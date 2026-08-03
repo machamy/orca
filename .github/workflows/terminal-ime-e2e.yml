@@ -52,7 +52,7 @@ jobs:
           xfwm4
           xvfb
 
-      - name: Build native IBus Wayland bridge
+      - name: Build native IBus Wayland runtime
         if: matrix.display_server == 'wayland'
         env:
           IBUS_COMMIT: 81ac95ed70b2fe02d41c7735c6788a4c6ab47bcc
@@ -72,7 +72,7 @@ jobs:
           cd "$RUNNER_TEMP/ibus-source"
           autoreconf -fiv
           ./configure \
-            --disable-shared --enable-static --disable-tests --disable-distro-tests \
+            --enable-shared --disable-static --disable-tests --disable-distro-tests \
             --disable-gtk2 --disable-gtk3 --disable-gtk4 --disable-xim --enable-wayland \
             --disable-appindicator --disable-memconf --disable-dconf \
             --disable-systemd-services --disable-python2 --disable-python-library \
@@ -85,9 +85,17 @@ jobs:
             ibusenumtypes.c ibusenumtypes.h ibusmarshalers.c ibusmarshalers.h \
             ibusresources.c ibusresources.h
           make -C src libibus-1.0.la
+          make -C bus marshalers.h marshalers.c
+          make -C bus -j2 ibus-daemon
           make -C client/wayland -j2 ibus-wayland
-          install -m 0755 client/wayland/ibus-wayland "$RUNNER_TEMP/ibus-wayland"
-          echo "ORCA_E2E_IBUS_WAYLAND=$RUNNER_TEMP/ibus-wayland" >> "$GITHUB_ENV"
+          mkdir "$RUNNER_TEMP/ibus-runtime" "$RUNNER_TEMP/ibus-runtime/lib"
+          install -m 0755 bus/.libs/ibus-daemon "$RUNNER_TEMP/ibus-runtime/ibus-daemon"
+          install -m 0755 client/wayland/.libs/ibus-wayland \
+            "$RUNNER_TEMP/ibus-runtime/ibus-wayland"
+          cp -a src/.libs/libibus-1.0.so* "$RUNNER_TEMP/ibus-runtime/lib/"
+          echo "ORCA_E2E_IBUS_DAEMON=$RUNNER_TEMP/ibus-runtime/ibus-daemon" >> "$GITHUB_ENV"
+          echo "ORCA_E2E_IBUS_WAYLAND=$RUNNER_TEMP/ibus-runtime/ibus-wayland" >> "$GITHUB_ENV"
+          echo "ORCA_E2E_IBUS_LIBRARY_PATH=$RUNNER_TEMP/ibus-runtime/lib" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
