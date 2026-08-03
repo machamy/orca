@@ -103,12 +103,22 @@ export class RemoteRuntimePtyRecoveryState {
 
   // Why: resume/online should fire an already-scheduled backoff immediately, not start a new epoch.
   retryNow(): boolean {
-    if (this.phase !== 'backoff' || this.pendingRetry === null || this.pendingEpoch === null) {
+    if (this.pendingRetry === null || this.pendingEpoch === null) {
+      return false
+    }
+    if (this.phase !== 'backoff' && this.phase !== 'disconnected') {
       return false
     }
     const retry = this.pendingRetry
-    const epoch = this.pendingEpoch
+    const latched = this.phase === 'disconnected'
     this.clearRetryTimer()
+    if (latched) {
+      // Why: the deadline only stops auto-retry; an explicit trigger opens a fresh recovery window.
+      this.epoch += 1
+      this.attempt = 0
+      this.armDeadline(this.epoch)
+    }
+    const epoch = this.epoch
     this.phase = 'recovering'
     this.onChange?.()
     retry(epoch)
@@ -159,7 +169,8 @@ export class RemoteRuntimePtyRecoveryState {
         return
       }
       this.deadlineTimer = null
-      this.clearRetryTimer()
+      // Why: the cutoff stops self-initiated retries but must keep the pane revivable by online/resume/reconnect.
+      this.stopRetryTimer()
       this.phase = 'disconnected'
       this.onChange?.()
     }, REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
@@ -172,11 +183,15 @@ export class RemoteRuntimePtyRecoveryState {
     this.clearDeadlineTimer()
   }
 
-  private clearRetryTimer(): void {
+  private stopRetryTimer(): void {
     if (this.retryTimer) {
       clearTimeout(this.retryTimer)
       this.retryTimer = null
     }
+  }
+
+  private clearRetryTimer(): void {
+    this.stopRetryTimer()
     this.pendingRetry = null
     this.pendingEpoch = null
     scheduledRecoveries.delete(this)

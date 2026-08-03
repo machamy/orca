@@ -187,6 +187,7 @@ export function createRemoteRuntimePtyTransport(
   let recoveryReplacementPolicy: HostHandleReplacementPolicy = 'reuse'
   let recoveryReplacementPolicyHandle: string | null = null
   let stopWaitingForPublishedHandle: (() => void) | null = null
+  let publishedHandleWaitEpoch: number | null = null
   let settleHostSessionAttachRetry: ((retry: boolean) => void) | null = null
   let resubscribeInventoryEpoch: number | null = null
   let resubscribeInventoryWindows = 0
@@ -236,8 +237,10 @@ export function createRemoteRuntimePtyTransport(
   }
 
   const recovery = new RemoteRuntimePtyRecoveryState(() => {
-    if (recovery.currentPhase === 'disconnected') {
+    if (recovery.currentPhase === 'disposed') {
       clearPublishedHandleWait()
+    }
+    if (recovery.currentPhase === 'disconnected') {
       // Why: cached pixels may remain, but no stream from the exhausted epoch may keep delivering or accepting terminal traffic.
       subscriptionGeneration += 1
       closeMultiplexedStream()
@@ -1257,6 +1260,7 @@ export function createRemoteRuntimePtyTransport(
   function clearPublishedHandleWait(): void {
     stopWaitingForPublishedHandle?.()
     stopWaitingForPublishedHandle = null
+    publishedHandleWaitEpoch = null
   }
 
   function isCurrentRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
@@ -1329,8 +1333,30 @@ export function createRemoteRuntimePtyTransport(
           retireRemoteTerminalId()
           return
         }
-        if (!update.terminalHandle || update.terminalHandle === previousHandle) {
+        if (!update.terminalHandle) {
           return
+        }
+        if (update.terminalHandle === previousHandle) {
+          // Why: once the auto-recovery window is spent, a host still publishing this surface is evidence the fenced handle outlived the stale error.
+          if (
+            recovery.currentPhase !== 'disconnected' ||
+            getCurrentMultiplexedStream(previousHandle)
+          ) {
+            return
+          }
+          recovery.begin()
+          clearPublishedHandleWait()
+          const reusedPtyId = remotePtyId
+          void subscribeToHandle(recovery.currentEpoch, true).catch((error) => {
+            if (!recoverAfterSubscribeFailure(error, previousHandle, reusedPtyId)) {
+              handleRemoteTerminalError(error)
+            }
+          })
+          return
+        }
+        if (recovery.currentPhase === 'disconnected') {
+          // Why: without a live epoch a failed resubscribe is swallowed as already-latched, leaving a pane with no handle and no way back.
+          recovery.begin()
         }
         rebindRemoteTerminalHandle(update.terminalHandle)
         const reboundHandle = handle
@@ -1507,8 +1533,12 @@ export function createRemoteRuntimePtyTransport(
       clearPendingViewportClaim()
     }
     strengthenRecoveryReplacementPolicy(handle, replacementPolicy)
-    if (replacementPolicy === 'require-replacement' && stopWaitingForPublishedHandle) {
-      // Why: once recovery is handed to accepted snapshots, repeated sends to the stale handle must not re-arm inventory RPCs.
+    if (
+      replacementPolicy === 'require-replacement' &&
+      stopWaitingForPublishedHandle &&
+      // Why: only the epoch that handed recovery to accepted snapshots is blocked; a newer epoch is a fresh attempt, not a repeated stale send.
+      publishedHandleWaitEpoch === recoveryEpoch
+    ) {
       return
     }
     if (resubscribeEpoch === recoveryEpoch) {
@@ -1529,6 +1559,7 @@ export function createRemoteRuntimePtyTransport(
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
       // Why: subscribe before polling so a fresh host snapshot can't land in the gap between the inventory loop and its event-driven fallback.
       waitForPublishedHostSessionHandle(toHostSessionTabId(tabId), resubscribeHandle)
+      publishedHandleWaitEpoch = recoveryEpoch
     }
     resubscribeEpoch = recoveryEpoch
     resubscribeRequestedHandle = null

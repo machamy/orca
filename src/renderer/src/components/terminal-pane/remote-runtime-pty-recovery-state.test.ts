@@ -69,6 +69,7 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(state.isActive).toBe(false)
     expect(state.isCurrent(epoch)).toBe(false)
     expect(onChange).toHaveBeenCalled()
+    state.dispose()
   })
 
   it('advances a pending backoff immediately via retryNow and the active registry', async () => {
@@ -154,16 +155,24 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(retryNow).not.toHaveBeenCalled()
   })
 
-  it('removes timed-out panes from the scheduled recovery registry', async () => {
+  it('keeps a timed-out pane revivable through the scheduled recovery registry', async () => {
     vi.useFakeTimers()
     const state = new RemoteRuntimePtyRecoveryState()
-    const epoch = state.begin()
-    state.schedule(epoch, vi.fn())
-    const retryNow = vi.spyOn(state, 'retryNow')
+    const retry = vi.fn()
+    const firstEpoch = state.begin()
+    // Why: the backoff ladder outlasts the recovery window, so a retry is still armed when the cutoff lands.
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS - 100)
+    state.schedule(firstEpoch, retry)
 
-    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
-    retryAllRemoteRuntimePtyRecoveriesNow()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(state.currentPhase).toBe('disconnected')
 
-    expect(retryNow).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(retry).not.toHaveBeenCalled()
+
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+    expect(retry).toHaveBeenCalledWith(firstEpoch + 1)
+    expect(state.currentPhase).toBe('recovering')
+    state.dispose()
   })
 })
