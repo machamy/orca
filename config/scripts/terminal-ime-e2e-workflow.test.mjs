@@ -70,6 +70,8 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).toContain("inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'")
     expect(runner).toContain("['--disable=wayland']")
     expect(runner).toContain("for (const engine of ['hangul', 'pinyin'])")
+    expect(runner).toContain("spawnSync('fcitx5-remote', [], { encoding: 'utf8' })")
+    expect(runner).not.toContain("['--check']")
     expect(runner.match(/spawnSync\('ibus', \['engine', engine\]/g)).toHaveLength(1)
     expect(runner).toContain("process.kill(-processGroupId, 'SIGTERM')")
     expect(runner).toContain("process.kill(-processGroupId, 'SIGKILL')")

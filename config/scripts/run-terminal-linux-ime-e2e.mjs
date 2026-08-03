@@ -161,7 +161,7 @@ async function waitForFcitx(fcitxProcess) {
     if (fcitxProcess.exitCode !== null) {
       throw new Error(`fcitx5 exited early with code ${fcitxProcess.exitCode}`)
     }
-    const result = spawnSync('fcitx5-remote', ['--check'], { encoding: 'utf8' })
+    const result = spawnSync('fcitx5-remote', [], { encoding: 'utf8' })
     if (result.status === 0) {
       for (const engine of ['hangul', 'pinyin']) {
         const addon = spawnSync('fcitx5-remote', ['-m', engine], { encoding: 'utf8' })
