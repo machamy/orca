@@ -32,7 +32,6 @@ import {
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { readLastTerminalInputAt } from '@/lib/terminal-input-activity-coalescing'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -579,25 +578,6 @@ function normalizeSleepingAgentSessionCollectOptions(
     : (options as CollectSleepingAgentSessionRecordsOptions)
 }
 
-function isValidManualSleepLiveAgentEntry(
-  state: AppState,
-  entry: AgentStatusEntry,
-  capturedAt: number
-): boolean {
-  if (entry.interrupted === true || entry.state === 'done') {
-    return false
-  }
-  const lastInputAt = readLastTerminalInputAt(state.lastTerminalInputAtByPaneKey, entry.paneKey)
-  if (
-    typeof lastInputAt === 'number' &&
-    Number.isFinite(lastInputAt) &&
-    lastInputAt > entry.updatedAt
-  ) {
-    return false
-  }
-  return isExplicitAgentStatusFresh(entry, capturedAt, AGENT_STATUS_STALE_AFTER_MS)
-}
-
 function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
   return entry.state === 'done' && entry.interrupted !== true
 }
@@ -641,6 +621,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     : undefined
   const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
   const records: Record<string, SleepingAgentSessionRecord> = {}
+  const promotedLiveRecoveryPaneKeys = new Set<string>()
 
   if (isManualWorktreeSleep) {
     for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
@@ -664,6 +645,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
         updatedAt: capturedAt,
         origin: 'worktree-sleep'
       }
+      promotedLiveRecoveryPaneKeys.add(existing.paneKey)
     }
   }
 
@@ -695,26 +677,45 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
       continue
     }
+    // Why: the promoted checkpoint carries recovery identity (transcript, connection) the live
+    // turn row lacks, so it must not be overwritten by a re-derived record.
+    if (promotedLiveRecoveryPaneKeys.has(paneKey)) {
+      continue
+    }
     const belongsToWorktree =
       entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
     if (!belongsToWorktree) {
       continue
     }
-    if (isManualWorktreeSleep && !isValidManualSleepLiveAgentEntry(state, entry, capturedAt)) {
-      continue
-    }
     if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
       continue
     }
+    // Why: manual sleep kills the pty either way, so the record carries resume identity, not
+    // the dead turn's interrupt flag — and an explicitly slept workspace is never stale at wake.
+    // `state` is preserved so a done pane wakes lazily in place instead of spawning a new tab.
+    const captureEntry = isManualWorktreeSleep
+      ? { ...entry, updatedAt: capturedAt, interrupted: false }
+      : entry
     const record = sleepingRecordFromEntry({
       state,
-      entry,
+      entry: captureEntry,
       worktreeId,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, entry),
       origin
     })
     if (record) {
+      // Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a
+      // deliberately blocked worker must not become auto-resumable at wake.
+      const previous = state.sleepingAgentSessionsByPaneKey[paneKey]
+      if (
+        isManualWorktreeSleep &&
+        previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
+        previous.agent === record.agent &&
+        agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
+      ) {
+        record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
+      }
       records[record.paneKey] = record
     }
   }
