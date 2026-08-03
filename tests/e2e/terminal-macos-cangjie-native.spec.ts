@@ -108,7 +108,6 @@ test.describe('Native macOS Cangjie terminal input @headful', () => {
       expect(cancelTrace.dom.slice(0, RECORDED_CANGJIE_CANCEL_BOUNDARIES.length)).toMatchObject(
         RECORDED_CANGJIE_CANCEL_BOUNDARIES
       )
-      expect(cancelTrace.onData).toEqual([])
 
       selectInputSource(ABC_ID)
       await expect
@@ -117,10 +116,13 @@ test.describe('Native macOS Cangjie terminal input @headful', () => {
       await orcaPage.keyboard.type('ordinary')
       await orcaPage.keyboard.press('Enter')
 
+      const completeTrace = await readTerminalImeBoundaryTrace(orcaPage)
+      expect(completeTrace.onData.slice(cancelTrace.onData.length).join('')).toBe('ordinary\r')
+      expect(cancelTrace.onData).toEqual([])
       expect(await waitForTerminalImeBytes(orcaPage, reader)).toEqual([
         Buffer.from('ordinary\n').toString('hex')
       ])
-      expect((await readTerminalImeBoundaryTrace(orcaPage)).onData.join('')).toBe('ordinary\r')
+      expect(completeTrace.onData.join('')).toBe('ordinary\r')
       completed = true
     } finally {
       await attachTerminalImeBoundaryEvidence(orcaPage, testInfo, 'native-macos-cangjie').catch(
