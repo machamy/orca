@@ -29,6 +29,17 @@ let loggedWorkerUnavailable = false
 // and the Stop action and advertised-URL matching that ride on it — recovers on
 // the next tick.
 let skippedMetadataOnLastScan = false
+// Why (#11161): a skipped cycle would otherwise report every listener as
+// external, so the panel flip-flops and the Stop action loses its owner. Carry
+// the previous cycle's metadata forward, keyed tightly enough that a recycled
+// pid cannot inherit it.
+let lastListenerMetadata = new Map<string, ProcessMetadata>()
+
+export type WorkspacePortScanOptions = {
+  /** Set by attribution-dependent callers (Stop, the localhost-label allowlist)
+   *  that must never trade owner metadata for scan latency. */
+  requireMetadata?: boolean
+}
 
 type RawListeningPort = {
   host: string
@@ -58,7 +69,8 @@ type PlatformListeningPortScan = {
 
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher,
+  options: WorkspacePortScanOptions = {}
 ): Promise<WorkspacePortScanResult> {
   const cooldown = commandTimeoutBackoff.snapshot()
   if (cooldown.isCoolingDown) {
@@ -70,7 +82,7 @@ export async function scanWorkspacePorts(
   }
 
   try {
-    const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts()
+    const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts(options)
     commandTimeoutBackoff.recordSuccess()
     const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
     // Why (#11161): without cwd/command-line every port looks unattributed, and
@@ -97,12 +109,45 @@ export function resetWorkspacePortScanTimeoutBackoffForTests(): void {
   commandTimeoutBackoff.reset()
   loggedWorkerUnavailable = false
   skippedMetadataOnLastScan = false
+  lastListenerMetadata = new Map()
 }
 
-function shouldSkipMetadataCommands(spawnMs: number): boolean {
+function shouldSkipMetadataCommands(spawnMs: number, opts: WorkspacePortScanOptions): boolean {
+  if (opts.requireMetadata) {
+    // Leave the skip parity alone: it belongs to the background scan cadence,
+    // and a one-shot user action must not shift which tick degrades.
+    return false
+  }
   const skip = spawnMs > SLOW_SPAWN_SKIP_METADATA_MS && !skippedMetadataOnLastScan
   skippedMetadataOnLastScan = skip
   return skip
+}
+
+/** Identity tight enough that a recycled pid cannot inherit stale metadata. */
+function listenerMetadataKey(port: RawListeningPort): string {
+  return `${port.pid ?? 'unknown'}:${port.host}:${port.port}`
+}
+
+function rememberListenerMetadata(ports: readonly RawListeningPort[]): void {
+  lastListenerMetadata = new Map(
+    ports.map((port) => [
+      listenerMetadataKey(port),
+      { processName: port.processName, commandLine: port.commandLine, cwd: port.cwd }
+    ])
+  )
+}
+
+function recallListenerMetadata(port: RawListeningPort): RawListeningPort {
+  const remembered = lastListenerMetadata.get(listenerMetadataKey(port))
+  if (!remembered) {
+    return port
+  }
+  return {
+    ...port,
+    processName: port.processName ?? remembered.processName,
+    commandLine: port.commandLine ?? remembered.commandLine,
+    cwd: port.cwd ?? remembered.cwd
+  }
 }
 
 // Why: a mispackaged probe worker fails identically forever, so logging it on
@@ -235,20 +280,35 @@ export function parseProcNetTcp(content: string): { host: string; port: number; 
   return results
 }
 
-async function scanPlatformListeningPorts(): Promise<PlatformListeningPortScan> {
+async function scanPlatformListeningPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
+  const scan = await dispatchPlatformListeningPortScan(options)
+  if (scan.metadataAvailable) {
+    rememberListenerMetadata(scan.ports)
+    return scan
+  }
+  return { ...scan, ports: scan.ports.map(recallListenerMetadata) }
+}
+
+async function dispatchPlatformListeningPortScan(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
   if (process.platform === 'linux') {
     return scanLinuxProcPorts()
   }
   if (process.platform === 'darwin') {
-    return scanDarwinLsofPorts()
+    return scanDarwinLsofPorts(options)
   }
   if (process.platform === 'win32') {
-    return scanWindowsNetstatPorts()
+    return scanWindowsNetstatPorts(options)
   }
   throw new Error(`Port scanning is not supported on ${process.platform}`)
 }
 
-async function scanDarwinLsofPorts(): Promise<PlatformListeningPortScan> {
+async function scanDarwinLsofPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
   const { stdout, spawnMs } = await runPortScanCommand('lsof', [
     '-nP',
     '-iTCP',
@@ -257,7 +317,7 @@ async function scanDarwinLsofPorts(): Promise<PlatformListeningPortScan> {
     'pcn'
   ])
   const ports = parseLsofListeningOutput(stdout)
-  if (shouldSkipMetadataCommands(spawnMs)) {
+  if (shouldSkipMetadataCommands(spawnMs, options)) {
     return { ports, metadataAvailable: false }
   }
   const metadata = await loadDarwinProcessMetadata(
@@ -269,10 +329,12 @@ async function scanDarwinLsofPorts(): Promise<PlatformListeningPortScan> {
   }
 }
 
-async function scanWindowsNetstatPorts(): Promise<PlatformListeningPortScan> {
+async function scanWindowsNetstatPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
   const { stdout, spawnMs } = await runPortScanCommand('netstat', ['-ano', '-p', 'tcp'])
   const ports = parseNetstatListeningOutput(stdout)
-  if (shouldSkipMetadataCommands(spawnMs)) {
+  if (shouldSkipMetadataCommands(spawnMs, options)) {
     return { ports, metadataAvailable: false }
   }
   const metadata = await loadWindowsProcessMetadata(

@@ -373,4 +373,80 @@ describe('scanWorkspacePorts with delayed process creation', () => {
 
     expect(runPortScanCommandMock).toHaveBeenCalledTimes(3)
   })
+
+  // Regression for #11161 review: the skip parity is driven by the 30s poller,
+  // so a one-shot user action would otherwise land on a random parity.
+  it('keeps probing metadata for callers that require attribution', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    mockStalledDarwinScan()
+
+    const scan = await scanWorkspacePorts(worktrees, urlWatcherStub(), { requireMetadata: true })
+
+    expect(scan.ports[0]).toMatchObject({ kind: 'workspace' })
+    expect(runPortScanCommandMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not let a required-metadata scan reset the background skip parity', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    mockStalledDarwinScan()
+
+    await scanWorkspacePorts(worktrees, urlWatcherStub())
+    await scanWorkspacePorts(worktrees, urlWatcherStub(), { requireMetadata: true })
+    await scanWorkspacePorts(worktrees, urlWatcherStub())
+
+    // 1 skipped + 3 required + 3 recovered; a reset parity would skip twice.
+    expect(runPortScanCommandMock).toHaveBeenCalledTimes(7)
+  })
+
+  // Regression for #11161 review: without carry-forward the panel moves every
+  // workspace port into External on each skipped cycle.
+  it('carries the previous cycle attribution through a skipped scan', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    let listenSpawnMs = 5
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'lsof' && args.includes('-iTCP')) {
+        return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: listenSpawnMs }
+      }
+      return { stdout: command === 'lsof' ? ['p123', 'n/repo'].join('\n') : '', spawnMs: 5 }
+    })
+
+    const full = await scanWorkspacePorts(worktrees, urlWatcherStub())
+    listenSpawnMs = 4_200
+    const skipped = await scanWorkspacePorts(worktrees, urlWatcherStub())
+
+    expect(full.ports[0]).toMatchObject({ kind: 'workspace' })
+    expect(skipped.ports[0]).toMatchObject({ kind: 'workspace', processName: 'node' })
+  })
+
+  it('does not hand carried-forward metadata to a different listener', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    let listenOutput = LSOF_LISTEN_OUTPUT
+    let listenSpawnMs = 5
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'lsof' && args.includes('-iTCP')) {
+        return { stdout: listenOutput, spawnMs: listenSpawnMs }
+      }
+      return { stdout: command === 'lsof' ? ['p123', 'n/repo'].join('\n') : '', spawnMs: 5 }
+    })
+
+    await scanWorkspacePorts(worktrees, urlWatcherStub())
+    listenOutput = ['p123', 'cnode', 'n127.0.0.1:9999'].join('\n')
+    listenSpawnMs = 4_200
+    const skipped = await scanWorkspacePorts(worktrees, urlWatcherStub())
+
+    expect(skipped.ports[0]?.kind).toBe('external')
+  })
 })
+
+/** Darwin scan where every spawn stalls past the metadata-skip threshold. */
+function mockStalledDarwinScan(): void {
+  runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+    if (command === 'lsof' && args.includes('-iTCP')) {
+      return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 4_200 }
+    }
+    if (command === 'lsof') {
+      return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 4_200 }
+    }
+    return { stdout: '123 node /repo/server.js', spawnMs: 4_200 }
+  })
+}
