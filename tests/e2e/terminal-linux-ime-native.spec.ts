@@ -72,7 +72,11 @@ function wtypeKeyArgs(keys: string[], delayMs: number): string[] {
 }
 
 function runWtype(...args: string[]): void {
-  execFileSync('wtype', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
+  // Why: wlroots assigns seat focus after the virtual keyboard binds; immediate keys disappear.
+  execFileSync('wtype', ['-s', '500', ...args], {
+    stdio: 'pipe',
+    timeout: NATIVE_COMMAND_TIMEOUT_MS
+  })
 }
 
 function wtypeImeActivationArgs(): string[] {
