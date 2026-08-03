@@ -55,7 +55,19 @@ function runXdotool(...args: string[]): void {
   execFileSync('xdotool', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
 }
 
-async function focusNativeTerminalWindow(page: Page): Promise<string> {
+function selectIbusEngine(engine: string): void {
+  execFileSync('ibus', ['engine', engine], {
+    stdio: 'pipe',
+    timeout: NATIVE_COMMAND_TIMEOUT_MS
+  })
+  const activeEngine = execFileSync('ibus', ['engine'], {
+    encoding: 'utf8',
+    timeout: NATIVE_COMMAND_TIMEOUT_MS
+  }).trim()
+  expect(activeEngine).toBe(engine)
+}
+
+async function focusNativeTerminalWindow(page: Page, engine: string): Promise<string> {
   await focusActiveTerminalInput(page)
   const title = `ORCA_NATIVE_IBUS_${randomUUID()}`
   await page.evaluate((nextTitle) => {
@@ -64,15 +76,7 @@ async function focusNativeTerminalWindow(page: Page): Promise<string> {
   await expect.poll(() => page.title(), { timeout: 5_000 }).toBe(title)
 
   runXdotool('search', '--onlyvisible', '--name', title, 'windowfocus', '--sync')
-  execFileSync('ibus', ['engine', 'hangul'], {
-    stdio: 'pipe',
-    timeout: NATIVE_COMMAND_TIMEOUT_MS
-  })
-  const engine = execFileSync('ibus', ['engine'], {
-    encoding: 'utf8',
-    timeout: NATIVE_COMMAND_TIMEOUT_MS
-  }).trim()
-  expect(engine).toBe('hangul')
+  selectIbusEngine(engine)
   return title
 }
 
@@ -99,11 +103,27 @@ function typeSentenceSequence(repetitions: number): void {
   }
 }
 
+function typeNumericCandidateSequence(repetitions: number): void {
+  const delay = String(nativeKeyDelayMs())
+  for (let index = 0; index < repetitions; index += 1) {
+    runXdotool('type', '--delay', delay, '--clearmodifiers', 'zhong')
+    runXdotool('sleep', '0.2')
+    runXdotool('key', '1')
+    runXdotool('key', 'Return')
+    selectIbusEngine('xkb:us::eng')
+    runXdotool('type', '--delay', delay, '--clearmodifiers', '1')
+    runXdotool('key', 'Return')
+    selectIbusEngine('libpinyin')
+  }
+}
+
 async function runNativeIbusScenario(
   page: Page,
   testInfo: TestInfo,
   testRepoPath: string,
-  expectedText: string,
+  engine: string,
+  expectedLines: string[],
+  expectedCommit: RegExp,
   driveInput: (repetitions: number) => void
 ): Promise<void> {
   await waitForSessionReady(page)
@@ -113,12 +133,12 @@ async function runNativeIbusScenario(
 
   const repetitions = nativeRepetitions()
   const ptyId = await waitForActivePanePtyId(page)
-  const reader = createTerminalImeByteReader(testRepoPath, repetitions)
+  const reader = createTerminalImeByteReader(testRepoPath, expectedLines.length)
   let completed = false
   let receivedBytes: string[] = []
   try {
     await startTerminalImeByteReader(page, ptyId, reader)
-    await focusNativeTerminalWindow(page)
+    await focusNativeTerminalWindow(page, engine)
     await installTerminalImeBoundaryProbe(page)
     driveInput(repetitions)
 
@@ -130,19 +150,20 @@ async function runNativeIbusScenario(
         (event) =>
           (event.type === 'compositionupdate' ||
             (event.type === 'input' && event.inputType === 'insertText')) &&
-          /[\uac00-\ud7af]/.test(event.data ?? '')
+          expectedCommit.test(event.data ?? '')
       )
     ).toBe(true)
 
-    const expectedBytes = Buffer.from(`${expectedText}\n`).toString('hex')
-    expect(receivedBytes).toEqual(Array.from({ length: repetitions }, () => expectedBytes))
+    const expectedBytes = expectedLines.map((line) => Buffer.from(`${line}\n`).toString('hex'))
+    expect(receivedBytes).toEqual(expectedBytes)
 
-    expect(trace.onData.join('')).toBe(`${expectedText}\r`.repeat(repetitions))
+    expect(trace.onData.join('')).toBe(expectedLines.map((line) => `${line}\r`).join(''))
     completed = true
   } finally {
     await attachTerminalImeBoundaryEvidence(page, testInfo, 'native-ibus-boundaries', {
       display: process.env.DISPLAY,
-      expectedText,
+      engine,
+      expectedLines,
       keyDelayMs: nativeKeyDelayMs(),
       receivedBytes,
       repetitions
@@ -155,29 +176,57 @@ async function runNativeIbusScenario(
   }
 }
 
-test.describe('Native IBus Hangul terminal input @headful', () => {
+test.describe('Native IBus terminal input @headful', () => {
   test.skip(
-    process.env.ORCA_E2E_NATIVE_IBUS_HANGUL !== '1',
-    'Run through config/scripts/run-terminal-ibus-hangul-e2e.mjs'
+    process.env.ORCA_E2E_NATIVE_IBUS !== '1',
+    'Run through config/scripts/run-terminal-ibus-e2e.mjs'
   )
 
   test('forwards the issue exact-byte sequence without loss or duplication', async ({
     orcaPage,
     testRepoPath
   }, testInfo) => {
-    await runNativeIbusScenario(orcaPage, testInfo, testRepoPath, '한abc글', typeExactByteSequence)
+    const repetitions = nativeRepetitions()
+    await runNativeIbusScenario(
+      orcaPage,
+      testInfo,
+      testRepoPath,
+      'hangul',
+      Array.from({ length: repetitions }, () => '한abc글'),
+      /[\uac00-\ud7af]/,
+      typeExactByteSequence
+    )
   })
 
   test('forwards the issue sentence stress sequence without leaked ASCII', async ({
     orcaPage,
     testRepoPath
   }, testInfo) => {
+    const repetitions = nativeRepetitions()
     await runNativeIbusScenario(
       orcaPage,
       testInfo,
       testRepoPath,
-      '테스트를 하고 있는데 여전히 그러네',
+      'hangul',
+      Array.from({ length: repetitions }, () => '테스트를 하고 있는데 여전히 그러네'),
+      /[\uac00-\ud7af]/,
       typeSentenceSequence
+    )
+  })
+
+  test('keeps a numeric Pinyin candidate and ordinary digit exactly once', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    const repetitions = nativeRepetitions()
+    await runNativeIbusScenario(
+      orcaPage,
+      testInfo,
+      testRepoPath,
+      'libpinyin',
+      Array.from({ length: repetitions }, () => ['中', '1']).flat(),
+      /中/,
+      typeNumericCandidateSequence
     )
   })
 })

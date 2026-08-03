@@ -179,19 +179,13 @@ async function runInsideSession(evidenceDir) {
 
     const testProcess = spawn(
       process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-      [
-        'run',
-        'test:e2e:headful',
-        '--workers=1',
-        '--',
-        'tests/e2e/terminal-ibus-hangul-native.spec.ts'
-      ],
+      ['run', 'test:e2e:headful', '--workers=1', '--', 'tests/e2e/terminal-ibus-native.spec.ts'],
       {
         cwd: projectDir,
         env: {
           ...process.env,
           ORCA_E2E_FORWARD_APP_LOGS: '1',
-          ORCA_E2E_NATIVE_IBUS_HANGUL: '1'
+          ORCA_E2E_NATIVE_IBUS: '1'
         },
         stdio: 'inherit'
       }
@@ -217,14 +211,14 @@ async function runInsideSession(evidenceDir) {
     mkdirSync(path.join(projectDir, 'test-results'), { recursive: true })
     copyFileSync(
       ibusLogPath,
-      path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-ibus.log')
+      path.join(projectDir, 'test-results', 'terminal-ibus-native-daemon.log')
     )
     copyFileSync(
       windowManagerLogPath,
-      path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-xfwm4.log')
+      path.join(projectDir, 'test-results', 'terminal-ibus-native-xfwm4.log')
     )
     writeFileSync(
-      path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-processes.json'),
+      path.join(projectDir, 'test-results', 'terminal-ibus-native-processes.json'),
       `${JSON.stringify(evidence, null, 2)}\n`
     )
   }
@@ -244,7 +238,7 @@ async function runInsideSession(evidenceDir) {
 
 async function runOuter() {
   if (process.platform !== 'linux') {
-    throw new Error('The native IBus Hangul E2E runner requires Linux/X11')
+    throw new Error('The native IBus E2E runner requires Linux/X11')
   }
 
   const evidenceDir = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-ime-e2e-'))

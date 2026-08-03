@@ -29,6 +29,7 @@ jobs:
           dconf-gsettings-backend
           ibus
           ibus-hangul
+          ibus-libpinyin
           libglib2.0-bin
           python3
           xdotool
@@ -56,7 +57,7 @@ jobs:
       - name: Build Electron app for E2E
         run: pnpm exec electron-vite build --mode e2e
 
-      - name: Run native IBus Hangul exact-byte tests
+      - name: Run native IBus exact-byte tests
         env:
           SKIP_BUILD: '1'
         run: pnpm run test:e2e:terminal-ime-native

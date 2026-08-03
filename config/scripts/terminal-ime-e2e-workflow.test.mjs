@@ -16,7 +16,7 @@ describe('terminal IME e2e workflow', () => {
     expect(workflow.on.schedule).toEqual([{ cron: '30 9 * * *' }])
   })
 
-  it('installs native IBus Hangul and X11 input tools', () => {
+  it('installs native IBus engines and X11 input tools', () => {
     const runs = workflow.jobs['linux-x11'].steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
@@ -24,6 +24,7 @@ describe('terminal IME e2e workflow', () => {
 
     expect(installRun).toBeDefined()
     expect(installRun).toContain('ibus-hangul')
+    expect(installRun).toContain('ibus-libpinyin')
     expect(installRun).toContain('xdotool')
     expect(installRun).toContain('xfwm4')
     expect(installRun).toContain('xvfb')
@@ -53,7 +54,7 @@ describe('terminal IME e2e workflow', () => {
 
   it('keeps IBus lifecycle scoped to owned processes', () => {
     const runner = readFileSync(
-      join(projectDir, 'config/scripts/run-terminal-ibus-hangul-e2e.mjs'),
+      join(projectDir, 'config/scripts/run-terminal-ibus-e2e.mjs'),
       'utf8'
     )
 
@@ -67,7 +68,7 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).toContain("process.kill(-processGroupId, 'SIGKILL')")
     expect(runner).toContain('const killDeadline = Date.now() + processKillTimeoutMs')
     expect(runner).toMatch(
-      /'test:e2e:headful',\s*'--workers=1',\s*'--',\s*'tests\/e2e\/terminal-ibus-hangul-native\.spec\.ts'/
+      /'test:e2e:headful',\s*'--workers=1',\s*'--',\s*'tests\/e2e\/terminal-ibus-native\.spec\.ts'/
     )
     expect(runner).not.toContain("'--replace'")
     expect(runner).not.toContain('killall')
@@ -76,7 +77,7 @@ describe('terminal IME e2e workflow', () => {
 
   it('bounds blocking native input commands', () => {
     const nativeSpec = readFileSync(
-      join(projectDir, 'tests/e2e/terminal-ibus-hangul-native.spec.ts'),
+      join(projectDir, 'tests/e2e/terminal-ibus-native.spec.ts'),
       'utf8'
     )
 
