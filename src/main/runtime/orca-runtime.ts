@@ -1245,6 +1245,10 @@ type RuntimePtyWorktreeRecord = {
   lastAgentStatus: AgentStatus | null
   lastOscTitle: string | null
   lastOscTitleAt: number | null
+  // Why a second stamp: `lastOscTitleAt` is a title-observation sequence number,
+  // comparable only to other title stamps. Anything that must date a live title
+  // against an off-pane clock (hook `receivedAt`) needs wall-clock ms.
+  lastOscTitleEpochMs: number | null
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
@@ -9914,6 +9918,7 @@ export class OrcaRuntimeService {
       const observedAt = this.nextTitleObservationSequence()
       pty.lastOscTitle = normalizedTitle
       pty.lastOscTitleAt = observedAt
+      pty.lastOscTitleEpochMs = Date.now()
       pty.lastAgentStatus = agentStatus
       this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       ptyRecordChanged = prevTitle !== normalizedTitle || prevStatus !== agentStatus
@@ -9995,6 +10000,7 @@ export class OrcaRuntimeService {
     if (pty) {
       pty.lastOscTitle = null
       pty.lastOscTitleAt = null
+      pty.lastOscTitleEpochMs = null
       pty.lastAgentStatus = null
       pty.managementTitle = null
       pty.managementTitleAt = null
@@ -28016,6 +28022,7 @@ export class OrcaRuntimeService {
         lastAgentStatus: null,
         lastOscTitle: null,
         lastOscTitleAt: null,
+        lastOscTitleEpochMs: null,
         managementTitle: null,
         managementTitleAt: null,
         controllerTitle: null,
@@ -29437,7 +29444,7 @@ export class OrcaRuntimeService {
           stateStartedAt: retained.stateStartedAt,
           worktreeId: retained.worktreeId
         }
-      : this.resolveHookLiveAgentRow(hookRow, pty, leaf, nonAgentTitle)
+      : this.resolveHookLiveAgentRow(hookRow, pty, nonAgentTitle)
     if (liveRow) {
       return {
         agentStatus: normalizeCompatibleAgentStatusEntryForOwner(
@@ -29502,7 +29509,6 @@ export class OrcaRuntimeService {
       liveStateStartedAt: number | null
     },
     pty: RuntimePtyWorktreeRecord | null,
-    leaf: RuntimeLeafRecord | null,
     nonAgentTitle: boolean
   ): {
     payload: ParsedAgentStatusPayload
@@ -29519,13 +29525,11 @@ export class OrcaRuntimeService {
     if (nonAgentTitle && !pendingQuestion) {
       return null
     }
-    const latestTitleEvidenceAt = Math.max(
-      pty?.titleUpdatedAt ?? 0,
-      pty?.lastOscTitleAt ?? 0,
-      leaf?.paneTitleUpdatedAt ?? 0,
-      leaf?.lastOscTitleAt ?? 0
-    )
-    if (!pendingQuestion && receivedAt < latestTitleEvidenceAt) {
+    // Why only this stamp: it is the sole wall-clock date on the pane's live title,
+    // so it is the only one comparable to a hook `receivedAt`. The sibling
+    // `titleUpdatedAt`/`lastOscTitleAt`/`paneTitleUpdatedAt` fields are observation
+    // sequence numbers, and comparing them here can only ever misfire.
+    if (!pendingQuestion && receivedAt < (pty?.lastOscTitleEpochMs ?? 0)) {
       return null
     }
     return {

@@ -98,27 +98,17 @@ async function projectAgentStatus(
     : undefined
 }
 
-function ptyRecord(runtime: OrcaRuntimeService): {
-  title: string | null
-  titleUpdatedAt: number | null
-  lastOscTitle: string | null
-  lastOscTitleAt: number | null
-  lastAgentStatus: string | null
-} {
-  return (
-    runtime as unknown as {
-      ptysById: Map<
-        string,
-        {
-          title: string | null
-          titleUpdatedAt: number | null
-          lastOscTitle: string | null
-          lastOscTitleAt: number | null
-          lastAgentStatus: string | null
-        }
-      >
-    }
-  ).ptysById.get(PTY_ID)!
+/** Observe a pane title the way production does, so the recency stamps under test are
+ *  the ones the OSC path actually writes (a sequence number *and* a wall clock). */
+function observePaneTitle(runtime: OrcaRuntimeService, title: string): void {
+  runtime.onPtyData(PTY_ID, `\x1b]0;${title}\x07`, Date.now())
+}
+
+function lastOscTitleEpochMs(runtime: OrcaRuntimeService): number {
+  const pty = (
+    runtime as unknown as { ptysById: Map<string, { lastOscTitleEpochMs: number | null }> }
+  ).ptysById.get(PTY_ID)
+  return pty?.lastOscTitleEpochMs ?? 0
 }
 
 describe('headless hook agent-status projection (#11761)', () => {
@@ -213,11 +203,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     const agentStatus = await projectAgentStatus(
       [hookRow({ state: 'working', toolName: 'Bash', interactivePrompt: undefined })],
       (runtime) => {
-        const pty = ptyRecord(runtime)
-        pty.title = 'bash'
-        pty.lastOscTitle = 'bash'
-        pty.titleUpdatedAt = Date.now()
-        pty.lastOscTitleAt = Date.now()
+        observePaneTitle(runtime, 'bash')
       }
     )
 
@@ -227,11 +213,7 @@ describe('headless hook agent-status projection (#11761)', () => {
 
   it('keeps a pending question visible even under a non-agent title', async () => {
     const agentStatus = await projectAgentStatus([hookRow()], (runtime) => {
-      const pty = ptyRecord(runtime)
-      pty.title = 'bash'
-      pty.lastOscTitle = 'bash'
-      pty.titleUpdatedAt = Date.now()
-      pty.lastOscTitleAt = Date.now()
+      observePaneTitle(runtime, 'bash')
     })
 
     expect(agentStatus).toEqual(
@@ -254,16 +236,37 @@ describe('headless hook agent-status projection (#11761)', () => {
         })
       ],
       (runtime) => {
-        const pty = ptyRecord(runtime)
-        pty.title = '⠋ Claude'
-        pty.lastOscTitle = '⠋ Claude'
-        pty.titleUpdatedAt = now
-        pty.lastOscTitleAt = now
-        pty.lastAgentStatus = 'working'
+        observePaneTitle(runtime, '⠋ Claude')
       }
     )
 
     expect(agentStatus).toEqual(expect.objectContaining({ state: 'working', prompt: '' }))
+  })
+
+  // The other direction of the same guard: once the hook reports after the last
+  // spinner frame, its state is the newest evidence and must be published.
+  it('publishes a hook row received after the latest title observation', async () => {
+    const rows = [hookRow()]
+    const runtime = await createRuntimeWithHookRows(rows)
+    observePaneTitle(runtime, '⠋ Claude')
+    const reportedAt = lastOscTitleEpochMs(runtime) + 1_000
+    rows[0] = hookRow({
+      state: 'done',
+      prompt: '',
+      toolName: undefined,
+      interactivePrompt: undefined,
+      receivedAt: reportedAt,
+      stateStartedAt: reportedAt
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+
+    // `updatedAt` pins the row's provenance: the identity-only fallback would
+    // publish `working` (the stale spinner title) stamped with its own clock.
+    expect(tab?.type === 'terminal' && tab.agentStatus).toEqual(
+      expect.objectContaining({ state: 'done', updatedAt: reportedAt })
+    )
   })
 })
 
