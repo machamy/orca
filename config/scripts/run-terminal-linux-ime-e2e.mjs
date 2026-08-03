@@ -241,6 +241,7 @@ async function runInsideSession(evidenceDir) {
     inputMethodGroupBeforeCleanup: [],
     inputMethodGroupAfterCleanup: [],
     playwrightPid: null,
+    swaySocket: null,
     waylandDisplay: process.env.WAYLAND_DISPLAY ?? null,
     windowManagerPid: null,
     windowManagerGroupAfterCleanup: []
@@ -270,6 +271,11 @@ async function runInsideSession(evidenceDir) {
     evidence.windowManagerPid = windowManagerProcess.pid
     console.error(`[terminal-ime] started ${windowManagerName} PID ${windowManagerProcess.pid}`)
     if (isWayland) {
+      process.env.SWAYSOCK = path.join(
+        process.env.XDG_RUNTIME_DIR,
+        `sway-ipc.${process.getuid()}.${windowManagerProcess.pid}.sock`
+      )
+      evidence.swaySocket = process.env.SWAYSOCK
       await waitForWaylandCompositor(windowManagerProcess)
     }
 

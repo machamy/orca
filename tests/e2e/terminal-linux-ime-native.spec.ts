@@ -172,6 +172,22 @@ async function focusNativeTerminalWindow(page: Page, engine: string): Promise<st
 
   if (!isWayland) {
     runXdotool('search', '--onlyvisible', '--name', title, 'windowfocus', '--sync')
+  } else {
+    await expect
+      .poll(() => {
+        try {
+          const result = JSON.parse(
+            execFileSync('swaymsg', [`[title="${title}"]`, 'focus'], {
+              encoding: 'utf8',
+              timeout: NATIVE_COMMAND_TIMEOUT_MS
+            })
+          ) as { success?: boolean }[]
+          return result.some(({ success }) => success === true)
+        } catch {
+          return false
+        }
+      })
+      .toBe(true)
   }
   await selectInputMethod(engine)
   return title
