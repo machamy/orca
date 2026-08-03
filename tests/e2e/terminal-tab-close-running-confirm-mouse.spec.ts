@@ -40,13 +40,15 @@ async function startBusyTerminal(page: Page): Promise<string> {
   await execInTerminal(page, ptyId, 'echo close-confirm-ready')
   await waitForTerminalOutput(page, 'close-confirm-ready', 20_000)
   await execInTerminal(page, ptyId, 'sleep 300')
+  // Why: `hasChildProcesses` is already true while macOS's `login` wrapper starts the
+  // shell, so wait for `sleep` itself or the close legitimately sees an idle terminal.
   await expect
     .poll(
       async () =>
-        (await page.evaluate((id) => window.api.pty.inspectProcess(id), ptyId)).hasChildProcesses,
-      { timeout: 20_000, message: 'sleep 300 never registered as a child process' }
+        (await page.evaluate((id) => window.api.pty.inspectProcess(id), ptyId)).foregroundProcess,
+      { timeout: 20_000, message: 'sleep 300 never became the foreground process' }
     )
-    .toBe(true)
+    .toBe('sleep')
   return (await getActiveTabId(page))!
 }
 

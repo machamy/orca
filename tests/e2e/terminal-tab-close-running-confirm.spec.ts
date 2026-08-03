@@ -53,16 +53,18 @@ test('#10142 tab X button bypasses the Cmd+W running-process confirmation', asyn
   await execInTerminal(orcaPage, ptyId, 'echo repro-10142-ready')
   await waitForTerminalOutput(orcaPage, 'repro-10142-ready', 20_000)
   await execInTerminal(orcaPage, ptyId, 'sleep 300')
-  // Only press close once the PTY actually reports the child; otherwise the
-  // probe legitimately sees an idle shell and closing is correct.
+  // Only press close once `sleep` is the foreground process; otherwise the probe
+  // legitimately sees an idle shell and closing is correct. `hasChildProcesses` alone is
+  // not enough: macOS spawns the shell under `login`, so a still-initialising terminal
+  // reports a child before `sleep 300` has run.
   await expect
     .poll(
       async () =>
         (await orcaPage.evaluate((id) => window.api.pty.inspectProcess(id), ptyId))
-          .hasChildProcesses,
-      { timeout: 20_000, message: 'sleep 300 never registered as a child process' }
+          .foregroundProcess,
+      { timeout: 20_000, message: 'sleep 300 never became the foreground process' }
     )
-    .toBe(true)
+    .toBe('sleep')
 
   const busyTabId = (await getActiveTabId(orcaPage))!
   const busyTab = orcaPage.locator(`${SORTABLE_TAB}[data-tab-id="${busyTabId}"]`).first()
