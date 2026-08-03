@@ -582,6 +582,15 @@ function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean
   return entry.state === 'done' && entry.interrupted !== true
 }
 
+// Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive
+// record's tab. Sleeping a workspace must not become "one phone tap respawns all of it" — the pane
+// issues its own `--resume` cold restore when its tab is opened instead (#11598).
+function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): void {
+  if (record.state === 'done') {
+    record.restoreOnTabOpenOnly = true
+  }
+}
+
 // Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
 // sleep or quit capture is the pane's only resume handle once its live row is gone.
 function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
@@ -681,6 +690,9 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       origin
     })
     if (record) {
+      if (isManualWorktreeSleep) {
+        markManualSleepLazyRestore(record)
+      }
       records[record.paneKey] = record
     }
   }
@@ -717,6 +729,9 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       origin
     })
     if (record) {
+      if (isManualWorktreeSleep) {
+        markManualSleepLazyRestore(record)
+      }
       // Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a
       // deliberately blocked worker must not become auto-resumable at wake.
       const previous = state.sleepingAgentSessionsByPaneKey[paneKey]

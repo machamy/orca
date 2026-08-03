@@ -110,6 +110,37 @@ describe('manual sleep agent session capture', () => {
     expect(records['tab-1:stale']).toMatchObject({ state: 'working', updatedAt: NOW })
   })
 
+  it('marks finished panes for tab-open-only restore so a mobile wake cannot respawn them all', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    const retainedEntry = makeAgentEntry({ paneKey: 'tab-1:retained', state: 'done' })
+    store.setState({
+      agentStatusByPaneKey: {
+        'tab-1:done': makeAgentEntry({ paneKey: 'tab-1:done', state: 'done' }),
+        'tab-1:working': makeAgentEntry({ paneKey: 'tab-1:working' })
+      },
+      retainedAgentsByPaneKey: {
+        'tab-1:retained': {
+          entry: retainedEntry,
+          tab: makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
+          worktreeId: 'wt-1',
+          agentType: 'codex',
+          startedAt: retainedEntry.stateStartedAt
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    const records = store.getState().sleepingAgentSessionsByPaneKey
+    expect(records['tab-1:done'].restoreOnTabOpenOnly).toBe(true)
+    expect(records['tab-1:retained'].restoreOnTabOpenOnly).toBe(true)
+    // Why: a still-working pane is resumed by wake, not by opening its tab.
+    expect(records['tab-1:working'].restoreOnTabOpenOnly).toBeUndefined()
+  })
+
   it('carries a blocked legacy-orchestration-worker flag onto the replacement record', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
