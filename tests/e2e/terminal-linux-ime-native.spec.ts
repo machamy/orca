@@ -75,12 +75,20 @@ function runWtype(...args: string[]): void {
   execFileSync('wtype', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
 }
 
-function runNativeKeySequence(keys: string[], delayMs = nativeKeyDelayMs()): void {
+function wtypeImeActivationArgs(): string[] {
+  return ['-M', 'ctrl', '-P', 'space', '-p', 'space', '-m', 'ctrl', '-s', '200']
+}
+
+function runNativeKeySequence(
+  keys: string[],
+  delayMs = nativeKeyDelayMs(),
+  activateWaylandIme = false
+): void {
   if (!isWayland) {
     runXdotool('key', '--delay', String(delayMs), '--clearmodifiers', ...keys)
     return
   }
-  runWtype(...wtypeKeyArgs(keys, delayMs))
+  runWtype(...(activateWaylandIme ? wtypeImeActivationArgs() : []), ...wtypeKeyArgs(keys, delayMs))
 }
 
 async function selectInputMethod(engine: string): Promise<void> {
@@ -90,6 +98,9 @@ async function selectInputMethod(engine: string): Promise<void> {
       stdio: 'pipe',
       timeout: NATIVE_COMMAND_TIMEOUT_MS
     })
+    if (isWayland) {
+      return
+    }
     execFileSync('fcitx5-remote', ['-o'], {
       stdio: 'pipe',
       timeout: NATIVE_COMMAND_TIMEOUT_MS
@@ -167,7 +178,7 @@ function typeExactByteSequence(repetitions: number): void {
   for (let index = 0; index < repetitions; index += 1) {
     keys.push('g', 'k', 's', 'Hangul', 'a', 'b', 'c', 'Hangul', 'r', 'm', 'f', 'Return')
   }
-  runNativeKeySequence(keys)
+  runNativeKeySequence(keys, nativeKeyDelayMs(), true)
 }
 
 function typeSentenceSequence(repetitions: number): void {
@@ -176,7 +187,7 @@ function typeSentenceSequence(repetitions: number): void {
     for (let index = 0; index < repetitions; index += 1) {
       keys.push(...'xptmxmfmf gkrh dlTsmsep duwjsgl rmfjsp', 'Return')
     }
-    runNativeKeySequence(keys)
+    runNativeKeySequence(keys, nativeKeyDelayMs(), true)
     return
   }
   const delaySeconds = String(nativeKeyDelayMs() / 1_000)
@@ -191,29 +202,31 @@ function typeSentenceSequence(repetitions: number): void {
 
 async function typeNumericCandidateSequence(repetitions: number): Promise<void> {
   const delay = String(nativeKeyDelayMs())
-  for (let index = 0; index < repetitions; index += 1) {
-    if (isWayland) {
-      runWtype(
+  if (isWayland) {
+    const args = wtypeImeActivationArgs()
+    for (let index = 0; index < repetitions; index += 1) {
+      args.push(
         ...wtypeKeyArgs([...'zhong'], nativeKeyDelayMs()),
         '-s',
         '200',
         ...wtypeKeyArgs(['1', 'Return'], nativeKeyDelayMs())
       )
-    } else {
-      runXdotool('type', '--delay', delay, '--clearmodifiers', 'zhong')
-      runXdotool('sleep', '0.2')
-      runXdotool('key', '1')
-      runXdotool('key', 'Return')
     }
+    runWtype(...args)
+    await selectOrdinaryInput()
+    runNativeKeySequence(Array.from({ length: repetitions }, () => ['1', 'Return']).flat())
+    return
+  }
+  for (let index = 0; index < repetitions; index += 1) {
+    runXdotool('type', '--delay', delay, '--clearmodifiers', 'zhong')
+    runXdotool('sleep', '0.2')
+    runXdotool('key', '1')
+    runXdotool('key', 'Return')
   }
   await selectOrdinaryInput()
   for (let index = 0; index < repetitions; index += 1) {
-    if (isWayland) {
-      runNativeKeySequence(['1', 'Return'])
-    } else {
-      runXdotool('type', '--delay', delay, '--clearmodifiers', '1')
-      runXdotool('key', 'Return')
-    }
+    runXdotool('type', '--delay', delay, '--clearmodifiers', '1')
+    runXdotool('key', 'Return')
   }
 }
 
