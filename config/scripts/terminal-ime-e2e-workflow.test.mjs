@@ -65,6 +65,7 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).toContain("['initial-input-mode', 'hangul']")
     expect(runner).toContain("['hangul-keyboard', '2']")
     expect(runner).toContain("await waitForIbusEngine(ibusProcess, 'libpinyin')")
+    expect(runner.match(/spawnSync\('ibus', \['engine', engine\]/g)).toHaveLength(1)
     expect(runner).toContain("process.kill(-processGroupId, 'SIGTERM')")
     expect(runner).toContain("process.kill(-processGroupId, 'SIGKILL')")
     expect(runner).toContain('const killDeadline = Date.now() + processKillTimeoutMs')

@@ -103,8 +103,17 @@ async function waitForIbusEngine(ibusProcess, engine) {
     if (ibusProcess.exitCode !== null) {
       throw new Error(`ibus-daemon exited early with code ${ibusProcess.exitCode}`)
     }
-    const result = spawnSync('ibus', ['engine', engine], { stdio: 'pipe' })
+    const result = spawnSync('ibus', ['engine'], { encoding: 'utf8' })
     if (result.status === 0) {
+      break
+    }
+    await delay(100)
+  }
+
+  spawnSync('ibus', ['engine', engine], { stdio: 'pipe' })
+  while (Date.now() < deadline) {
+    const result = spawnSync('ibus', ['engine'], { encoding: 'utf8' })
+    if (result.status === 0 && result.stdout.trim() === engine) {
       return
     }
     await delay(100)
