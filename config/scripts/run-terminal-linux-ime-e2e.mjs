@@ -19,16 +19,6 @@ const processKillTimeoutMs = 1_000
 const inputFramework = process.env.ORCA_E2E_NATIVE_IME ?? 'ibus'
 const displayServer = process.env.ORCA_E2E_NATIVE_DISPLAY_SERVER ?? 'x11'
 const isWayland = displayServer === 'wayland'
-const isWaylandIbus = isWayland && inputFramework === 'ibus'
-
-if (isWaylandIbus && process.env.ORCA_E2E_IBUS_LIBRARY_PATH) {
-  process.env.LD_LIBRARY_PATH = [
-    process.env.ORCA_E2E_IBUS_LIBRARY_PATH,
-    process.env.LD_LIBRARY_PATH
-  ]
-    .filter(Boolean)
-    .join(path.delimiter)
-}
 
 if (!['ibus', 'fcitx5'].includes(inputFramework)) {
   throw new Error(`Unsupported native IME framework: ${inputFramework}`)
@@ -299,12 +289,7 @@ async function runInsideSession(evidenceDir) {
       await waitForWaylandCompositor(windowManagerProcess)
     }
 
-    const inputMethodCommand =
-      inputFramework === 'ibus'
-        ? isWayland
-          ? (process.env.ORCA_E2E_IBUS_DAEMON ?? 'ibus-daemon')
-          : 'ibus-daemon'
-        : 'fcitx5'
+    const inputMethodCommand = inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'
     const inputMethodArgs =
       inputFramework === 'ibus'
         ? [
