@@ -161,8 +161,22 @@ async function waitForFcitx(fcitxProcess) {
     if (fcitxProcess.exitCode !== null) {
       throw new Error(`fcitx5 exited early with code ${fcitxProcess.exitCode}`)
     }
-    const result = spawnSync('fcitx5-remote', [], { encoding: 'utf8' })
-    if (result.status === 0) {
+    const owner = spawnSync(
+      'gdbus',
+      [
+        'call',
+        '--session',
+        '--dest',
+        'org.freedesktop.DBus',
+        '--object-path',
+        '/org/freedesktop/DBus',
+        '--method',
+        'org.freedesktop.DBus.NameHasOwner',
+        'org.fcitx.Fcitx5'
+      ],
+      { encoding: 'utf8' }
+    )
+    if (owner.status === 0 && owner.stdout.includes('true')) {
       for (const engine of ['hangul', 'pinyin']) {
         const addon = spawnSync('fcitx5-remote', ['-m', engine], { encoding: 'utf8' })
         if (addon.status !== 0 || addon.stdout.trim().length === 0) {

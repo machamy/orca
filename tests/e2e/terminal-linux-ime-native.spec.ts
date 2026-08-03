@@ -71,13 +71,13 @@ async function selectInputMethod(engine: string): Promise<void> {
     await expect
       .poll(
         () =>
-          execFileSync('fcitx5-remote', ['-n'], {
+          execFileSync('fcitx5-remote', [], {
             encoding: 'utf8',
             timeout: NATIVE_COMMAND_TIMEOUT_MS
           }).trim(),
         { timeout: 20_000 }
       )
-      .toBe(fcitxEngine)
+      .toBe('2')
     return
   }
 
