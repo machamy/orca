@@ -79,20 +79,12 @@ function runWtype(...args: string[]): void {
   })
 }
 
-function wtypeImeActivationArgs(): string[] {
-  return ['-M', 'ctrl', '-P', 'space', '-p', 'space', '-m', 'ctrl', '-s', '1000']
-}
-
-function runNativeKeySequence(
-  keys: string[],
-  delayMs = nativeKeyDelayMs(),
-  activateWaylandIme = false
-): void {
+function runNativeKeySequence(keys: string[], delayMs = nativeKeyDelayMs()): void {
   if (!isWayland) {
     runXdotool('key', '--delay', String(delayMs), '--clearmodifiers', ...keys)
     return
   }
-  runWtype(...(activateWaylandIme ? wtypeImeActivationArgs() : []), ...wtypeKeyArgs(keys, delayMs))
+  runWtype(...wtypeKeyArgs(keys, delayMs))
 }
 
 async function selectInputMethod(engine: string): Promise<void> {
@@ -102,9 +94,6 @@ async function selectInputMethod(engine: string): Promise<void> {
       stdio: 'pipe',
       timeout: NATIVE_COMMAND_TIMEOUT_MS
     })
-    if (isWayland) {
-      return
-    }
     execFileSync('fcitx5-remote', ['-o'], {
       stdio: 'pipe',
       timeout: NATIVE_COMMAND_TIMEOUT_MS
@@ -198,7 +187,7 @@ function typeExactByteSequence(repetitions: number): void {
   for (let index = 0; index < repetitions; index += 1) {
     keys.push('g', 'k', 's', 'Hangul', 'a', 'b', 'c', 'Hangul', 'r', 'm', 'f', 'Return')
   }
-  runNativeKeySequence(keys, nativeKeyDelayMs(), true)
+  runNativeKeySequence(keys)
 }
 
 function typeSentenceSequence(repetitions: number): void {
@@ -207,7 +196,7 @@ function typeSentenceSequence(repetitions: number): void {
     for (let index = 0; index < repetitions; index += 1) {
       keys.push(...'xptmxmfmf gkrh dlTsmsep duwjsgl rmfjsp', 'Return')
     }
-    runNativeKeySequence(keys, nativeKeyDelayMs(), true)
+    runNativeKeySequence(keys)
     return
   }
   const delaySeconds = String(nativeKeyDelayMs() / 1_000)
@@ -223,7 +212,7 @@ function typeSentenceSequence(repetitions: number): void {
 async function typeNumericCandidateSequence(repetitions: number): Promise<void> {
   const delay = String(nativeKeyDelayMs())
   if (isWayland) {
-    const args = wtypeImeActivationArgs()
+    const args: string[] = []
     for (let index = 0; index < repetitions; index += 1) {
       args.push(
         ...wtypeKeyArgs([...'zhong'], nativeKeyDelayMs()),
