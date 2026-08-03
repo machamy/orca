@@ -98,8 +98,8 @@ function configureHangulEngine() {
 }
 
 async function waitForIbusEngine(ibusProcess, engine) {
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
+  const busDeadline = Date.now() + 15_000
+  while (Date.now() < busDeadline) {
     if (ibusProcess.exitCode !== null) {
       throw new Error(`ibus-daemon exited early with code ${ibusProcess.exitCode}`)
     }
@@ -111,7 +111,8 @@ async function waitForIbusEngine(ibusProcess, engine) {
   }
 
   spawnSync('ibus', ['engine', engine], { stdio: 'pipe' })
-  while (Date.now() < deadline) {
+  const engineDeadline = Date.now() + 15_000
+  while (Date.now() < engineDeadline) {
     const result = spawnSync('ibus', ['engine'], { encoding: 'utf8' })
     if (result.status === 0 && result.stdout.trim() === engine) {
       return
