@@ -185,4 +185,22 @@ describe('stock xterm composition ownership', () => {
     expect(emitted.join('')).toBe('한')
     terminal.dispose()
   })
+
+  it('does not duplicate an IBus insertText delivered after the deferred range', async () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    keydown(textarea, 'Process', 229)
+    composition(textarea, 'compositionstart')
+    composition(textarea, 'compositionupdate', '한')
+    textarea.value = '한'
+    textarea.setSelectionRange(1, 1)
+    composition(textarea, 'compositionend')
+    await nextTask()
+    textarea.dispatchEvent(
+      new InputEvent('input', { bubbles: true, data: '한', inputType: 'insertText' })
+    )
+    await nextTask()
+
+    expect(emitted.join('')).toBe('한')
+    terminal.dispose()
+  })
 })

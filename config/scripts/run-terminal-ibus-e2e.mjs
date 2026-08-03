@@ -97,19 +97,19 @@ function configureHangulEngine() {
   }
 }
 
-async function waitForHangulEngine(ibusProcess) {
+async function waitForIbusEngine(ibusProcess, engine) {
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
     if (ibusProcess.exitCode !== null) {
       throw new Error(`ibus-daemon exited early with code ${ibusProcess.exitCode}`)
     }
-    const result = spawnSync('ibus', ['engine', 'hangul'], { stdio: 'pipe' })
+    const result = spawnSync('ibus', ['engine', engine], { stdio: 'pipe' })
     if (result.status === 0) {
       return
     }
     await delay(100)
   }
-  throw new Error('Timed out while selecting the IBus Hangul engine')
+  throw new Error(`Timed out while selecting the IBus ${engine} engine`)
 }
 
 async function runInsideSession(evidenceDir) {
@@ -157,7 +157,9 @@ async function runInsideSession(evidenceDir) {
     }
     evidence.ibusDaemonPid = ibusProcess.pid
     console.error(`[terminal-ime] started ibus-daemon PID ${ibusProcess.pid}`)
-    await waitForHangulEngine(ibusProcess)
+    await waitForIbusEngine(ibusProcess, 'hangul')
+    await waitForIbusEngine(ibusProcess, 'libpinyin')
+    await waitForIbusEngine(ibusProcess, 'hangul')
     console.error(`[terminal-ime] IBus version: ${commandOutput('ibus', ['version'])}`)
     console.error(`[terminal-ime] IBus engine: ${commandOutput('ibus', ['engine'])}`)
     console.error(
