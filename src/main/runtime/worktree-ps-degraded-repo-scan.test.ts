@@ -174,38 +174,42 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  // Why: `listWorktrees` swallows a missing git binary / unmounted repo path into `[]`, and a live repo always reports its main worktree,
-  // so zero local rows is the real shape of a failed scan — not a rejection.
-  it('keeps persisted worktrees when a local scan answers with zero rows', async () => {
-    listWorktreesMock.mockResolvedValue([])
+  // Why: `withTimeout` resolves its fallback on rejection as well as on timeout, so an unabsorbed rejection would silently widen
+  // selector resolution for local repos the way a stall does.
+  it('treats a rejected scan as a real answer instead of restoring persisted worktrees', async () => {
+    listWorktreesMock.mockRejectedValue(new Error('git unavailable'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
 
     const result = await runtime.getWorktreePs(10_000)
 
-    expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
+    expect(result.worktrees.map((worktree) => worktree.worktreeId)).not.toContain(WORKTREE_ID)
   })
 
-  it('does not prune lineage when a local scan answers with zero rows', async () => {
-    const removeWorktreeLineage = vi.fn()
-    const removeWorkspaceLineage = vi.fn()
-    listWorktreesMock.mockResolvedValue([])
-    const runtime = new OrcaRuntimeService(
-      makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
-    )
-
-    await runtime.getWorktreePs(10_000)
-
-    expect(removeWorktreeLineage).not.toHaveBeenCalled()
-    expect(removeWorkspaceLineage).not.toHaveBeenCalled()
-  })
-
-  it('resolves a local worktree selector from persisted metadata when a scan answers with zero rows', async () => {
-    listWorktreesMock.mockResolvedValue([])
+  it('still reports selector_not_found for a local worktree when the scan rejects', async () => {
+    listWorktreesMock.mockRejectedValue(new Error('git unavailable'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
 
-    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).resolves.toMatchObject({
-      id: WORKTREE_ID
-    })
+    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
+      'selector_not_found'
+    )
+  })
+
+  // Why: the scan cache only stores `ok` results, so calling a zero-row local scan degraded would re-spawn `git worktree list`
+  // on every ~1s snapshot recompute for a repo whose directory is permanently gone.
+  it('caches a zero-row local scan instead of rescanning on every poll', async () => {
+    vi.useFakeTimers()
+    try {
+      listWorktreesMock.mockResolvedValue([])
+      const runtime = new OrcaRuntimeService(makeStore() as never)
+
+      await runtime.getWorktreePs(10_000)
+      await vi.advanceTimersByTimeAsync(2_000)
+      await runtime.getWorktreePs(10_000)
+
+      expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops and prunes a worktree that a healthy scan no longer reports', async () => {

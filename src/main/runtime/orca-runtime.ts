@@ -27682,10 +27682,14 @@ export class OrcaRuntimeService {
           }))
         }
         // Why: mobile startup shares this path, so a slow repo scan degrades one repo's metadata instead of blocking all session loading.
-        // Why null: a stall or rejection never reached a verdict, so restore persisted rows instead of publishing a healthy-looking empty catalog.
+        // Why the catch: `withTimeout` resolves its fallback on rejection too, so the rejection must be absorbed first for `null` to mean
+        // "timed out" only. A stall never reached a verdict, so restore persisted rows instead of publishing a healthy-looking empty catalog;
+        // a rejection is a real answer and keeps its shipped zero-row semantics.
         const scan: RuntimeWorktreeScanResult =
           (await withTimeout<RuntimeWorktreeScanResult | null>(
-            this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
+            this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId).catch(
+              () => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult
+            ),
             RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
             null
           )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
@@ -27839,16 +27843,13 @@ export class OrcaRuntimeService {
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
-      const worktrees = await listRepoWorktrees(
-        repo,
-        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
-      )
-      // Why: `git worktree list` always reports the main worktree, so zero rows means git never answered — `listWorktrees` swallows a missing
-      // binary, an unmounted repo path and git-compat failures into `[]`. Treating that as authoritative would prune lineage and publish an
-      // empty catalog for a healthy host, so degrade to persisted rows exactly like the unreachable-SSH branch below.
-      return worktrees.length > 0
-        ? { ok: true, worktrees }
-        : { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
+      return {
+        ok: true,
+        worktrees: await listRepoWorktrees(
+          repo,
+          getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+        )
+      }
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {
