@@ -136,14 +136,31 @@ async function focusNativeTerminalWindow(page: Page, engine: string): Promise<st
 
 function typeExactByteSequence(repetitions: number): void {
   const delay = String(nativeKeyDelayMs())
+  const commands: string[] = []
   for (let index = 0; index < repetitions; index += 1) {
-    runXdotool('type', '--delay', delay, '--clearmodifiers', 'gks')
-    runXdotool('key', 'Hangul')
-    runXdotool('type', '--delay', delay, 'abc')
-    runXdotool('key', 'Hangul')
-    runXdotool('type', '--delay', delay, 'rmf')
-    runXdotool('key', 'Return')
+    commands.push(
+      'type',
+      '--delay',
+      delay,
+      '--clearmodifiers',
+      'gks',
+      'key',
+      'Hangul',
+      'type',
+      '--delay',
+      delay,
+      'abc',
+      'key',
+      'Hangul',
+      'type',
+      '--delay',
+      delay,
+      'rmf',
+      'key',
+      'Return'
+    )
   }
+  runXdotool(...commands)
 }
 
 function typeSentenceSequence(repetitions: number): void {
