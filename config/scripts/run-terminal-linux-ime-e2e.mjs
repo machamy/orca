@@ -1,5 +1,13 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  writeFileSync
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -9,9 +17,17 @@ const insideSessionFlag = '--inside-session'
 const processStopTimeoutMs = 5_000
 const processKillTimeoutMs = 1_000
 const inputFramework = process.env.ORCA_E2E_NATIVE_IME ?? 'ibus'
+const displayServer = process.env.ORCA_E2E_NATIVE_DISPLAY_SERVER ?? 'x11'
+const isWayland = displayServer === 'wayland'
 
 if (!['ibus', 'fcitx5'].includes(inputFramework)) {
   throw new Error(`Unsupported native IME framework: ${inputFramework}`)
+}
+if (!['wayland', 'x11'].includes(displayServer)) {
+  throw new Error(`Unsupported native display server: ${displayServer}`)
+}
+if (isWayland && inputFramework !== 'fcitx5') {
+  throw new Error('Native Wayland coverage currently requires Fcitx5')
 }
 
 function delay(milliseconds) {
@@ -190,18 +206,42 @@ async function waitForFcitx(fcitxProcess) {
   throw new Error('Timed out while starting Fcitx5')
 }
 
+async function waitForWaylandCompositor(compositorProcess) {
+  const runtimeDir = process.env.XDG_RUNTIME_DIR
+  const display = process.env.WAYLAND_DISPLAY
+  if (!runtimeDir || !display) {
+    throw new Error('Native Wayland coverage requires XDG_RUNTIME_DIR and WAYLAND_DISPLAY')
+  }
+  const socketPath = path.isAbsolute(display) ? display : path.join(runtimeDir, display)
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    if (compositorProcess.exitCode !== null) {
+      throw new Error(`sway exited early with code ${compositorProcess.exitCode}`)
+    }
+    if (existsSync(socketPath)) {
+      return
+    }
+    await delay(100)
+  }
+  throw new Error(`Timed out while waiting for Wayland socket: ${socketPath}`)
+}
+
 async function runInsideSession(evidenceDir) {
   const inputMethodLogPath = path.join(evidenceDir, `${inputFramework}-daemon.log`)
   const inputMethodLogFd = openSync(inputMethodLogPath, 'w')
-  const windowManagerLogPath = path.join(evidenceDir, 'xfwm4.log')
+  const windowManagerName = isWayland ? 'sway' : 'xfwm4'
+  const displayEvidenceSuffix = isWayland ? '-wayland' : ''
+  const windowManagerLogPath = path.join(evidenceDir, `${windowManagerName}.log`)
   const windowManagerLogFd = openSync(windowManagerLogPath, 'w')
   const evidence = {
     display: process.env.DISPLAY ?? null,
+    displayServer,
     inputFramework,
     inputMethodDaemonPid: null,
     inputMethodGroupBeforeCleanup: [],
     inputMethodGroupAfterCleanup: [],
     playwrightPid: null,
+    waylandDisplay: process.env.WAYLAND_DISPLAY ?? null,
     windowManagerPid: null,
     windowManagerGroupAfterCleanup: []
   }
@@ -215,22 +255,31 @@ async function runInsideSession(evidenceDir) {
     } else {
       configureFcitxProfile(evidenceDir)
     }
-    windowManagerProcess = spawn('xfwm4', ['--compositor=off'], {
-      detached: true,
-      env: process.env,
-      stdio: ['ignore', windowManagerLogFd, windowManagerLogFd]
-    })
+    windowManagerProcess = spawn(
+      windowManagerName,
+      isWayland ? ['-c', '/dev/null'] : ['--compositor=off'],
+      {
+        detached: true,
+        env: process.env,
+        stdio: ['ignore', windowManagerLogFd, windowManagerLogFd]
+      }
+    )
     if (!windowManagerProcess.pid) {
-      throw new Error('xfwm4 did not return a PID')
+      throw new Error(`${windowManagerName} did not return a PID`)
     }
     evidence.windowManagerPid = windowManagerProcess.pid
-    console.error(`[terminal-ime] started xfwm4 PID ${windowManagerProcess.pid}`)
+    console.error(`[terminal-ime] started ${windowManagerName} PID ${windowManagerProcess.pid}`)
+    if (isWayland) {
+      await waitForWaylandCompositor(windowManagerProcess)
+    }
 
     const inputMethodCommand = inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'
     const inputMethodArgs =
       inputFramework === 'ibus'
         ? ['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable']
-        : ['--disable=wayland']
+        : isWayland
+          ? []
+          : ['--disable=wayland']
     inputMethodProcess = spawn(inputMethodCommand, inputMethodArgs, {
       detached: true,
       env: process.env,
@@ -314,10 +363,18 @@ async function runInsideSession(evidenceDir) {
     )
     copyFileSync(
       windowManagerLogPath,
-      path.join(projectDir, 'test-results', `terminal-${inputFramework}-native-xfwm4.log`)
+      path.join(
+        projectDir,
+        'test-results',
+        `terminal-${inputFramework}-native${displayEvidenceSuffix}-${windowManagerName}.log`
+      )
     )
     writeFileSync(
-      path.join(projectDir, 'test-results', `terminal-${inputFramework}-native-processes.json`),
+      path.join(
+        projectDir,
+        'test-results',
+        `terminal-${inputFramework}-native${displayEvidenceSuffix}-processes.json`
+      ),
       `${JSON.stringify(evidence, null, 2)}\n`
     )
   }
@@ -337,7 +394,7 @@ async function runInsideSession(evidenceDir) {
 
 async function runOuter() {
   if (process.platform !== 'linux') {
-    throw new Error('The native Linux IME E2E runner requires Linux/X11')
+    throw new Error('The native Linux IME E2E runner requires Linux')
   }
 
   const evidenceDir = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-ime-e2e-'))
@@ -347,42 +404,68 @@ async function runOuter() {
   mkdirSync(path.join(evidenceDir, 'cache'))
   console.error(`[terminal-ime] evidence directory: ${evidenceDir}`)
 
-  const sessionProcess = spawn(
-    'xvfb-run',
-    [
-      '--auto-servernum',
-      'dbus-run-session',
-      '--',
-      process.execPath,
-      scriptPath,
-      insideSessionFlag,
-      evidenceDir
-    ],
-    {
-      cwd: projectDir,
-      detached: true,
-      env: {
-        ...process.env,
-        GTK_IM_MODULE: inputFramework === 'fcitx5' ? 'fcitx' : 'ibus',
-        ...(inputFramework === 'ibus' ? { IBUS_ENABLE_SYNC_MODE: '1' } : {}),
-        LANG: process.env.LANG || 'C.UTF-8',
-        QT_IM_MODULE: inputFramework === 'fcitx5' ? 'fcitx' : 'ibus',
-        XDG_CACHE_HOME: path.join(evidenceDir, 'cache'),
-        XDG_CONFIG_HOME: path.join(evidenceDir, 'config'),
-        XDG_RUNTIME_DIR: runtimeDir,
-        XMODIFIERS: inputFramework === 'fcitx5' ? '@im=fcitx' : '@im=ibus'
-      },
-      stdio: 'inherit'
-    }
-  )
+  const sessionCommand = isWayland ? 'dbus-run-session' : 'xvfb-run'
+  const sessionArgs = isWayland
+    ? ['--', process.execPath, scriptPath, insideSessionFlag, evidenceDir]
+    : [
+        '--auto-servernum',
+        'dbus-run-session',
+        '--',
+        process.execPath,
+        scriptPath,
+        insideSessionFlag,
+        evidenceDir
+      ]
+  const {
+    DISPLAY: _display,
+    GTK_IM_MODULE: _gtkImModule,
+    QT_IM_MODULE: _qtImModule,
+    XMODIFIERS: _xModifiers,
+    ...waylandBaseEnv
+  } = process.env
+  void _display
+  void _gtkImModule
+  void _qtImModule
+  void _xModifiers
+  const sessionProcess = spawn(sessionCommand, sessionArgs, {
+    cwd: projectDir,
+    detached: true,
+    env: {
+      ...(isWayland ? waylandBaseEnv : process.env),
+      ...(isWayland
+        ? {
+            ELECTRON_OZONE_PLATFORM_HINT: 'wayland',
+            WAYLAND_DISPLAY: 'wayland-1',
+            WLR_BACKENDS: 'headless',
+            WLR_HEADLESS_OUTPUTS: '1',
+            WLR_LIBINPUT_NO_DEVICES: '1',
+            XDG_SESSION_TYPE: 'wayland'
+          }
+        : {
+            GTK_IM_MODULE: inputFramework === 'fcitx5' ? 'fcitx' : 'ibus',
+            ...(inputFramework === 'ibus' ? { IBUS_ENABLE_SYNC_MODE: '1' } : {}),
+            QT_IM_MODULE: inputFramework === 'fcitx5' ? 'fcitx' : 'ibus',
+            XMODIFIERS: inputFramework === 'fcitx5' ? '@im=fcitx' : '@im=ibus'
+          }),
+      LANG: process.env.LANG || 'C.UTF-8',
+      XDG_CACHE_HOME: path.join(evidenceDir, 'cache'),
+      XDG_CONFIG_HOME: path.join(evidenceDir, 'config'),
+      XDG_RUNTIME_DIR: runtimeDir
+    },
+    stdio: 'inherit'
+  })
   if (!sessionProcess.pid) {
-    throw new Error('xvfb-run did not return a PID')
+    throw new Error(`${sessionCommand} did not return a PID`)
   }
-  console.error(`[terminal-ime] started isolated X11 session PID ${sessionProcess.pid}`)
+  console.error(
+    `[terminal-ime] started isolated ${displayServer} session PID ${sessionProcess.pid}`
+  )
   const exitCode = await waitForExit(sessionProcess)
   const remaining = await stopOwnedProcessGroup(sessionProcess.pid)
   if (remaining.length > 0) {
-    throw new Error(`Owned X11 session processes survived cleanup: ${remaining.join('; ')}`)
+    throw new Error(
+      `Owned ${displayServer} session processes survived cleanup: ${remaining.join('; ')}`
+    )
   }
   return exitCode
 }

@@ -29,14 +29,19 @@ const MAX_KEY_DELAY_MS = 100
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
 const inputFramework = process.env.ORCA_E2E_NATIVE_IME ?? 'ibus'
 const isFcitx = inputFramework === 'fcitx5'
+const displayServer = process.env.ORCA_E2E_NATIVE_DISPLAY_SERVER ?? 'x11'
+const isWayland = displayServer === 'wayland'
 
 test.use({
-  orcaAppExtraEnv: {
-    GTK_IM_MODULE: isFcitx ? 'fcitx' : 'ibus',
-    ...(isFcitx ? {} : { IBUS_ENABLE_SYNC_MODE: '1' }),
-    QT_IM_MODULE: isFcitx ? 'fcitx' : 'ibus',
-    XMODIFIERS: isFcitx ? '@im=fcitx' : '@im=ibus'
-  }
+  orcaAppExtraArgs: isWayland ? ['--ozone-platform=wayland'] : [],
+  orcaAppExtraEnv: isWayland
+    ? { ELECTRON_OZONE_PLATFORM_HINT: 'wayland', XDG_SESSION_TYPE: 'wayland' }
+    : {
+        GTK_IM_MODULE: isFcitx ? 'fcitx' : 'ibus',
+        ...(isFcitx ? {} : { IBUS_ENABLE_SYNC_MODE: '1' }),
+        QT_IM_MODULE: isFcitx ? 'fcitx' : 'ibus',
+        XMODIFIERS: isFcitx ? '@im=fcitx' : '@im=ibus'
+      }
 })
 
 function nativeRepetitions(): number {
@@ -55,6 +60,27 @@ function nativeKeyDelayMs(): number {
 
 function runXdotool(...args: string[]): void {
   execFileSync('xdotool', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
+}
+
+function wtypeKeyArgs(keys: string[], delayMs: number): string[] {
+  const args: string[] = []
+  for (const key of keys) {
+    const keyName = key === ' ' ? 'space' : key
+    args.push('-P', keyName, '-p', keyName, '-s', String(delayMs))
+  }
+  return args
+}
+
+function runWtype(...args: string[]): void {
+  execFileSync('wtype', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
+}
+
+function runNativeKeySequence(keys: string[], delayMs = nativeKeyDelayMs()): void {
+  if (!isWayland) {
+    runXdotool('key', '--delay', String(delayMs), '--clearmodifiers', ...keys)
+    return
+  }
+  runWtype(...wtypeKeyArgs(keys, delayMs))
 }
 
 async function selectInputMethod(engine: string): Promise<void> {
@@ -129,21 +155,30 @@ async function focusNativeTerminalWindow(page: Page, engine: string): Promise<st
   }, title)
   await expect.poll(() => page.title(), { timeout: 5_000 }).toBe(title)
 
-  runXdotool('search', '--onlyvisible', '--name', title, 'windowfocus', '--sync')
+  if (!isWayland) {
+    runXdotool('search', '--onlyvisible', '--name', title, 'windowfocus', '--sync')
+  }
   await selectInputMethod(engine)
   return title
 }
 
 function typeExactByteSequence(repetitions: number): void {
-  const delay = String(nativeKeyDelayMs())
   const keys: string[] = []
   for (let index = 0; index < repetitions; index += 1) {
     keys.push('g', 'k', 's', 'Hangul', 'a', 'b', 'c', 'Hangul', 'r', 'm', 'f', 'Return')
   }
-  runXdotool('key', '--delay', delay, '--clearmodifiers', ...keys)
+  runNativeKeySequence(keys)
 }
 
 function typeSentenceSequence(repetitions: number): void {
+  if (isWayland) {
+    const keys: string[] = []
+    for (let index = 0; index < repetitions; index += 1) {
+      keys.push(...'xptmxmfmf gkrh dlTsmsep duwjsgl rmfjsp', 'Return')
+    }
+    runNativeKeySequence(keys)
+    return
+  }
   const delaySeconds = String(nativeKeyDelayMs() / 1_000)
   for (let index = 0; index < repetitions; index += 1) {
     for (const key of 'xptmxmfmf gkrh dlTsmsep duwjsgl rmfjsp') {
@@ -157,15 +192,28 @@ function typeSentenceSequence(repetitions: number): void {
 async function typeNumericCandidateSequence(repetitions: number): Promise<void> {
   const delay = String(nativeKeyDelayMs())
   for (let index = 0; index < repetitions; index += 1) {
-    runXdotool('type', '--delay', delay, '--clearmodifiers', 'zhong')
-    runXdotool('sleep', '0.2')
-    runXdotool('key', '1')
-    runXdotool('key', 'Return')
+    if (isWayland) {
+      runWtype(
+        ...wtypeKeyArgs([...'zhong'], nativeKeyDelayMs()),
+        '-s',
+        '200',
+        ...wtypeKeyArgs(['1', 'Return'], nativeKeyDelayMs())
+      )
+    } else {
+      runXdotool('type', '--delay', delay, '--clearmodifiers', 'zhong')
+      runXdotool('sleep', '0.2')
+      runXdotool('key', '1')
+      runXdotool('key', 'Return')
+    }
   }
   await selectOrdinaryInput()
   for (let index = 0; index < repetitions; index += 1) {
-    runXdotool('type', '--delay', delay, '--clearmodifiers', '1')
-    runXdotool('key', 'Return')
+    if (isWayland) {
+      runNativeKeySequence(['1', 'Return'])
+    } else {
+      runXdotool('type', '--delay', delay, '--clearmodifiers', '1')
+      runXdotool('key', 'Return')
+    }
   }
 }
 
@@ -212,15 +260,22 @@ async function runNativeImeScenario(
     expect(trace.onData.join('')).toBe(expectedLines.map((line) => `${line}\r`).join(''))
     completed = true
   } finally {
-    await attachTerminalImeBoundaryEvidence(page, testInfo, `native-${inputFramework}-boundaries`, {
-      display: process.env.DISPLAY,
-      engine,
-      inputFramework,
-      expectedLines,
-      keyDelayMs: nativeKeyDelayMs(),
-      receivedBytes,
-      repetitions
-    }).catch(() => undefined)
+    await attachTerminalImeBoundaryEvidence(
+      page,
+      testInfo,
+      `native-${inputFramework}-${displayServer}-boundaries`,
+      {
+        display: process.env.DISPLAY,
+        displayServer,
+        engine,
+        inputFramework,
+        waylandDisplay: process.env.WAYLAND_DISPLAY,
+        expectedLines,
+        keyDelayMs: nativeKeyDelayMs(),
+        receivedBytes,
+        repetitions
+      }
+    ).catch(() => undefined)
     await disposeTerminalImeBoundaryProbe(page).catch(() => undefined)
     if (!completed) {
       await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)

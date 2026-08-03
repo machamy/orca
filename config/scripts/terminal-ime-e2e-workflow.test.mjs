@@ -28,6 +28,8 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toContain('fcitx5-chinese-addons')
     expect(installRun).toContain('fcitx5-frontend-gtk3')
     expect(installRun).toContain('fcitx5-hangul')
+    expect(installRun).toContain('sway')
+    expect(installRun).toContain('wtype')
     expect(installRun).toContain('xdotool')
     expect(installRun).toContain('xfwm4')
     expect(installRun).toContain('xvfb')
@@ -46,12 +48,15 @@ describe('terminal IME e2e workflow', () => {
       .filter((index) => index >= 0)
 
     expect(deterministicIndex).toBeGreaterThanOrEqual(0)
-    expect(nativeIndexes).toHaveLength(2)
+    expect(nativeIndexes).toHaveLength(3)
     expect(nativeIndexes.every((index) => deterministicIndex > index)).toBe(true)
     expect(steps.some((step) => step.with?.name === 'terminal-ime-native-evidence')).toBe(true)
     expect(steps.some((step) => step.with?.name === 'terminal-ime-native-fcitx5-evidence')).toBe(
       true
     )
+    expect(
+      steps.some((step) => step.with?.name === 'terminal-ime-native-fcitx5-wayland-evidence')
+    ).toBe(true)
   })
 
   it('keeps native input framework lifecycle scoped to owned processes', () => {
@@ -63,12 +68,14 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).toContain(
       "['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable']"
     )
-    expect(runner).toContain("spawn('xfwm4', ['--compositor=off']")
+    expect(runner).toContain("isWayland ? ['-c', '/dev/null'] : ['--compositor=off']")
     expect(runner).toContain("['initial-input-mode', 'hangul']")
     expect(runner).toContain("['hangul-keyboard', '2']")
     expect(runner).toContain("await waitForIbusEngine(inputMethodProcess, 'libpinyin')")
     expect(runner).toContain("inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'")
     expect(runner).toContain("['--disable=wayland']")
+    expect(runner).toContain("WLR_BACKENDS: 'headless'")
+    expect(runner).toContain("WLR_LIBINPUT_NO_DEVICES: '1'")
     expect(runner).toContain("for (const engine of ['hangul', 'pinyin'])")
     expect(runner).toContain("'org.freedesktop.DBus.NameHasOwner'")
     expect(runner).toContain("'org.fcitx.Fcitx5'")
@@ -91,7 +98,7 @@ describe('terminal IME e2e workflow', () => {
       'utf8'
     )
 
-    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(7)
+    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(8)
     expect(nativeSpec).toContain('{ timeout: 20_000 }')
   })
 })
