@@ -36,6 +36,7 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toContain('dconf-gsettings-backend')
     expect(installRun).toContain('libglib2.0-bin')
     expect(runs.some((run) => run.includes('IBUS_SHA256'))).toBe(true)
+    expect(runs.some((run) => run.includes('--prefix=/usr'))).toBe(true)
     expect(runs.some((run) => run.includes('--enable-shared --disable-static'))).toBe(true)
     expect(runs.some((run) => run.includes('make -C bus -j2 ibus-daemon'))).toBe(true)
     expect(runs.some((run) => run.includes('make -C client/wayland -j2 ibus-wayland'))).toBe(true)

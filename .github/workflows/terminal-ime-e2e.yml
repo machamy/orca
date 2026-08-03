@@ -72,6 +72,7 @@ jobs:
           cd "$RUNNER_TEMP/ibus-source"
           autoreconf -fiv
           ./configure \
+            --prefix=/usr \
             --enable-shared --disable-static --disable-tests --disable-distro-tests \
             --disable-gtk2 --disable-gtk3 --disable-gtk4 --disable-xim --enable-wayland \
             --disable-appindicator --disable-memconf --disable-dconf \
