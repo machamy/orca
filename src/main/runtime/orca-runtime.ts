@@ -5172,6 +5172,13 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
+  // Why: host-local repo IPC mutations never enter runtime methods, so paired
+  // clients need an explicit catalog invalidation; the local renderer already
+  // got its own repos:changed and must not be re-notified (#11994).
+  notifyReposChangedForRemoteClients(): void {
+    this.emitClientEvent({ type: 'reposChanged' })
+  }
+
   private notifyActivateWorktree(
     repoId: string,
     worktreeId: string,

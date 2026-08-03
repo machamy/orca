@@ -127,7 +127,7 @@ export function RepositoryPane({
 
   const handleRemoveProject = (repoId: string) => {
     if (confirmingRemove === repoId) {
-      removeProject(repoId)
+      removeProject(repoId, { errorFeedback: 'toast' })
       setConfirmingRemove(null)
       return
     }
