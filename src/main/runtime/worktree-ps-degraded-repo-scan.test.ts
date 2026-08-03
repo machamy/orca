@@ -29,6 +29,7 @@ vi.mock('../git/worktree', async (importOriginal) => ({
   listWorktrees: listWorktreesMock
 }))
 
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REPO_ID = 'repo-remote'
@@ -36,6 +37,9 @@ const REPO_PATH = '/home/user/projects/app'
 const WORKTREE_PATH = '/home/user/projects/app-feature'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 const SCRATCH_ID = `${REPO_ID}::${REPO_PATH}/.claude/worktrees/scratch`
+const SSH_CONNECTION_ID = 'ssh-remote-1'
+const SSH_HOST_ID = `ssh:${SSH_CONNECTION_ID}`
+const LOCAL_REPO_PATH = '/Users/me/dev/app'
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
   return {
@@ -77,6 +81,8 @@ type StoreOptions = {
   metaById?: Record<string, ReturnType<typeof makeMeta>>
   removeWorktreeLineage?: ReturnType<typeof vi.fn>
   removeWorkspaceLineage?: ReturnType<typeof vi.fn>
+  /** Extra `getRepos()` rows appended after the primary one, for same-id-on-two-hosts coverage. */
+  coHostedRepos?: { id: string; path: string; connectionId?: string }[]
 }
 
 function makeStore(options: StoreOptions = {}) {
@@ -95,7 +101,13 @@ function makeStore(options: StoreOptions = {}) {
         badgeColor: 'blue',
         addedAt: 1,
         ...(options.connectionId === undefined ? {} : { connectionId: options.connectionId })
-      }
+      },
+      ...(options.coHostedRepos ?? []).map((repo) => ({
+        displayName: 'app',
+        badgeColor: 'blue',
+        addedAt: 1,
+        ...repo
+      }))
     ],
     getAllWorktreeMeta: vi.fn(() => metaById),
     getWorktreeMeta: (id: string) => metaById[id],
@@ -205,6 +217,127 @@ describe('worktree.ps on a degraded repo scan', () => {
       await runtime.getWorktreePs(10_000)
       await vi.advanceTimersByTimeAsync(2_000)
       await runtime.getWorktreePs(10_000)
+
+      expect(listWorktreesMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: one repo id can be registered on several execution hosts, so a stalled host must not republish another host's rows.
+  it('does not overwrite another execution host’s healthy rows when this host’s scan stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      getSshGitProviderMock.mockReturnValue({
+        listWorktrees: vi.fn(async () => [
+          { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+          {
+            path: WORKTREE_PATH,
+            head: 'def',
+            branch: 'feature',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+      })
+      listWorktreesMock.mockImplementation(neverSettles)
+      const runtime = new OrcaRuntimeService(
+        makeStore({
+          connectionId: SSH_CONNECTION_ID,
+          coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
+          metaById: {
+            [WORKTREE_ID]: makeMeta({ hostId: SSH_HOST_ID }),
+            [MAIN_WORKTREE_ID]: makeMeta({
+              displayName: 'main',
+              instanceId: 'parent-instance',
+              hostId: SSH_HOST_ID
+            })
+          }
+        }) as never
+      )
+
+      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
+
+      const remote = result.worktrees.find((worktree) => worktree.worktreeId === WORKTREE_ID)
+      expect(remote?.branch).toBe('feature')
+      expect(remote?.hostId).toBe(SSH_HOST_ID)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not claim an unstamped persisted row when the repo id is registered on two hosts', async () => {
+    vi.useFakeTimers()
+    try {
+      getSshGitProviderMock.mockReturnValue({
+        listWorktrees: vi.fn(async () => [
+          { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+          {
+            path: WORKTREE_PATH,
+            head: 'def',
+            branch: 'feature',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+      })
+      listWorktreesMock.mockImplementation(neverSettles)
+      const runtime = new OrcaRuntimeService(
+        makeStore({
+          connectionId: SSH_CONNECTION_ID,
+          coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
+          metaById: {
+            [WORKTREE_ID]: makeMeta(),
+            [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main', instanceId: 'parent-instance' })
+          }
+        }) as never
+      )
+
+      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
+
+      const remote = result.worktrees.find((worktree) => worktree.worktreeId === WORKTREE_ID)
+      expect(remote?.hostId).toBe(SSH_HOST_ID)
+      expect(remote?.branch).toBe('feature')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: the ownership gate must not cost the single-host case the fix exists for — a stamped row on its own host still comes back.
+  it('restores persisted rows stamped for this host when its only owner stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      listWorktreesMock.mockImplementation(neverSettles)
+      const runtime = new OrcaRuntimeService(
+        makeStore({
+          metaById: {
+            [WORKTREE_ID]: makeMeta({ hostId: LOCAL_EXECUTION_HOST_ID }),
+            [MAIN_WORKTREE_ID]: makeMeta({
+              displayName: 'main',
+              instanceId: 'parent-instance',
+              hostId: LOCAL_EXECUTION_HOST_ID
+            })
+          }
+        }) as never
+      )
+
+      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
+
+      expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: the timeout fires per poll, so only the in-flight scan map keeps a permanent stall from re-spawning `git worktree list`.
+  it('does not re-spawn the git scan on every poll while a scan stays stalled', async () => {
+    vi.useFakeTimers()
+    try {
+      listWorktreesMock.mockImplementation(neverSettles)
+      const runtime = new OrcaRuntimeService(makeStore() as never)
+
+      await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
+      await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
       expect(listWorktreesMock).toHaveBeenCalledTimes(1)
     } finally {

@@ -27867,10 +27867,16 @@ export class OrcaRuntimeService {
     if (!store) {
       return []
     }
+    const expectedHostId = getRepoExecutionHostId(repo)
+    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
     const byWorktreeId = new Map<string, GitWorktreeInfo>()
     for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
       const parsed = splitWorktreeId(worktreeId)
       if (!parsed || parsed.repoId !== repo.id) {
+        continue
+      }
+      // Why: one repo id can be registered on several execution hosts, so a degraded host must not republish another host's rows (same gate as worktrees.ts).
+      if (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) {
         continue
       }
       // Why: mirror worktrees:list's disconnected-SSH fallback — keep persisted rows while a scan is unreachable or stalled instead of zero rows.
