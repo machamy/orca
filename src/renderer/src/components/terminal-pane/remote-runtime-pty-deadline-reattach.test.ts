@@ -7,6 +7,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 
 describe('remote runtime pty reattach after the bounded recovery window', () => {
   const runtimeCall = vi.fn()
@@ -78,7 +79,11 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     )
   }
 
-  function hostSnapshot(terminal: string, snapshotVersion: number, publicationEpoch: string) {
+  function hostSnapshot(
+    terminal: string,
+    snapshotVersion: number,
+    publicationEpoch: string
+  ): RuntimeMobileSessionTabsResult {
     return {
       worktree: 'wt-1',
       publicationEpoch,
@@ -291,9 +296,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const { retryAllRemoteRuntimePtyRecoveriesNow } = await import(
-        './remote-runtime-pty-recovery-state'
-      )
+      const { retryAllRemoteRuntimePtyRecoveriesNow } =
+        await import('./remote-runtime-pty-recovery-state')
       runtimeCall.mockImplementation(async (request: { method: string }) => {
         if (request.method === 'session.tabs.activate') {
           return {
