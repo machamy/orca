@@ -130,24 +130,6 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
         () => true
       )
     ).toBeNull()
-
-    expect(
-      resolveTerminalKeyboardShortcutAction(
-        event,
-        true,
-        'false',
-        0,
-        false,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        () => 'alt-enter',
-        () => true,
-        'orca-first',
-        true
-      )
-    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
   })
 })
 

@@ -10,10 +10,6 @@ import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 import {
-  requestCapturedTerminalReconfirmation,
-  sendCapturedTerminalInput
-} from './terminal-captured-input-dispatch'
-import {
   keybindingMatchesAction,
   type KeybindingOverrides,
   type KeybindingPlatform,
@@ -45,9 +41,6 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
-// macOS redispatches a committing Enter after keyup; dedupe against its PTY.
-const pendingImeShortcutCodes = new Map<string, string>()
-
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
   isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
@@ -60,10 +53,9 @@ export function resolveTerminalKeyboardShortcutAction(
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
   isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
-  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first',
-  afterImeCommit = false
+  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first'
 ): ReturnType<typeof resolveTerminalShortcutAction> {
-  if (!afterImeCommit && isImeOwnedKeyboardEvent(event)) {
+  if (isImeOwnedKeyboardEvent(event)) {
     return null
   }
   // Why: keep the host callback required at the production boundary so a
@@ -350,8 +342,7 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const resolveShortcutEvent = (
-      event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0],
-      afterImeCommit = false
+      event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0]
     ): ReturnType<typeof resolveTerminalKeyboardShortcutAction> =>
       resolveTerminalKeyboardShortcutAction(
         event,
@@ -365,44 +356,8 @@ export function useTerminalKeyboardShortcuts({
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
         isActivePaneWindowsTerminalHost,
-        terminalShortcutPolicy,
-        afterImeCommit
+        terminalShortcutPolicy
       )
-
-    const createCapturedInputSender = (
-      pane: { id: number; leafId: string },
-      data: string
-    ): (() => void) => {
-      const capturedTransport = paneTransportsRef.current.get(pane.id)
-      const capturedPtyId = capturedTransport?.getPtyId() ?? null
-      const capturedBinding = panePtyBindingsRef.current.get(pane.id) as
-        | (IDisposable & { requestWindowsShiftEnterReconfirmation?: () => void })
-        | undefined
-      const getCurrentManager = () => managerRef.current
-      const getCurrentTransport = () => paneTransportsRef.current.get(pane.id)
-      const getCurrentBinding = () => panePtyBindingsRef.current.get(pane.id)
-      return () => {
-        const targetPaneMounted =
-          getCurrentManager()
-            ?.getPanes()
-            .some((candidate) => candidate.id === pane.id && candidate.leafId === pane.leafId) ===
-          true
-        const sent = sendCapturedTerminalInput({
-          targetPaneMounted,
-          currentTransport: getCurrentTransport(),
-          capturedTransport,
-          capturedPtyId,
-          data
-        })
-        if (sent) {
-          recordTerminalUserInputForLeaf(tabId, pane.leafId)
-          if (data === '\x1b[13;2u') {
-            // Why: this write bypasses PTY onData, so no-OSC shells need reconfirmation.
-            requestCapturedTerminalReconfirmation(getCurrentBinding(), capturedBinding)
-          }
-        }
-      }
-    }
 
     const onKeyDown = (e: KeyboardEvent): void => {
       const manager = managerRef.current
@@ -414,28 +369,6 @@ export function useTerminalKeyboardShortcuts({
         return
       }
       if (isImeOwnedKeyboardEvent(e)) {
-        const pane = manager.getActivePane() ?? manager.getPanes()[0]
-        const action = resolveShortcutEvent(e, true)
-        if (
-          pane &&
-          action?.type === 'sendInput' &&
-          pane.terminal.inputAfterComposition(action.data)
-        ) {
-          const transport = paneTransportsRef.current.get(pane.id)
-          const ptyId = transport?.getPtyId()
-          if (ptyId) {
-            pendingImeShortcutCodes.set(ptyId, e.code)
-          }
-        }
-        return
-      }
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
-      const transport = pane ? paneTransportsRef.current.get(pane.id) : null
-      const ptyId = transport?.getPtyId()
-      if (ptyId && pendingImeShortcutCodes.get(ptyId) === e.code) {
-        pendingImeShortcutCodes.delete(ptyId)
-        e.preventDefault()
-        e.stopImmediatePropagation()
         return
       }
       // Why: replace stale state only for this physical key so rollover cannot
@@ -501,8 +434,14 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const sendResolvedInput = createCapturedInputSender(pane, action.data)
-        sendResolvedInput()
+        pane.terminal.input(action.data)
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        if (action.data === '\x1b[13;2u') {
+          const binding = panePtyBindingsRef.current.get(pane.id) as
+            | (IDisposable & { requestWindowsShiftEnterReconfirmation?: () => void })
+            | undefined
+          binding?.requestWindowsShiftEnterReconfirmation?.()
+        }
         return
       }
 
@@ -698,13 +637,6 @@ export function useTerminalKeyboardShortcuts({
     const onKeyUp = (e: KeyboardEvent): void => {
       if (isImeOwnedKeyboardEvent(e)) {
         return
-      }
-      const manager = managerRef.current
-      const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
-      const transport = pane ? paneTransportsRef.current.get(pane.id) : null
-      const ptyId = transport?.getPtyId()
-      if (!isMac && ptyId && pendingImeShortcutCodes.get(ptyId) === e.code) {
-        pendingImeShortcutCodes.delete(ptyId)
       }
       if (e.key === 'Alt') {
         optionKeyLocation = 0
