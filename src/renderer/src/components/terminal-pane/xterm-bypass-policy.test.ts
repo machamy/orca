@@ -124,6 +124,17 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it('bypasses unmodified native text through keyup so the macOS commit wins', () => {
+    for (const type of ['keydown', 'keyup']) {
+      expect(
+        shouldBypassXtermKeyboardEvent(
+          event({ type, key: '₩', code: 'Backquote', keyCode: 192, isComposing: false }),
+          noSel
+        )
+      ).toBe(true)
+    }
+  })
+
   it('does not bypass ordinary unmodified Latin input', () => {
     expect(
       shouldBypassXtermKeyboardEvent(

@@ -49,7 +49,7 @@ function isSingleNonAsciiPrintableText(key: string): boolean {
 export function shouldBypassXtermForMacImeStart(event: XtermBypassEvent, isMac: boolean): boolean {
   if (
     !isMac ||
-    event.type !== 'keydown' ||
+    !isXtermHandledKeyEvent(event.type) ||
     event.metaKey ||
     event.ctrlKey ||
     event.altKey ||
@@ -57,12 +57,8 @@ export function shouldBypassXtermForMacImeStart(event: XtermBypassEvent, isMac: 
   ) {
     return false
   }
-  const chars = Array.from(event.key)
-  if (chars.length !== 1) {
-    return false
-  }
-  const codePoint = chars[0].codePointAt(0)
-  return codePoint !== undefined && codePoint >= 0x3131 && codePoint <= 0x318e
+  // Why: macOS key bindings can replace layout text only after keydown; leave keypress/input to Chromium.
+  return isSingleNonAsciiPrintableText(event.key)
 }
 
 function isXtermHandledKeyEvent(type: string): boolean {

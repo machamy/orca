@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
 
 function openTerminal(): {
   emitted: string[]
@@ -82,6 +83,34 @@ describe('stock xterm composition ownership', () => {
     keydown(textarea, 'Enter', 13)
 
     expect(emitted.join('')).toBe('ab\r')
+    terminal.dispose()
+  })
+
+  it('uses the recorded macOS committed text instead of the keydown layout text', () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    terminal.attachCustomKeyEventHandler(
+      (event) =>
+        !shouldBypassXtermKeyboardEvent(event, {
+          isMac: true,
+          hasSelection: false
+        })
+    )
+    keydown(textarea, '₩', 192)
+    const keypress = new KeyboardEvent('keypress', {
+      bubbles: true,
+      code: 'Backquote',
+      key: '₩'
+    })
+    Object.defineProperties(keypress, {
+      charCode: { value: 96 },
+      keyCode: { value: 96 },
+      which: { value: 96 }
+    })
+    textarea.dispatchEvent(keypress)
+    textarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: '₩' }))
+    keydown(textarea, 'a', 65)
+
+    expect(emitted.join('')).toBe('`a')
     terminal.dispose()
   })
 
