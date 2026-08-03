@@ -64,6 +64,7 @@ import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
 import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
+import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
@@ -1311,16 +1312,38 @@ function TerminalPane(
         return
       }
       const settings = useAppStore.getState().settings
+      // Why: same bound as the whole-tab guard, so a wedged remote probe never leaves Cmd+W
+      // looking dead for the full 15s RPC timeout; unanswered means ask, not close (#10142).
+      let decided = false
+      const decide = (act: () => void): void => {
+        if (decided) {
+          return
+        }
+        decided = true
+        act()
+      }
+      const confirmClose = (): void =>
+        setPendingCloseConfirmation({ paneId, copyKind: getCloseDialogCopyKind(paneId) })
+      const probeTimeout = setTimeout(() => decide(confirmClose), RUNNING_CLOSE_PROBE_TIMEOUT_MS)
       void inspectRuntimeTerminalProcess(settings, ptyId)
         .then((process) => {
-          if (!process.hasChildProcesses || settings?.skipCloseTerminalWithRunningProcessConfirm) {
-            executeClosePane(paneId)
-          } else {
-            setPendingCloseConfirmation({ paneId, copyKind: getCloseDialogCopyKind(paneId) })
-          }
+          clearTimeout(probeTimeout)
+          decide(() => {
+            if (
+              !process.hasChildProcesses ||
+              settings?.skipCloseTerminalWithRunningProcessConfirm
+            ) {
+              executeClosePane(paneId)
+            } else {
+              confirmClose()
+            }
+          })
         })
         // Why: if the child-process probe rejects (wedged IPC, legacy provider), close anyway — Cmd+W doing nothing is worse than closing a pane with a child.
-        .catch(() => executeClosePane(paneId))
+        .catch(() => {
+          clearTimeout(probeTimeout)
+          decide(() => executeClosePane(paneId))
+        })
     },
     [executeClosePane, getCloseDialogCopyKind]
   )

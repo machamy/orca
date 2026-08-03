@@ -295,7 +295,9 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('closes instead of hanging when a wedged remote probe never settles', async () => {
+  // Why: a remote inspect can take its full 15s RPC timeout. Closing at 4s would kill a
+  // running remote command with no prompt — the exact failure this guard exists to stop.
+  it('prompts instead of closing when a wedged remote probe never settles', async () => {
     vi.useFakeTimers()
     inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
     const onClose = vi.fn()
@@ -306,11 +308,50 @@ describe('guardRunningTerminalClose', () => {
     vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
     vi.useRealTimers()
 
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1', tabLabel: 'npm run dev' })
+
+    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(visibleRequest()).toBeNull()
   })
 
-  it('does not close twice when a slow probe resolves after the timeout closed the tab', async () => {
+  it('treats every pane as a candidate when picking the copy for a timed-out probe', async () => {
+    setState({
+      ptyIdsByTabId: { 'tab-1': ['pty-a', 'pty-b'] },
+      terminalLayoutsByTabId: {
+        'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' } }
+      },
+      agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
+    })
+    vi.useFakeTimers()
+    inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
+
+    guard()
+    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
+    vi.useRealTimers()
+
+    expect(visibleRequest()?.copyKind).toBe('agent')
+  })
+
+  it('closes rather than wedging when the timed-out prompt throws', async () => {
+    const requestSpy = vi
+      .spyOn(useRunningTerminalCloseConfirmStore.getState(), 'requestRunningTerminalCloseConfirm')
+      .mockImplementation(() => {
+        throw new Error('subscriber blew up')
+      })
+    vi.useFakeTimers()
+    inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
+    const onClose = vi.fn()
+
+    guard(onClose)
+    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
+    vi.useRealTimers()
+    requestSpy.mockRestore()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a slow probe that resolves after the timeout already prompted', async () => {
     vi.useFakeTimers()
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: 'sleep',
@@ -323,6 +364,8 @@ describe('guardRunningTerminalClose', () => {
     vi.useRealTimers()
     await settleProbe()
 
+    expect(onClose).not.toHaveBeenCalled()
+    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(visibleRequest()).toBeNull()
   })

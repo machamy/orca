@@ -1,10 +1,8 @@
 /**
- * Repro for #10142: the tab X button bypasses the running-process close
- * confirmation that Cmd/Ctrl+W enforces on the same tab.
- *
- * Both halves run against one tab with a live `sleep 300` child:
- *   1. Cmd+W  -> "Stop running command?" dialog (cancelled, tab survives).
- *   2. X click -> expected the same dialog; today the tab just disappears.
+ * Regression for #10142: keyboard and mouse enforce the same running-process close
+ * confirmation. Both halves run against one tab with a live `sleep 300` child:
+ *   1. Cmd/Ctrl+W -> "Stop running command?" dialog (cancelled, tab survives).
+ *   2. X click    -> the same dialog, and the tab is still there behind it.
  */
 import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
@@ -24,7 +22,6 @@ import {
 } from './helpers/terminal'
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
-const SCREENSHOT_DIR = '/tmp/vbb/10142/.repro'
 
 function countRenderedTabs(page: Page): Promise<number> {
   return page.locator(SORTABLE_TAB).count()
@@ -36,7 +33,7 @@ function closeDialogTitle(page: Page) {
 
 test.describe.configure({ mode: 'serial' })
 
-test('#10142 tab X button bypasses the Cmd+W running-process confirmation', async ({
+test('the tab X button applies the same running-process confirmation as Cmd+W', async ({
   orcaPage
 }) => {
   test.setTimeout(120_000)
@@ -73,8 +70,6 @@ test('#10142 tab X button bypasses the Cmd+W running-process confirmation', asyn
   await focusActiveTerminalInput(orcaPage)
   await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w')
   await expect(closeDialogTitle(orcaPage)).toBeVisible({ timeout: 15_000 })
-  await orcaPage.screenshot({ path: `${SCREENSHOT_DIR}/10142-1-cmdw-shows-confirm.png` })
-
   await orcaPage.getByRole('button', { name: /^Cancel$/ }).click()
   await expect(closeDialogTitle(orcaPage)).toBeHidden()
   await expect(busyTab).toBeVisible()
@@ -84,7 +79,6 @@ test('#10142 tab X button bypasses the Cmd+W running-process confirmation', asyn
   await busyTab.hover()
   await busyTab.getByRole('button', { name: /^Close tab /i }).click()
   await orcaPage.waitForTimeout(1_500)
-  await orcaPage.screenshot({ path: `${SCREENSHOT_DIR}/10142-2-x-click-no-confirm.png` })
 
   expect(
     {
