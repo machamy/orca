@@ -99,6 +99,29 @@ describe('stock xterm composition ownership', () => {
     terminal.dispose()
   })
 
+  it('emits deferred shortcut input with the range-derived commit', async () => {
+    const { emitted, terminal, textarea } = openTerminal()
+    composition(textarea, 'compositionstart')
+    composition(textarea, 'compositionupdate', '한')
+    textarea.value = '한'
+    textarea.setSelectionRange(1, 1)
+
+    expect(terminal.inputAfterComposition('\x1b\r')).toBe(true)
+    composition(textarea, 'compositionend', '한')
+    await nextTask()
+
+    expect(emitted).toEqual(['한\x1b\r'])
+    terminal.dispose()
+  })
+
+  it('does not defer input without an active composition', () => {
+    const { emitted, terminal } = openTerminal()
+
+    expect(terminal.inputAfterComposition('\x1b\r')).toBe(false)
+    expect(emitted).toEqual([])
+    terminal.dispose()
+  })
+
   it('delivers same-task composition ranges before physical Enter', () => {
     const { emitted, terminal, textarea } = openTerminal()
 

@@ -45,6 +45,9 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 
+// macOS redispatches a committing Enter after keyup; dedupe against its PTY.
+const pendingImeShortcutCodes = new Map<string, string>()
+
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
   isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
@@ -57,9 +60,10 @@ export function resolveTerminalKeyboardShortcutAction(
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
   isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
-  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first'
+  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first',
+  afterImeCommit = false
 ): ReturnType<typeof resolveTerminalShortcutAction> {
-  if (isImeOwnedKeyboardEvent(event)) {
+  if (!afterImeCommit && isImeOwnedKeyboardEvent(event)) {
     return null
   }
   // Why: keep the host callback required at the production boundary so a
@@ -346,7 +350,8 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const resolveShortcutEvent = (
-      event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0]
+      event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0],
+      afterImeCommit = false
     ): ReturnType<typeof resolveTerminalKeyboardShortcutAction> =>
       resolveTerminalKeyboardShortcutAction(
         event,
@@ -360,7 +365,8 @@ export function useTerminalKeyboardShortcuts({
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
         isActivePaneWindowsTerminalHost,
-        terminalShortcutPolicy
+        terminalShortcutPolicy,
+        afterImeCommit
       )
 
     const createCapturedInputSender = (
@@ -408,6 +414,28 @@ export function useTerminalKeyboardShortcuts({
         return
       }
       if (isImeOwnedKeyboardEvent(e)) {
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        const action = resolveShortcutEvent(e, true)
+        if (
+          pane &&
+          action?.type === 'sendInput' &&
+          pane.terminal.inputAfterComposition(action.data)
+        ) {
+          const transport = paneTransportsRef.current.get(pane.id)
+          const ptyId = transport?.getPtyId()
+          if (ptyId) {
+            pendingImeShortcutCodes.set(ptyId, e.code)
+          }
+        }
+        return
+      }
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      const transport = pane ? paneTransportsRef.current.get(pane.id) : null
+      const ptyId = transport?.getPtyId()
+      if (ptyId && pendingImeShortcutCodes.get(ptyId) === e.code) {
+        pendingImeShortcutCodes.delete(ptyId)
+        e.preventDefault()
+        e.stopImmediatePropagation()
         return
       }
       // Why: replace stale state only for this physical key so rollover cannot
@@ -670,6 +698,13 @@ export function useTerminalKeyboardShortcuts({
     const onKeyUp = (e: KeyboardEvent): void => {
       if (isImeOwnedKeyboardEvent(e)) {
         return
+      }
+      const manager = managerRef.current
+      const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      const transport = pane ? paneTransportsRef.current.get(pane.id) : null
+      const ptyId = transport?.getPtyId()
+      if (!isMac && ptyId && pendingImeShortcutCodes.get(ptyId) === e.code) {
+        pendingImeShortcutCodes.delete(ptyId)
       }
       if (e.key === 'Alt') {
         optionKeyLocation = 0

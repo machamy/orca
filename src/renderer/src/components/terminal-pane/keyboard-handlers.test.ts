@@ -114,9 +114,10 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
   })
 
   it('refuses a marked real Enter before shortcut resolution', () => {
+    const event = makeKeyEvent({ key: 'Enter', shiftKey: true, isComposing: true, keyCode: 13 })
     expect(
       resolveTerminalKeyboardShortcutAction(
-        makeKeyEvent({ key: 'Enter', shiftKey: true, isComposing: true, keyCode: 13 }),
+        event,
         true,
         'false',
         0,
@@ -129,6 +130,24 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
         () => true
       )
     ).toBeNull()
+
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        event,
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => 'alt-enter',
+        () => true,
+        'orca-first',
+        true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
   })
 })
 

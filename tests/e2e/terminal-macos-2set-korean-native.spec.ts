@@ -51,8 +51,9 @@ function typeNativeTwoSetKoreanPreedit(processId: number, keyCodes: readonly num
   ])
 }
 
-function commitNativeComposition(): void {
-  execFileSync('osascript', ['-e', 'tell application "System Events" to key code 36'])
+function commitNativeComposition(shift = false): void {
+  const modifier = shift ? ' using shift down' : ''
+  execFileSync('osascript', ['-e', `tell application "System Events" to key code 36${modifier}`])
 }
 
 async function readActiveComposition(page: Page): Promise<string | null> {
@@ -72,7 +73,7 @@ async function runNativeScenario(
   processId: number,
   keyCodes: readonly number[],
   expectedText: string,
-  preCommit?: { committedText: string; preeditText: string }
+  preCommit?: { committedText: string; preeditText: string; shiftEnter?: boolean }
 ): Promise<void> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
@@ -83,7 +84,7 @@ async function runNativeScenario(
   )
 
   const ptyId = await waitForActivePanePtyId(page)
-  const reader = createTerminalImeByteReader(testRepoPath, 1)
+  let reader = createTerminalImeByteReader(testRepoPath, 1)
   let completed = false
   try {
     await startTerminalImeByteReader(page, ptyId, reader)
@@ -95,15 +96,33 @@ async function runNativeScenario(
       await expect
         .poll(async () => (await readTerminalImeBoundaryTrace(page)).onData.join(''))
         .toBe(preCommit.committedText)
-      commitNativeComposition()
+      commitNativeComposition(preCommit.shiftEnter)
     } else {
       typeNativeTwoSetKorean(processId, keyCodes)
     }
 
-    const receivedBytes = await waitForTerminalImeBytes(page, reader)
-    expect(receivedBytes).toEqual([Buffer.from(`${expectedText}\n`).toString('hex')])
+    if (preCommit?.shiftEnter) {
+      expect(await waitForTerminalImeBytes(page, reader)).toEqual([
+        Buffer.from(`${expectedText}\x1b\n`).toString('hex')
+      ])
+      removeTerminalImeByteReader(reader)
+      reader = createTerminalImeByteReader(testRepoPath, 1)
+      await startTerminalImeByteReader(page, ptyId, reader)
+      await page.keyboard.type('ordinary')
+      await page.keyboard.press('Shift+Enter')
+      expect(await waitForTerminalImeBytes(page, reader)).toEqual([
+        Buffer.from('ordinary\x1b\n').toString('hex')
+      ])
+    } else {
+      expect(await waitForTerminalImeBytes(page, reader)).toEqual([
+        Buffer.from(`${expectedText}\n`).toString('hex')
+      ])
+    }
     const trace = await readTerminalImeBoundaryTrace(page)
-    expect(trace.onData.join('')).toBe(`${expectedText}\r`)
+    const expectedOnData = preCommit?.shiftEnter
+      ? `${expectedText}\x1b\rordinary`
+      : `${expectedText}\r`
+    expect(trace.onData.join('')).toBe(expectedOnData)
     completed = true
   } finally {
     await attachTerminalImeBoundaryEvidence(page, testInfo, 'native-macos-2set-boundaries').catch(
@@ -166,6 +185,22 @@ test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
       [15, 40, 1, 40, 14, 40],
       '가나다',
       { committedText: '가나', preeditText: '다' }
+    )
+  })
+
+  test('commits the final syllable before physical Shift+Enter', async ({
+    electronApp,
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await runNativeScenario(
+      orcaPage,
+      testInfo,
+      testRepoPath,
+      electronApp.process().pid!,
+      [13, 40],
+      '자',
+      { committedText: '', preeditText: '자', shiftEnter: true }
     )
   })
 })
