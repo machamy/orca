@@ -101,6 +101,17 @@ export class RemoteRuntimePtyRecoveryState {
     return true
   }
 
+  // Why: a wait that ends with no liveness evidence arms no timer, so park a retry or online/resume/reconnect find nothing to revive.
+  parkRetryForExternalTrigger(epoch: number, retry: (epoch: number) => void): boolean {
+    if (!this.isCurrent(epoch) || this.pendingRetry !== null) {
+      return false
+    }
+    this.pendingRetry = retry
+    this.pendingEpoch = epoch
+    scheduledRecoveries.add(this)
+    return true
+  }
+
   // Why: a one-shot retry whose owner already resolved elsewhere would otherwise survive the cutoff as fake revivable work.
   discardPendingRetry(retry: (epoch: number) => void): void {
     if (this.pendingRetry !== retry) {

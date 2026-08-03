@@ -188,6 +188,8 @@ export function createRemoteRuntimePtyTransport(
   let recoveryReplacementPolicyHandle: string | null = null
   let stopWaitingForPublishedHandle: (() => void) | null = null
   let publishedHandleWaitEpoch: number | null = null
+  // Why: a spent auto-recovery window is the evidence that licenses reattaching the fenced handle; explicit retries must not erase it.
+  let autoRecoveryWindowSpent = false
   let settleHostSessionAttachRetry: ((retry: boolean) => void) | null = null
   let resubscribeInventoryEpoch: number | null = null
   let resubscribeInventoryWindows = 0
@@ -241,9 +243,13 @@ export function createRemoteRuntimePtyTransport(
       clearPublishedHandleWait()
     }
     if (recovery.currentPhase === 'disconnected') {
+      autoRecoveryWindowSpent = true
       // Why: cached pixels may remain, but no stream from the exhausted epoch may keep delivering or accepting terminal traffic.
       subscriptionGeneration += 1
       closeMultiplexedStream()
+    }
+    if (recovery.currentPhase === 'idle') {
+      autoRecoveryWindowSpent = false
     }
     if (
       recovery.currentPhase === 'disconnected' ||
@@ -1343,12 +1349,11 @@ export function createRemoteRuntimePtyTransport(
         }
         if (update.terminalHandle === previousHandle) {
           // Why: once the auto-recovery window is spent, a host still publishing this surface is evidence the fenced handle outlived the stale error.
-          if (
-            recovery.currentPhase !== 'disconnected' ||
-            getCurrentMultiplexedStream(previousHandle)
-          ) {
+          if (!autoRecoveryWindowSpent || getCurrentMultiplexedStream(previousHandle)) {
             return
           }
+          // Why: one reattach per spent window, so a handle that really is dead is not retried on every host snapshot.
+          autoRecoveryWindowSpent = false
           recovery.begin()
           clearPublishedHandleWait()
           const reusedPtyId = remotePtyId
@@ -1471,6 +1476,13 @@ export function createRemoteRuntimePtyTransport(
             code: 'remote_runtime_unavailable'
           })
         }
+        // Why: liveness is unknown, so auto-retry stops here; keep an unarmed retry parked for online/resume/reconnect to fire.
+        recovery.parkRetryForExternalTrigger(recoveryEpoch, (nextEpoch) => {
+          scheduleResubscribeAfterTransportClose(
+            handle ? getRecoveryReplacementPolicy(handle) : 'reuse',
+            nextEpoch
+          )
+        })
         return
       }
       if (!nextHandle) {

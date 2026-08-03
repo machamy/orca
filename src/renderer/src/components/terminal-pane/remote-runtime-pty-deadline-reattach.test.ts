@@ -271,10 +271,10 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     }
   })
 
-  it('lets Reconnect poll again once a require-replacement wait outlives its own epoch', async () => {
+  it('reattaches from a same-handle snapshot delivered inside the Reconnect window', async () => {
     vi.useFakeTimers()
     try {
-      const { transport } = await attachStalePane()
+      const { transport, onError } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
 
       await vi.advanceTimersByTimeAsync(66_000)
@@ -284,8 +284,49 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
       expect(transport.retryRecovery?.()).toBe(true)
       await vi.advanceTimersByTimeAsync(1_000)
-
       expect(hostListCalls).toBeGreaterThan(listCallsAtCutoff)
+
+      // Reconnect must not disarm the only path back: the click opens a window, it does not spend one.
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        hostSnapshot('terminal-stale', 4, 'epoch-3'),
+        'env-1'
+      )
+      await vi.waitFor(() => expect(subscribedTerminalHandles()).toHaveLength(2))
+
+      emitSnapshot(latestSubscribePayload().streamId, 'reattached')
+      expect(transport.isConnected()).toBe(true)
+      expect(onError).not.toHaveBeenCalled()
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('revives a latched require-replacement pane when online or system resume fires', async () => {
+    vi.useFakeTimers()
+    try {
+      const { transport, onError } = await attachStalePane()
+      const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+      const { retryAllRemoteRuntimePtyRecoveriesNow } =
+        await import('./remote-runtime-pty-recovery-state')
+
+      await vi.advanceTimersByTimeAsync(66_000)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      const listCallsAtCutoff = hostListCalls
+
+      expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(hostListCalls).toBeGreaterThan(listCallsAtCutoff)
+
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        hostSnapshot('terminal-stale', 4, 'epoch-3'),
+        'env-1'
+      )
+      await vi.waitFor(() => expect(subscribedTerminalHandles()).toHaveLength(2))
+
+      emitSnapshot(latestSubscribePayload().streamId, 'reattached')
+      expect(transport.isConnected()).toBe(true)
+      expect(onError).not.toHaveBeenCalled()
       transport.destroy?.()
     } finally {
       vi.useRealTimers()

@@ -175,4 +175,36 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     expect(state.currentPhase).toBe('recovering')
     state.dispose()
   })
+
+  it('revives a parked retry that never armed a backoff timer', async () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const firstEpoch = state.begin()
+    expect(state.parkRetryForExternalTrigger(firstEpoch, retry)).toBe(true)
+
+    // Why: parking must not fire on its own, so the pane still latches at the cutoff.
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 300_000)
+    expect(state.currentPhase).toBe('disconnected')
+    expect(retry).not.toHaveBeenCalled()
+
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+    expect(retry).toHaveBeenCalledWith(firstEpoch + 1)
+    expect(state.currentPhase).toBe('recovering')
+    state.dispose()
+  })
+
+  it('refuses to park over an armed backoff or a stale epoch', () => {
+    vi.useFakeTimers()
+    const state = new RemoteRuntimePtyRecoveryState()
+    const epoch = state.begin()
+    state.schedule(epoch, vi.fn())
+
+    expect(state.parkRetryForExternalTrigger(epoch, vi.fn())).toBe(false)
+
+    state.cancel()
+    expect(state.parkRetryForExternalTrigger(epoch, vi.fn())).toBe(false)
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
+    state.dispose()
+  })
 })
