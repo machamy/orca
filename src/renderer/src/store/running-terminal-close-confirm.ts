@@ -15,7 +15,29 @@ export type RunningTerminalCloseConfirmState = {
   runningTerminalCloseConfirm: RunningTerminalCloseConfirmRequest | null
   requestRunningTerminalCloseConfirm: (request: RunningTerminalCloseConfirmRequest) => void
   confirmRunningTerminalClose: () => void
+  /** Accepts the visible request and every queued one. Used when the user ticks "don't ask
+   *  again": a prompt they just opted out of must not still be waiting behind this one. */
+  confirmAllRunningTerminalCloses: () => void
   dismissRunningTerminalClose: () => void
+}
+
+/** Folds a duplicate request for the same tab into the pending one instead of dropping it,
+ *  so two surfaces closing the same tab both get their callback. */
+function mergeRequests(
+  pending: RunningTerminalCloseConfirmRequest,
+  duplicate: RunningTerminalCloseConfirmRequest
+): RunningTerminalCloseConfirmRequest {
+  return {
+    ...pending,
+    onConfirm: () => {
+      pending.onConfirm()
+      duplicate.onConfirm()
+    },
+    onCancel: () => {
+      pending.onCancel?.()
+      duplicate.onCancel?.()
+    }
+  }
 }
 
 // Why a standalone store instead of an AppState slice (which is what the sibling
@@ -39,11 +61,16 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
     requestRunningTerminalCloseConfirm: (request) => {
       const visible = get().runningTerminalCloseConfirm
       // Why: the probe is async, so a second click on the same tab arrives before the
-      // dialog opens; without this it would stack a second identical prompt.
-      if (
-        visible?.terminalTabId === request.terminalTabId ||
-        queuedRequests.some((queued) => queued.terminalTabId === request.terminalTabId)
-      ) {
+      // dialog opens. One prompt, but both closes still resolve.
+      if (visible?.terminalTabId === request.terminalTabId) {
+        set({ runningTerminalCloseConfirm: mergeRequests(visible, request) })
+        return
+      }
+      const queuedIndex = queuedRequests.findIndex(
+        (queued) => queued.terminalTabId === request.terminalTabId
+      )
+      if (queuedIndex >= 0) {
+        queuedRequests[queuedIndex] = mergeRequests(queuedRequests[queuedIndex]!, request)
         return
       }
       if (visible) {
@@ -64,6 +91,14 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       // next real request instead of seeing the stale one.
       advanceRequest()
       request.onConfirm()
+    },
+
+    confirmAllRunningTerminalCloses: () => {
+      const pending = [get().runningTerminalCloseConfirm, ...queuedRequests.splice(0)]
+      set({ runningTerminalCloseConfirm: null })
+      for (const request of pending) {
+        request?.onConfirm()
+      }
     },
 
     dismissRunningTerminalClose: () => {

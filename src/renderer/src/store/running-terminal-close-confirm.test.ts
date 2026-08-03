@@ -44,7 +44,7 @@ describe('running terminal close confirmation store', () => {
     ).toBe('tab-2')
   })
 
-  it('ignores a repeat request for the tab already being confirmed', () => {
+  it('shows one prompt for a repeat request but still resolves both closes', () => {
     const first = vi.fn()
     const duplicate = vi.fn()
     const store = useRunningTerminalCloseConfirmStore.getState()
@@ -54,11 +54,24 @@ describe('running terminal close confirmation store', () => {
     store.confirmRunningTerminalClose()
 
     expect(first).toHaveBeenCalledTimes(1)
-    expect(duplicate).not.toHaveBeenCalled()
+    expect(duplicate).toHaveBeenCalledTimes(1)
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 
-  it('ignores a repeat request for a tab already waiting in the queue', () => {
+  it('cancels both callers when a folded repeat request is dismissed', () => {
+    const store = useRunningTerminalCloseConfirmStore.getState()
+    const firstCancel = vi.fn()
+    const duplicateCancel = vi.fn()
+
+    store.requestRunningTerminalCloseConfirm(request('tab-1', vi.fn(), firstCancel))
+    store.requestRunningTerminalCloseConfirm(request('tab-1', vi.fn(), duplicateCancel))
+    store.dismissRunningTerminalClose()
+
+    expect(firstCancel).toHaveBeenCalledTimes(1)
+    expect(duplicateCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('folds a repeat request into the one already waiting in the queue', () => {
     const store = useRunningTerminalCloseConfirmStore.getState()
     const queued = vi.fn()
     const duplicate = vi.fn()
@@ -71,7 +84,21 @@ describe('running terminal close confirmation store', () => {
     store.confirmRunningTerminalClose()
 
     expect(queued).toHaveBeenCalledTimes(1)
-    expect(duplicate).not.toHaveBeenCalled()
+    expect(duplicate).toHaveBeenCalledTimes(1)
+    expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
+  })
+
+  it('confirms every pending request once the user opts out of the prompt', () => {
+    const store = useRunningTerminalCloseConfirmStore.getState()
+    const visible = vi.fn()
+    const queued = vi.fn()
+
+    store.requestRunningTerminalCloseConfirm(request('tab-1', visible))
+    store.requestRunningTerminalCloseConfirm(request('tab-2', queued))
+    store.confirmAllRunningTerminalCloses()
+
+    expect(visible).toHaveBeenCalledTimes(1)
+    expect(queued).toHaveBeenCalledTimes(1)
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 

@@ -117,6 +117,87 @@ describe('RunningTerminalCloseDialog', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
+  // Why: this queue opens after an async probe while the pinned queue opens synchronously,
+  // so both can be pending at once. Two modal overlays + focus traps is the bug.
+  it('waits for a visible pinned confirmation instead of stacking a second modal', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    useAppStore.setState({
+      pinnedTabCloseConfirm: { tabLabel: 'pinned tab', onConfirm: vi.fn() }
+    })
+
+    await renderDialog({ onConfirm: vi.fn() }, updateSettings)
+
+    expect(document.body.textContent).not.toContain('Stop running command?')
+
+    await act(async () => {
+      useAppStore.setState({ pinnedTabCloseConfirm: null })
+    })
+
+    expect(document.body.textContent).toContain('Stop running command?')
+  })
+
+  it('does not carry the opt-out tick over to the next queued tab', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    const nextOnConfirm = vi.fn()
+
+    await renderDialog({ onConfirm: vi.fn(), onCancel: vi.fn() }, updateSettings)
+    await act(async () => {
+      useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
+        terminalTabId: 'tab-2',
+        tabLabel: 'build watcher',
+        copyKind: 'command',
+        onConfirm: nextOnConfirm
+      })
+    })
+
+    await act(async () => {
+      getCheckbox().click()
+    })
+    await act(async () => {
+      getButton('Cancel').click()
+    })
+
+    expect(document.body.textContent).toContain('build watcher')
+    expect(getCheckbox().getAttribute('data-state')).toBe('unchecked')
+
+    await act(async () => {
+      getButton('Stop and Close').click()
+    })
+
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(nextOnConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a queued prompt once the user opts out of asking again', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    const onConfirm = vi.fn()
+    const nextOnConfirm = vi.fn()
+
+    await renderDialog({ onConfirm }, updateSettings)
+    await act(async () => {
+      useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
+        terminalTabId: 'tab-2',
+        tabLabel: 'build watcher',
+        copyKind: 'command',
+        onConfirm: nextOnConfirm
+      })
+    })
+
+    await act(async () => {
+      getCheckbox().click()
+    })
+    await act(async () => {
+      getButton('Stop and Close').click()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      skipCloseTerminalWithRunningProcessConfirm: true
+    })
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    expect(nextOnConfirm).toHaveBeenCalledTimes(1)
+    expect(document.body.textContent).not.toContain('build watcher')
+  })
+
   it('cancels without closing and shows the next queued tab', async () => {
     const onConfirm = vi.fn()
     const onCancel = vi.fn()

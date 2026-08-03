@@ -9,7 +9,12 @@ import {
   resolveHostSessionTabIdForWebSessionTab
 } from '@/runtime/web-session-tabs-sync'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import {
+  guardPinnedTabClose,
+  isUnifiedTabPinned,
+  resolvePinnedTabLabel,
+  shouldConfirmPinnedTabClose
+} from '@/store/pinned-tab-close-guard'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
@@ -28,20 +33,6 @@ import {
 } from './terminal-close-target'
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
 export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
-
-type TerminalTabActionState = ReturnType<typeof useAppStore.getState>
-
-function isPinnedVisibleTab(
-  state: TerminalTabActionState,
-  worktreeId: string,
-  visibleId: string
-): boolean {
-  return (
-    (state.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
-      (tab) => (tab.id === visibleId || tab.entityId === visibleId) && tab.isPinned
-    ) ?? false
-  )
-}
 
 export function closeTerminalTab(
   tabId: string,
@@ -89,7 +80,7 @@ export function closeTerminalTab(
   if (
     options?.reason !== 'pty-exit' &&
     !options?.force &&
-    isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)
+    isUnifiedTabPinned(state, owningWorktreeId, terminalTabId)
   ) {
     // Why: background lifecycle callers cannot safely wait on a modal whose
     // owner may be unattended; reject pinned tabs without bypassing the guard.
@@ -97,13 +88,18 @@ export function closeTerminalTab(
       options.onCancel?.()
       return
     }
-    guardPinnedTabClose({
-      isPinned: true,
-      tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
-      onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
-      ...(options?.onCancel ? { onCancel: options.onCancel } : {})
-    })
-    return
+    // Why: the pin prompt supersedes the running-process one only when it actually
+    // appears. With `confirmClosePinnedTab` off it says nothing, so fall through and let
+    // a busy pinned tab still get asked — Cmd+W did exactly that before #10142.
+    if (shouldConfirmPinnedTabClose(state)) {
+      guardPinnedTabClose({
+        isPinned: true,
+        tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+        onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
+        ...(options?.onCancel ? { onCancel: options.onCancel } : {})
+      })
+      return
+    }
   }
 
   // Why: the X button, middle-click and the tab menu used to skip the running-process

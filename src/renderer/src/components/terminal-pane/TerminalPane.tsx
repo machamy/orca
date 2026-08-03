@@ -63,6 +63,7 @@ import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog, { type CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
+import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
@@ -1287,16 +1288,10 @@ function TerminalPane(
   )
 
   // Cmd+W confirms before killing a shell with a running child (e.g. npm run dev); idle prompts close immediately, and Ctrl+D bypasses by design.
+  // Why: the agent-vs-command rule is shared with the tab-strip prompt so the two close paths cannot word the same close differently (#10142).
   const getCloseDialogCopyKind = useCallback(
-    (paneId: number): CloseTerminalDialogCopyKind => {
-      const leafId = managerRef.current?.getLeafId(paneId)
-      if (!leafId) {
-        return 'command'
-      }
-      const agentType =
-        useAppStore.getState().agentStatusByPaneKey[makePaneKey(tabId, leafId)]?.agentType
-      return agentType && agentType !== 'unknown' ? 'agent' : 'command'
-    },
+    (paneId: number): CloseTerminalDialogCopyKind =>
+      resolveLeafCloseCopyKind(tabId, managerRef.current?.getLeafId(paneId)),
     [tabId]
   )
 

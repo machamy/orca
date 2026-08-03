@@ -193,6 +193,46 @@ describe('closeTerminalTab running-process confirmation', () => {
     expect(closeTab).toHaveBeenCalledWith('tab-busy')
   })
 
+  // Why: the pin prompt supersedes this one only when it actually appears. With the pin
+  // confirmation off it says nothing, and the running command must still be announced.
+  it('still asks about a running command on a pinned tab when pin confirmation is off', async () => {
+    const state = busyTabState({
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false }
+    })
+    ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
+      'wt-1'
+    ]![0]!.isPinned = true
+    getStateMock.mockReturnValue(state)
+
+    closeTerminalTab('tab-busy')
+    await settleProbe()
+
+    expect(requestPinnedTabCloseConfirmMock).not.toHaveBeenCalled()
+    expect(closeTab).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-busy' })
+
+    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
+
+    expect(closeTab).toHaveBeenCalledWith('tab-busy')
+  })
+
+  it('rejects a pinned tab for a CLI close even when pin confirmation is off', () => {
+    const state = busyTabState({
+      settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false }
+    })
+    ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
+      'wt-1'
+    ]![0]!.isPinned = true
+    getStateMock.mockReturnValue(state)
+    const onCancel = vi.fn()
+
+    closeTerminalTab('tab-busy', { rejectPinned: true, onCancel })
+
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
   it('confirms before telling a paired host to close its busy tab', async () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
     getStateMock.mockReturnValue(

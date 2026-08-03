@@ -16,7 +16,8 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import {
   guardRunningTerminalClose,
-  shouldConfirmRunningTerminalClose
+  shouldConfirmRunningTerminalClose,
+  RUNNING_CLOSE_PROBE_TIMEOUT_MS
 } from './running-terminal-close-guard'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
@@ -259,5 +260,83 @@ describe('guardRunningTerminalClose', () => {
 
     expect(visibleRequest()).toMatchObject({ copyKind: 'command' })
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // Why: makePaneKey throws on a tab id containing ':'; the dialog must never be the
+  // reason a close silently stops happening.
+  it('closes rather than wedging when the copy-kind lookup throws', async () => {
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      ptyIdsByTabId: { 'tab:1': ['pty-a'] },
+      terminalLayoutsByTabId: { 'tab:1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a' } } },
+      agentStatusByPaneKey: {}
+    })
+    const onClose = vi.fn()
+
+    guardRunningTerminalClose({ terminalTabId: 'tab:1', tabLabel: 'weird', onClose })
+    await settleProbe()
+
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab:1', copyKind: 'command' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('closes rather than wedging when raising the confirmation throws', async () => {
+    const requestSpy = vi
+      .spyOn(useRunningTerminalCloseConfirmStore.getState(), 'requestRunningTerminalCloseConfirm')
+      .mockImplementation(() => {
+        throw new Error('subscriber blew up')
+      })
+    const onClose = vi.fn()
+
+    guard(onClose)
+    await settleProbe()
+    requestSpy.mockRestore()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes instead of hanging when a wedged remote probe never settles', async () => {
+    vi.useFakeTimers()
+    inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
+    const onClose = vi.fn()
+
+    guard(onClose)
+    expect(onClose).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
+    vi.useRealTimers()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(visibleRequest()).toBeNull()
+  })
+
+  it('does not close twice when a slow probe resolves after the timeout closed the tab', async () => {
+    vi.useFakeTimers()
+    inspectRuntimeTerminalProcessMock.mockResolvedValue({
+      foregroundProcess: 'sleep',
+      hasChildProcesses: true
+    })
+    const onClose = vi.fn()
+
+    guard(onClose)
+    vi.advanceTimersByTime(RUNNING_CLOSE_PROBE_TIMEOUT_MS)
+    vi.useRealTimers()
+    await settleProbe()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(visibleRequest()).toBeNull()
+  })
+
+  // Why: an SSH drop zeroes ptyIdsByTabId while the remote command keeps running. We
+  // accept the silent close (there is nothing left to probe) rather than blocking closes
+  // on a dead link — documented here so the behavior is a decision, not an accident.
+  it('closes a reconnecting ssh tab whose pty ids were already zeroed', () => {
+    setState({ ptyIdsByTabId: { 'tab-1': [] } })
+    const onClose = vi.fn()
+
+    guard(onClose)
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
   })
 })
