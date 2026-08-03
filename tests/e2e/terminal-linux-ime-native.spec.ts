@@ -66,6 +66,21 @@ function wtypeKeyArgs(keys: string[], delayMs: number): string[] {
   const args: string[] = []
   for (const key of keys) {
     const keyName = key === ' ' ? 'space' : key
+    if (/^[A-Z]$/.test(keyName)) {
+      args.push(
+        '-M',
+        'shift',
+        '-P',
+        keyName.toLowerCase(),
+        '-p',
+        keyName.toLowerCase(),
+        '-m',
+        'shift',
+        '-s',
+        String(delayMs)
+      )
+      continue
+    }
     args.push('-P', keyName, '-p', keyName, '-s', String(delayMs))
   }
   return args
