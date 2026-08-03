@@ -13,7 +13,10 @@ import type {
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
 } from '../shared/remote-server-update'
-import { isWindowsSignatureCheckUnavailableFailure } from '../shared/updater-windows-signature-check'
+import {
+  isWindowsSignatureCheckUnavailableFailure,
+  isWindowsSignatureMismatchFailure
+} from '../shared/updater-windows-signature-check'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -747,6 +750,8 @@ async function performQuitAndInstall(): Promise<void> {
           true
         )
         resetQuitForUpdateState()
+        // Why: a bare return would exit this span Success and hide the aborted install from tracing.
+        span.fail('Could not persist the supervised serve update handoff')
         return
       }
 
@@ -774,6 +779,12 @@ async function performQuitAndInstall(): Promise<void> {
 
       // Why: quitAndInstall can synchronously clear quitAndInstallInProgress via recovery (Win/Linux dispatchError); skip destructive prep if it already ran.
       if (!quitAndInstallInProgress) {
+        // Why: recovery already wrote the reason to currentStatus; a bare return would exit this span Success.
+        span.fail(
+          currentStatus.state === 'error'
+            ? currentStatus.message
+            : 'quitAndInstall returned without invoking the installer'
+        )
         return
       }
 
@@ -874,6 +885,29 @@ function sendInstallFailureStatus(status: UpdateStatus): void {
   sendStatus(status, { force: true })
 }
 
+const INSTALL_FAILURE_CAUSE_MAX_LENGTH = 200
+
+/**
+ * Appends the updater's own text to the generic install-failure copy. Without it the only record of
+ * why the install never started is destroyed — on Linux that text carries the exact `dpkg -i <path>`
+ * command the user has to run by hand, and remote clients get nothing but "it didn't come back".
+ */
+function withInstallFailureCause(baseMessage: string, error: unknown): string {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  const cause = raw.replace(/\s+/g, ' ').trim().slice(0, INSTALL_FAILURE_CAUSE_MAX_LENGTH)
+  if (!cause || cause === 'Unknown error') {
+    return baseMessage
+  }
+  // Why: UpdateCard picks the whole card off this string, so a signature verdict must not be prefixed by contradictory restart advice.
+  if (
+    isWindowsSignatureCheckUnavailableFailure(cause) ||
+    isWindowsSignatureMismatchFailure(cause)
+  ) {
+    return cause
+  }
+  return `${baseMessage} (${cause})`
+}
+
 /**
  * The recovery status for a failed `.deb`/`.rpm` install, or null when no retained package can
  * recover it. Must run before `resetQuitForUpdateState()` clears the attempt diagnostic.
@@ -929,14 +963,19 @@ function handleQuitAndInstallFailure(error?: unknown): boolean {
   const recoveryStatus = buildLinuxPackageInstallFailureStatus(error)
   failServeUpdateHandoff('The native updater rejected the install request.')
   resetQuitForUpdateState()
-  recordUpdaterLifecycle('quit_and_install_failed_via_event', undefined, {
-    level: 'warn',
-    message: 'Update install could not start; recovered app state'
-  })
+  // Durable data carries classification only — the cause text stays on the status the user can read.
+  recordUpdaterLifecycle(
+    'quit_and_install_failed_via_event',
+    { errorType: error instanceof Error ? error.name : typeof error },
+    {
+      level: 'warn',
+      message: 'Update install could not start; recovered app state'
+    }
+  )
   sendInstallFailureStatus(
     recoveryStatus ?? {
       state: 'error',
-      message: getPreCommitInstallFailureMessage()
+      message: withInstallFailureCause(getPreCommitInstallFailureMessage(), error)
     }
   )
   return true

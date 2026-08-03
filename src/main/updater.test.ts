@@ -112,6 +112,12 @@ const { getLinuxRootPackageTypeMock, recordUpdaterLifecycleMock } = vi.hoisted((
   recordUpdaterLifecycleMock: vi.fn()
 }))
 
+// Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
+const PRE_COMMIT_INSTALL_FAILURE =
+  process.platform === 'darwin'
+    ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
+    : 'Could not start the update installer. Orca remains open.'
+
 // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
 vi.mock('./linux-update-package-type', () => ({
   getLinuxRootPackageType: getLinuxRootPackageTypeMock
@@ -1781,7 +1787,8 @@ describe('updater', () => {
       expect.objectContaining({
         state: 'error',
         // Why: a pre-commit install failure is not fixed by restarting, so the copy must not suggest it.
-        message: 'Could not start the update installer. Orca remains open.'
+        // The updater's own text is appended because it is the only record of why the install never ran.
+        message: `${PRE_COMMIT_INSTALL_FAILURE} (No update filepath provided, can't quit and install)`
       })
     )
   })
@@ -3799,11 +3806,7 @@ describe('updater', () => {
       'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
     const RPM_SHA512 =
       'W2U3AUPfVpc0Ia1qX/VJ5+8aW+yOFhysT6ryodo7A6DTZKqL6RYLK53U6ShGx+9f4lb35qtd4tOp5jzJZZdAfQ=='
-    // Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
-    const PRE_COMMIT_FAILURE_MESSAGE =
-      process.platform === 'darwin'
-        ? 'Could not restart to install the update. Quit and reopen Orca, then try again.'
-        : 'Could not start the update installer. Orca remains open.'
+    const PRE_COMMIT_FAILURE_MESSAGE = PRE_COMMIT_INSTALL_FAILURE
     const DEB_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb'
     const RPM_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide-1.0.61.x86_64.rpm'
     const AGENT_STDERR =
@@ -3972,7 +3975,7 @@ describe('updater', () => {
 
       expect(send).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: PRE_COMMIT_FAILURE_MESSAGE
+        message: `${PRE_COMMIT_FAILURE_MESSAGE} (${EXIT_127})`
       })
       expect(recordUpdaterLifecycleMock).not.toHaveBeenCalledWith(
         'linux_package_install_failed',

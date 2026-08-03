@@ -1,5 +1,6 @@
 import {
   compareAppVersions,
+  hasReachedAppVersion,
   isPerfPrereleaseAppVersion,
   isPrereleaseAppVersion,
   isValidAppVersion
@@ -13,6 +14,7 @@ import type {
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../shared/types'
+import { readRemoteServerInstallFailure } from './remote-server-install-failure-probe'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
@@ -213,12 +215,7 @@ export async function runRemoteServerUpdate(
     if (available.status.state === 'not-available') {
       const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
       const currentVersion = status.appVersion?.trim() ?? ''
-      const reachedTarget =
-        entry.targetVersion !== null &&
-        isValidAppVersion(currentVersion) &&
-        isValidAppVersion(entry.targetVersion) &&
-        compareAppVersions(currentVersion, entry.targetVersion) >= 0
-      if (!reachedTarget) {
+      if (!hasReachedAppVersion(currentVersion, entry.targetVersion)) {
         throw new Error('remote_update_requested_version_unavailable')
       }
       next = {
@@ -269,14 +266,14 @@ export async function runRemoteServerUpdate(
 
     const now = transport.now ?? Date.now
     const reconnectDeadline = now() + timing.reconnectTimeoutMs
+    // Why: the install RPC returns before the installer fires, so an error on the first tick belongs to an earlier attempt.
+    let probed = false
     while (now() < reconnectDeadline) {
+      let installFailure: string | null = null
       try {
         const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
         const version = status.appVersion?.trim() ?? ''
-        const reachedTarget =
-          isValidAppVersion(version) &&
-          isValidAppVersion(install.targetVersion) &&
-          compareAppVersions(version, install.targetVersion) >= 0
+        const reachedTarget = hasReachedAppVersion(version, install.targetVersion)
         if (status.runtimeId !== install.runtimeId && reachedTarget) {
           next = {
             ...next,
@@ -289,8 +286,16 @@ export async function runRemoteServerUpdate(
           onProgress(next)
           return next
         }
+        installFailure = probed
+          ? await readRemoteServerInstallFailure(entry.environmentId, transport, install, status)
+          : null
+        probed = true
       } catch {
         // A refused connection is expected while the server process is being replaced.
+      }
+      // Why: thrown outside the try so the loop's own catch cannot swallow the reason we came for.
+      if (installFailure !== null) {
+        throw new Error(installFailure)
       }
       await transport.wait(timing.pollIntervalMs)
     }
