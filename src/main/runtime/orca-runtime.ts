@@ -27682,11 +27682,15 @@ export class OrcaRuntimeService {
           }))
         }
         // Why: mobile startup shares this path, so a slow repo scan degrades one repo's metadata instead of blocking all session loading.
-        const scan = await withTimeout(
-          this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
-          RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
-          { ok: false, worktrees: [] }
-        )
+        // Why null: only a stall earns the persisted-row fallback; a rejected scan already reached the host, so it stays authoritative-empty.
+        const scan: RuntimeWorktreeScanResult =
+          (await withTimeout<RuntimeWorktreeScanResult | null>(
+            this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId).catch(
+              (): RuntimeWorktreeScanResult => ({ ok: false, worktrees: [] })
+            ),
+            RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
+            null
+          )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
         const gitWorktrees = scan.worktrees
         if (scan.ok) {
           this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
@@ -27847,16 +27851,16 @@ export class OrcaRuntimeService {
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {
-      return { ok: false, worktrees: this.listStoredSshWorktreesForResolution(repo) }
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
     try {
       return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
     } catch {
-      return { ok: false, worktrees: this.listStoredSshWorktreesForResolution(repo) }
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
   }
 
-  private listStoredSshWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
+  private listStoredWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
     const store = this.store
     if (!store) {
       return []
@@ -27867,7 +27871,7 @@ export class OrcaRuntimeService {
       if (!parsed || parsed.repoId !== repo.id) {
         continue
       }
-      // Why: mirror worktrees:list's disconnected-SSH fallback — keep persisted SSH worktrees while the provider reconnects instead of zero rows.
+      // Why: mirror worktrees:list's disconnected-SSH fallback — keep persisted rows while a scan is unreachable or stalled instead of zero rows.
       byWorktreeId.set(worktreeId, {
         path: parsed.worktreePath,
         head: '',
