@@ -55,6 +55,23 @@ function makeMeta(overrides: Record<string, unknown> = {}) {
   }
 }
 
+const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
+
+// Why: prune assertions only discriminate when the repo actually owns lineage rows a scan verdict could delete.
+function makeLineage() {
+  return {
+    [WORKTREE_ID]: {
+      worktreeId: WORKTREE_ID,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: MAIN_WORKTREE_ID,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'agent' as const,
+      capture: 'env-workspace' as const,
+      createdAt: 1
+    }
+  }
+}
+
 type StoreOptions = {
   connectionId?: string
   metaById?: Record<string, ReturnType<typeof makeMeta>>
@@ -65,8 +82,9 @@ type StoreOptions = {
 function makeStore(options: StoreOptions = {}) {
   const metaById = options.metaById ?? {
     [WORKTREE_ID]: makeMeta(),
-    [`${REPO_ID}::${REPO_PATH}`]: makeMeta({ displayName: 'main' })
+    [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main', instanceId: 'parent-instance' })
   }
+  const lineageById = makeLineage()
   const store = {
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => [
@@ -86,7 +104,8 @@ function makeStore(options: StoreOptions = {}) {
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
-    getAllWorktreeLineage: () => ({}),
+    getAllWorktreeLineage: () => lineageById,
+    getAllWorkspaceLineage: () => ({ [`worktree:${WORKTREE_ID}`]: { parentWorkspaceKey: null } }),
     removeWorktreeLineage: options.removeWorktreeLineage ?? vi.fn(),
     removeWorkspaceLineage: options.removeWorkspaceLineage ?? vi.fn(),
     getGitHubCache: () => undefined as never,
@@ -155,34 +174,51 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  it('still reports an empty catalog when a local scan fails', async () => {
-    listWorktreesMock.mockRejectedValue(new Error('git unavailable'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-
-    await expect(runtime.getWorktreePs(10_000)).resolves.toMatchObject({
-      worktrees: [],
-      totalCount: 0
-    })
-  })
-
-  it('does not resolve a local worktree selector from persisted metadata when a scan fails', async () => {
-    listWorktreesMock.mockRejectedValue(new Error('git unavailable'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-
-    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      'selector_not_found'
-    )
-  })
-
-  it('drops a worktree that a healthy scan no longer reports', async () => {
-    listWorktreesMock.mockResolvedValue([
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
-    ])
+  // Why: `listWorktrees` swallows a missing git binary / unmounted repo path into `[]`, and a live repo always reports its main worktree,
+  // so zero local rows is the real shape of a failed scan — not a rejection.
+  it('keeps persisted worktrees when a local scan answers with zero rows', async () => {
+    listWorktreesMock.mockResolvedValue([])
     const runtime = new OrcaRuntimeService(makeStore() as never)
 
     const result = await runtime.getWorktreePs(10_000)
 
+    expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
+  })
+
+  it('does not prune lineage when a local scan answers with zero rows', async () => {
+    const removeWorktreeLineage = vi.fn()
+    const removeWorkspaceLineage = vi.fn()
+    listWorktreesMock.mockResolvedValue([])
+    const runtime = new OrcaRuntimeService(
+      makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
+    )
+
+    await runtime.getWorktreePs(10_000)
+
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(removeWorkspaceLineage).not.toHaveBeenCalled()
+  })
+
+  it('resolves a local worktree selector from persisted metadata when a scan answers with zero rows', async () => {
+    listWorktreesMock.mockResolvedValue([])
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+
+    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).resolves.toMatchObject({
+      id: WORKTREE_ID
+    })
+  })
+
+  it('drops and prunes a worktree that a healthy scan no longer reports', async () => {
+    const removeWorktreeLineage = vi.fn()
+    listWorktreesMock.mockResolvedValue([
+      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
+    ])
+    const runtime = new OrcaRuntimeService(makeStore({ removeWorktreeLineage }) as never)
+
+    const result = await runtime.getWorktreePs(10_000)
+
     expect(result.worktrees.map((worktree) => worktree.worktreeId)).not.toContain(WORKTREE_ID)
+    expect(removeWorktreeLineage).toHaveBeenCalledWith(WORKTREE_ID)
   })
 
   it('does not prune lineage while a scan is stalled', async () => {

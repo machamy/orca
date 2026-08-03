@@ -27682,12 +27682,10 @@ export class OrcaRuntimeService {
           }))
         }
         // Why: mobile startup shares this path, so a slow repo scan degrades one repo's metadata instead of blocking all session loading.
-        // Why null: only a stall earns the persisted-row fallback; a rejected scan already reached the host, so it stays authoritative-empty.
+        // Why null: a stall or rejection never reached a verdict, so restore persisted rows instead of publishing a healthy-looking empty catalog.
         const scan: RuntimeWorktreeScanResult =
           (await withTimeout<RuntimeWorktreeScanResult | null>(
-            this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId).catch(
-              (): RuntimeWorktreeScanResult => ({ ok: false, worktrees: [] })
-            ),
+            this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
             RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
             null
           )) ?? { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
@@ -27841,13 +27839,16 @@ export class OrcaRuntimeService {
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
-      return {
-        ok: true,
-        worktrees: await listRepoWorktrees(
-          repo,
-          getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
-        )
-      }
+      const worktrees = await listRepoWorktrees(
+        repo,
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+      )
+      // Why: `git worktree list` always reports the main worktree, so zero rows means git never answered — `listWorktrees` swallows a missing
+      // binary, an unmounted repo path and git-compat failures into `[]`. Treating that as authoritative would prune lineage and publish an
+      // empty catalog for a healthy host, so degrade to persisted rows exactly like the unreachable-SSH branch below.
+      return worktrees.length > 0
+        ? { ok: true, worktrees }
+        : { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {

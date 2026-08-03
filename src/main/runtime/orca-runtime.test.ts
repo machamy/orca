@@ -36225,7 +36225,8 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('does not prune lineage when a runtime local worktree scan fails', async () => {
+  // Why zero rows, not a rejection: `listWorktrees` swallows git failures into `[]`, and a live repo always reports its main worktree.
+  it('does not prune lineage when a runtime local worktree scan cannot answer', async () => {
     const parentPath = '/tmp/worktree-parent'
     const childPath = '/tmp/worktree-child'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
@@ -36259,10 +36260,12 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeLineage: () => lineageById,
       removeWorktreeLineage
     }
-    vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('git unavailable'))
+    vi.mocked(listWorktrees).mockResolvedValueOnce([])
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await expect(runtime.showManagedWorktree(`id:${childId}`)).rejects.toThrow('selector_not_found')
+    await expect(runtime.showManagedWorktree(`id:${childId}`)).resolves.toMatchObject({
+      id: childId
+    })
 
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
     expect(runtimeStore.setWorktreeMeta).not.toHaveBeenCalled()
@@ -36351,8 +36354,10 @@ describe('OrcaRuntimeService', () => {
     await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [deletedId])
     expect(localProvider.shutdown).not.toHaveBeenCalled()
 
-    // The worktree is now gone; the cached scan must not mask that.
-    vi.mocked(listWorktrees).mockResolvedValue([])
+    // The worktree is now gone; the cached scan must not mask that. Git still reports the main worktree — zero rows would mean a failed scan.
+    vi.mocked(listWorktrees).mockResolvedValue([
+      { path: TEST_REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
+    ])
     const result = await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [
       deletedId
     ])
@@ -43753,10 +43758,12 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
 
     // Regression (#8882): orphan-cleanup removal must also drop the raw scan cache, or the worktree lingers in listings until the 30s TTL.
-    vi.mocked(listWorktrees).mockResolvedValue([])
-    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
-      { worktrees: [] }
-    )
+    vi.mocked(listWorktrees).mockResolvedValue([
+      { path: TEST_REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
+    ])
+    const relisted = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    expect(relisted.authoritative).toBe(true)
+    expect(relisted.worktrees.map((worktree) => worktree.id)).not.toContain(TEST_WORKTREE_ID)
   })
 
   it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {
