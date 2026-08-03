@@ -101,6 +101,14 @@ export class RemoteRuntimePtyRecoveryState {
     return true
   }
 
+  // Why: a one-shot retry whose owner already resolved elsewhere would otherwise survive the cutoff as fake revivable work.
+  discardPendingRetry(retry: (epoch: number) => void): void {
+    if (this.pendingRetry !== retry) {
+      return
+    }
+    this.clearRetryTimer()
+  }
+
   // Why: resume/online should fire an already-scheduled backoff immediately, not start a new epoch.
   retryNow(): boolean {
     if (this.pendingRetry === null || this.pendingEpoch === null) {

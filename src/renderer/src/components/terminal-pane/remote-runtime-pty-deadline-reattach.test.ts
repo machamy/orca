@@ -286,4 +286,49 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       vi.useRealTimers()
     }
   })
+
+  it('leaves Reconnect available when online fires on a pane latched during the attach wait', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { retryAllRemoteRuntimePtyRecoveriesNow } = await import(
+        './remote-runtime-pty-recovery-state'
+      )
+      runtimeCall.mockImplementation(async (request: { method: string }) => {
+        if (request.method === 'session.tabs.activate') {
+          return {
+            ok: false,
+            error: {
+              code: 'remote_runtime_unavailable',
+              message: 'Remote Orca runtime connection closed'
+            }
+          }
+        }
+        return { ok: true, result: {} }
+      })
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-tab-1',
+        leafId: 'pane:1',
+        onPtyExit: vi.fn(),
+        onPtyRebind: vi.fn()
+      })
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-stale',
+        cols: 80,
+        rows: 24,
+        callbacks: { onError: vi.fn() }
+      })
+
+      await vi.advanceTimersByTimeAsync(66_000)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+
+      // The attach wait is single-shot and the cutoff already settled it; replaying it would spin the banner with no RPC in flight.
+      expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
+      expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

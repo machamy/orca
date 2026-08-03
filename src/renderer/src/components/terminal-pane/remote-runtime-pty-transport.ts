@@ -565,11 +565,16 @@ export function createRemoteRuntimePtyTransport(
         if (settleHostSessionAttachRetry === settle) {
           settleHostSessionAttachRetry = null
         }
+        // Why: this wait is single-shot, so replaying it after the cutoff would strand the pane in 'recovering' with no RPC in flight.
+        recovery.discardPendingRetry(scheduledRetry)
         resolve(retry)
+      }
+      const scheduledRetry = (): void => {
+        settle(true)
       }
       settleHostSessionAttachRetry?.(false)
       settleHostSessionAttachRetry = settle
-      if (!recovery.schedule(recoveryEpoch, () => settle(true))) {
+      if (!recovery.schedule(recoveryEpoch, scheduledRetry)) {
         settle(false)
       }
     })
