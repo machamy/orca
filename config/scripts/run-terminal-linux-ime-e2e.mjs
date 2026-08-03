@@ -26,9 +26,6 @@ if (!['ibus', 'fcitx5'].includes(inputFramework)) {
 if (!['wayland', 'x11'].includes(displayServer)) {
   throw new Error(`Unsupported native display server: ${displayServer}`)
 }
-if (isWayland && inputFramework !== 'fcitx5') {
-  throw new Error('Native Wayland coverage currently requires Fcitx5')
-}
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -171,6 +168,16 @@ async function waitForIbusEngine(ibusProcess, engine) {
   throw new Error(`Timed out while selecting the IBus ${engine} engine`)
 }
 
+async function waitForIbusWaylandBridge(bridgeProcess) {
+  const deadline = Date.now() + 1_000
+  while (Date.now() < deadline) {
+    if (bridgeProcess.exitCode !== null) {
+      throw new Error(`ibus-wayland exited early with code ${bridgeProcess.exitCode}`)
+    }
+    await delay(100)
+  }
+}
+
 async function waitForFcitx(fcitxProcess) {
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
@@ -237,6 +244,8 @@ async function runInsideSession(evidenceDir) {
     display: process.env.DISPLAY ?? null,
     displayServer,
     inputFramework,
+    inputMethodBridgeGroupAfterCleanup: [],
+    inputMethodBridgePid: null,
     inputMethodDaemonPid: null,
     inputMethodGroupBeforeCleanup: [],
     inputMethodGroupAfterCleanup: [],
@@ -246,6 +255,7 @@ async function runInsideSession(evidenceDir) {
     windowManagerPid: null,
     windowManagerGroupAfterCleanup: []
   }
+  let inputMethodBridgeProcess
   let inputMethodProcess
   let windowManagerProcess
   let testExitCode = 1
@@ -282,7 +292,12 @@ async function runInsideSession(evidenceDir) {
     const inputMethodCommand = inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'
     const inputMethodArgs =
       inputFramework === 'ibus'
-        ? ['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable']
+        ? [
+            ...(isWayland ? [] : ['--xim']),
+            '--verbose',
+            '--panel=disable',
+            '--emoji-extension=disable'
+          ]
         : isWayland
           ? []
           : ['--disable=wayland']
@@ -316,6 +331,20 @@ async function runInsideSession(evidenceDir) {
           'hangul-keyboard'
         ])}`
       )
+      if (isWayland) {
+        const bridgeCommand = process.env.ORCA_E2E_IBUS_WAYLAND ?? 'ibus-wayland'
+        inputMethodBridgeProcess = spawn(bridgeCommand, [], {
+          detached: true,
+          env: process.env,
+          stdio: ['ignore', inputMethodLogFd, inputMethodLogFd]
+        })
+        if (!inputMethodBridgeProcess.pid) {
+          throw new Error(`${bridgeCommand} did not return a PID`)
+        }
+        evidence.inputMethodBridgePid = inputMethodBridgeProcess.pid
+        console.error(`[terminal-ime] started ${bridgeCommand} PID ${inputMethodBridgeProcess.pid}`)
+        await waitForIbusWaylandBridge(inputMethodBridgeProcess)
+      }
     } else {
       await waitForFcitx(inputMethodProcess)
       console.error(`[terminal-ime] Fcitx5 version: ${commandOutput('fcitx5', ['--version'])}`)
@@ -351,6 +380,11 @@ async function runInsideSession(evidenceDir) {
     console.error(`[terminal-ime] started Playwright PID ${testProcess.pid}`)
     testExitCode = await waitForExit(testProcess)
   } finally {
+    if (inputMethodBridgeProcess?.pid) {
+      evidence.inputMethodBridgeGroupAfterCleanup = await stopOwnedProcessGroup(
+        inputMethodBridgeProcess.pid
+      )
+    }
     if (inputMethodProcess?.pid) {
       evidence.inputMethodGroupBeforeCleanup = processGroupMembers(inputMethodProcess.pid)
       evidence.inputMethodGroupAfterCleanup = await stopOwnedProcessGroup(inputMethodProcess.pid)
@@ -388,6 +422,11 @@ async function runInsideSession(evidenceDir) {
   if (evidence.inputMethodGroupAfterCleanup.length > 0) {
     throw new Error(
       `Owned ${inputFramework} processes survived cleanup: ${evidence.inputMethodGroupAfterCleanup.join('; ')}`
+    )
+  }
+  if (evidence.inputMethodBridgeGroupAfterCleanup.length > 0) {
+    throw new Error(
+      `Owned IBus Wayland bridge processes survived cleanup: ${evidence.inputMethodBridgeGroupAfterCleanup.join('; ')}`
     )
   }
   if (evidence.windowManagerGroupAfterCleanup.length > 0) {

@@ -35,6 +35,8 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toContain('dbus-x11')
     expect(installRun).toContain('dconf-gsettings-backend')
     expect(installRun).toContain('libglib2.0-bin')
+    expect(runs.some((run) => run.includes('IBUS_SHA256'))).toBe(true)
+    expect(runs.some((run) => run.includes('make -C client/wayland -j2 ibus-wayland'))).toBe(true)
   })
 
   it('pins X11 to Ubuntu 22.04 and Wayland to a current wlroots stack', () => {
@@ -54,7 +56,7 @@ describe('terminal IME e2e workflow', () => {
       .filter((index) => index >= 0)
 
     expect(deterministicIndex).toBeGreaterThanOrEqual(0)
-    expect(nativeIndexes).toHaveLength(3)
+    expect(nativeIndexes).toHaveLength(4)
     expect(nativeIndexes.every((index) => deterministicIndex > index)).toBe(true)
     expect(steps.some((step) => step.with?.name === 'terminal-ime-native-evidence')).toBe(true)
     expect(steps.some((step) => step.with?.name === 'terminal-ime-native-fcitx5-evidence')).toBe(
@@ -62,6 +64,9 @@ describe('terminal IME e2e workflow', () => {
     )
     expect(
       steps.some((step) => step.with?.name === 'terminal-ime-native-fcitx5-wayland-evidence')
+    ).toBe(true)
+    expect(
+      steps.some((step) => step.with?.name === 'terminal-ime-native-ibus-wayland-evidence')
     ).toBe(true)
   })
 
@@ -71,14 +76,14 @@ describe('terminal IME e2e workflow', () => {
       'utf8'
     )
 
-    expect(runner).toContain(
-      "['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable']"
-    )
+    expect(runner).toContain("...(isWayland ? [] : ['--xim'])")
     expect(runner).toContain("isWayland ? ['-c', '/dev/null'] : ['--compositor=off']")
     expect(runner).toContain("['initial-input-mode', 'hangul']")
     expect(runner).toContain("['hangul-keyboard', '2']")
     expect(runner).toContain("await waitForIbusEngine(inputMethodProcess, 'libpinyin')")
     expect(runner).toContain("inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'")
+    expect(runner).toContain("process.env.ORCA_E2E_IBUS_WAYLAND ?? 'ibus-wayland'")
+    expect(runner).toContain('await waitForIbusWaylandBridge(inputMethodBridgeProcess)')
     expect(runner).toContain("['--disable=wayland']")
     expect(runner).toContain("WLR_BACKENDS: 'headless'")
     expect(runner).toContain("WLR_LIBINPUT_NO_DEVICES: '1'")
