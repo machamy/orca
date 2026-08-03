@@ -14,7 +14,6 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
-import { isUnifiedTabPinned } from '@/store/pinned-tab-close-guard'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
@@ -1303,15 +1302,12 @@ function TerminalPane(
 
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
-      // Why: closing the last pane of a pinned tab prefers the pin dialog over the running-process prompt; non-pinned tabs keep the process prompt.
-      const isLastPane = (managerRef.current?.getPanes().length ?? 0) <= 1
-      if (isLastPane) {
-        const state = useAppStore.getState()
-        const confirmPinned = state.settings?.confirmClosePinnedTab ?? true
-        if (confirmPinned && isUnifiedTabPinned(state, worktreeId, tabId)) {
-          executeClosePane(paneId)
-          return
-        }
+      // Why: the last pane closes the whole tab, and closeTerminalTab owns both the pinned
+      // and running-process guards. Probing here too would double-prompt, and its nullable
+      // transport ptyId would silently skip the prompt the mouse paths now get (#10142).
+      if ((managerRef.current?.getPanes().length ?? 0) <= 1) {
+        executeClosePane(paneId)
+        return
       }
       const transport = paneTransportsRef.current.get(paneId)
       const ptyId = transport?.getPtyId()
@@ -1331,7 +1327,7 @@ function TerminalPane(
         // Why: if the child-process probe rejects (wedged IPC, legacy provider), close anyway — Cmd+W doing nothing is worse than closing a pane with a child.
         .catch(() => executeClosePane(paneId))
     },
-    [executeClosePane, tabId, worktreeId, getCloseDialogCopyKind]
+    [executeClosePane, getCloseDialogCopyKind]
   )
 
   useImperativeHandle(

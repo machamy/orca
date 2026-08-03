@@ -1,11 +1,12 @@
 /**
- * Repro for #10142: tab X button / middle-click bypass the running-process close
- * confirmation that Cmd+W enforces.
+ * Regression for #10142: the tab X button / middle-click used to bypass the
+ * running-process close confirmation that Cmd+W enforces. Assertions unchanged
+ * from the adjudicated repro.
  *
  * Mouse close path: SortableTab (X onClick / onAuxClick button===1) -> onClose
- *   -> Terminal.tsx handleCloseTab -> closeTerminalTab() — no process probe.
+ *   -> Terminal.tsx handleCloseTab -> closeTerminalTab() -> running-process guard.
  * Keyboard path: Cmd+W -> TerminalPane.handleRequestClosePane -> inspectRuntimeTerminalProcess
- *   -> CloseTerminalDialog.
+ *   (split panes) or closeTerminalTab's guard (last pane) -> CloseTerminalDialog.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -93,10 +94,7 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
 
   // Control: the keyboard entry point does probe for running children.
   it('keyboard Cmd+W path probes for running child processes before closing', () => {
-    const source = readFileSync(
-      join(__dirname, '../terminal-pane/TerminalPane.tsx'),
-      'utf8'
-    )
+    const source = readFileSync(join(__dirname, '../terminal-pane/TerminalPane.tsx'), 'utf8')
     const handler = source.slice(source.indexOf('const handleRequestClosePane'))
     expect(handler.slice(0, handler.indexOf('useImperativeHandle'))).toContain(
       'inspectRuntimeTerminalProcess'
@@ -106,8 +104,9 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
   // Control: the harness does observe a guard when one exists — pinning blocks the same mouse close.
   it('mouse close routes a pinned tab through its confirmation guard', () => {
     const state = stateWithBusyTerminalTab(closeTab)
-    ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)['wt-1']![0]!.isPinned =
-      true
+    ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
+      'wt-1'
+    ]![0]!.isPinned = true
     getStateMock.mockReturnValue(state)
 
     closeTerminalTab('tab-busy')

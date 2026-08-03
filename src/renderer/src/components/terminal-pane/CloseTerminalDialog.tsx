@@ -17,11 +17,15 @@ export type CloseTerminalDialogCopyKind = 'command' | 'agent'
 export default function CloseTerminalDialog({
   open,
   copyKind = 'command',
+  tabLabel,
   onCancel,
   onConfirm
 }: {
   open: boolean
   copyKind?: CloseTerminalDialogCopyKind
+  /** Names the tab when the prompt can target a tab the user is not looking at
+   *  (tab-strip X, middle-click). Omitted for the focused-pane keyboard path. */
+  tabLabel?: string
   onCancel: () => void
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
@@ -39,6 +43,7 @@ export default function CloseTerminalDialog({
   }
 
   const isAgent = copyKind === 'agent'
+  const trimmedTabLabel = tabLabel?.trim()
 
   return (
     <Dialog
@@ -74,6 +79,11 @@ export default function CloseTerminalDialog({
                 )}
           </DialogDescription>
         </DialogHeader>
+        {trimmedTabLabel ? (
+          <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
+            {trimmedTabLabel}
+          </p>
+        ) : null}
         <div className="flex items-center gap-2">
           <Checkbox
             id={checkboxId}

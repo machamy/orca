@@ -14,6 +14,10 @@ import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
 } from '@/store/slices/terminal-tab-retirement'
+import {
+  guardRunningTerminalClose,
+  shouldConfirmRunningTerminalClose
+} from './running-terminal-close-guard'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
@@ -51,6 +55,9 @@ export function closeTerminalTab(
     hostCloseReason?: TerminalTabCloseReason
     /** PTY whose lifecycle event initiated the host close. */
     lifecyclePtyId?: string
+    /** Set by callers that must never raise a modal (bulk closes, CLI/RPC, lifecycle
+     *  fallbacks) and by the re-entry that runs once the user confirmed. */
+    skipRunningProcessConfirm?: boolean
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
@@ -94,6 +101,21 @@ export function closeTerminalTab(
       isPinned: true,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
       onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
+      ...(options?.onCancel ? { onCancel: options.onCancel } : {})
+    })
+    return
+  }
+
+  // Why: the X button, middle-click and the tab menu used to skip the running-process
+  // prompt that Cmd+W enforced (#10142). Guarding here — above the web-runtime branch so
+  // host-backed tabs are covered too — gives every close path one shared policy.
+  if (shouldConfirmRunningTerminalClose(options)) {
+    guardRunningTerminalClose({
+      terminalTabId,
+      tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+      // Why: re-enter instead of continuing inline so pinned/route/precomputed state is
+      // re-validated against fresh state after an arbitrarily long dialog.
+      onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
     return
