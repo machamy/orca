@@ -80,7 +80,7 @@ function runWtype(...args: string[]): void {
 }
 
 function wtypeImeActivationArgs(): string[] {
-  return ['-M', 'ctrl', '-P', 'space', '-p', 'space', '-m', 'ctrl', '-s', '200']
+  return ['-M', 'ctrl', '-P', 'space', '-p', 'space', '-m', 'ctrl', '-s', '1000']
 }
 
 function runNativeKeySequence(
