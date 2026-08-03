@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -55,16 +55,24 @@ function runXdotool(...args: string[]): void {
   execFileSync('xdotool', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
 }
 
-function selectIbusEngine(engine: string): void {
-  execFileSync('ibus', ['engine', engine], {
-    stdio: 'pipe',
-    timeout: NATIVE_COMMAND_TIMEOUT_MS
-  })
-  const activeEngine = execFileSync('ibus', ['engine'], {
-    encoding: 'utf8',
-    timeout: NATIVE_COMMAND_TIMEOUT_MS
-  }).trim()
-  expect(activeEngine).toBe(engine)
+async function selectIbusEngine(engine: string): Promise<void> {
+  const request = spawn('ibus', ['engine', engine], { stdio: 'ignore' })
+  try {
+    await expect
+      .poll(
+        () =>
+          execFileSync('ibus', ['engine'], {
+            encoding: 'utf8',
+            timeout: NATIVE_COMMAND_TIMEOUT_MS
+          }).trim(),
+        { timeout: 20_000 }
+      )
+      .toBe(engine)
+  } finally {
+    if (request.exitCode === null) {
+      request.kill()
+    }
+  }
 }
 
 async function focusNativeTerminalWindow(page: Page, engine: string): Promise<string> {
@@ -76,7 +84,7 @@ async function focusNativeTerminalWindow(page: Page, engine: string): Promise<st
   await expect.poll(() => page.title(), { timeout: 5_000 }).toBe(title)
 
   runXdotool('search', '--onlyvisible', '--name', title, 'windowfocus', '--sync')
-  selectIbusEngine(engine)
+  await selectIbusEngine(engine)
   return title
 }
 
@@ -103,17 +111,18 @@ function typeSentenceSequence(repetitions: number): void {
   }
 }
 
-function typeNumericCandidateSequence(repetitions: number): void {
+async function typeNumericCandidateSequence(repetitions: number): Promise<void> {
   const delay = String(nativeKeyDelayMs())
   for (let index = 0; index < repetitions; index += 1) {
     runXdotool('type', '--delay', delay, '--clearmodifiers', 'zhong')
     runXdotool('sleep', '0.2')
     runXdotool('key', '1')
     runXdotool('key', 'Return')
-    selectIbusEngine('xkb:us::eng')
+  }
+  await selectIbusEngine('xkb:us::eng')
+  for (let index = 0; index < repetitions; index += 1) {
     runXdotool('type', '--delay', delay, '--clearmodifiers', '1')
     runXdotool('key', 'Return')
-    selectIbusEngine('libpinyin')
   }
 }
 
@@ -124,7 +133,7 @@ async function runNativeIbusScenario(
   engine: string,
   expectedLines: string[],
   expectedCommit: RegExp,
-  driveInput: (repetitions: number) => void
+  driveInput: (repetitions: number) => void | Promise<void>
 ): Promise<void> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
@@ -140,7 +149,7 @@ async function runNativeIbusScenario(
     await startTerminalImeByteReader(page, ptyId, reader)
     await focusNativeTerminalWindow(page, engine)
     await installTerminalImeBoundaryProbe(page)
-    driveInput(repetitions)
+    await driveInput(repetitions)
 
     receivedBytes = await waitForTerminalImeBytes(page, reader, 30_000)
     const trace = await readTerminalImeBoundaryTrace(page)
@@ -224,7 +233,10 @@ test.describe('Native IBus terminal input @headful', () => {
       testInfo,
       testRepoPath,
       'libpinyin',
-      Array.from({ length: repetitions }, () => ['中', '1']).flat(),
+      [
+        ...Array.from({ length: repetitions }, () => '中'),
+        ...Array.from({ length: repetitions }, () => '1')
+      ],
       /中/,
       typeNumericCandidateSequence
     )

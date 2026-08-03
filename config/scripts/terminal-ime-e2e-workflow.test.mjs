@@ -83,6 +83,7 @@ describe('terminal IME e2e workflow', () => {
       'utf8'
     )
 
-    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(3)
+    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(2)
+    expect(nativeSpec).toContain('{ timeout: 20_000 }')
   })
 })
