@@ -9,6 +9,7 @@ describe('terminal IME e2e workflow', () => {
   const workflow = parse(
     readFileSync(join(projectDir, '.github/workflows/terminal-ime-e2e.yml'), 'utf8')
   )
+  const linuxJob = workflow.jobs.linux
 
   it('runs only on schedule or manual dispatch', () => {
     expect(workflow.on.pull_request).toBeUndefined()
@@ -17,9 +18,7 @@ describe('terminal IME e2e workflow', () => {
   })
 
   it('installs native IBus and Fcitx5 engines with X11 input tools', () => {
-    const runs = workflow.jobs['linux-x11'].steps
-      .map((step) => step.run)
-      .filter((run) => typeof run === 'string')
+    const runs = linuxJob.steps.map((step) => step.run).filter((run) => typeof run === 'string')
     const installRun = runs.find((run) => run.includes('apt-get install'))
 
     expect(installRun).toBeDefined()
@@ -38,8 +37,15 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toContain('libglib2.0-bin')
   })
 
+  it('pins X11 to Ubuntu 22.04 and Wayland to a current wlroots stack', () => {
+    expect(linuxJob.strategy.matrix.include).toEqual([
+      { label: 'X11', os: 'ubuntu-22.04', display_server: 'x11' },
+      { label: 'Wayland', os: 'ubuntu-24.04', display_server: 'wayland' }
+    ])
+  })
+
   it('runs both native framework suites before deterministic boundaries', () => {
-    const steps = workflow.jobs['linux-x11'].steps
+    const steps = linuxJob.steps
     const deterministicIndex = steps.findIndex((step) =>
       step.run?.includes('terminal-ime-exact-byte.spec.ts')
     )
