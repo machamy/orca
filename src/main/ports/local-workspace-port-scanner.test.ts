@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import path from 'node:path'
 import {
   attributePortToWorkspace,
@@ -20,7 +20,7 @@ vi.mock('./port-scan-command-client', () => ({
 
 const LSOF_LISTEN_OUTPUT = ['p123', 'cnode', 'n127.0.0.1:5173'].join('\n')
 
-function urlWatcherStub(): { lookup: () => undefined; reconcileScan: () => void } {
+function urlWatcherStub(): { lookup: () => undefined; reconcileScan: Mock } {
   return { lookup: () => undefined, reconcileScan: vi.fn() }
 }
 
@@ -326,6 +326,40 @@ describe('scanWorkspacePorts with delayed process creation', () => {
 
     expect(runPortScanCommandMock).toHaveBeenCalledTimes(1)
     expect(scan.ports).toHaveLength(1)
+  })
+
+  // Regression for #11161 review: a metadata-less scan must not be reconciled as
+  // "the listener vanished" — that evicts advertised URLs only a PTY can restore.
+  it('does not reconcile advertised URLs for a scan that skipped metadata', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    runPortScanCommandMock.mockResolvedValue({ stdout: LSOF_LISTEN_OUTPUT, spawnMs: 4_200 })
+    const watcher = urlWatcherStub()
+
+    await scanWorkspacePorts(worktrees, watcher)
+
+    expect(watcher.reconcileScan).not.toHaveBeenCalled()
+  })
+
+  it('re-probes metadata on the scan after a skip instead of degrading forever', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'lsof' && args.includes('-iTCP')) {
+        return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 4_200 }
+      }
+      if (command === 'lsof') {
+        return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 4_200 }
+      }
+      return { stdout: '123 node /repo/server.js', spawnMs: 4_200 }
+    })
+    const watcher = urlWatcherStub()
+
+    const skipped = await scanWorkspacePorts(worktrees, watcher)
+    const recovered = await scanWorkspacePorts(worktrees, watcher)
+
+    expect(skipped.ports[0]?.kind).toBe('external')
+    expect(recovered.ports[0]).toMatchObject({ kind: 'workspace' })
+    expect(runPortScanCommandMock).toHaveBeenCalledTimes(4)
+    expect(watcher.reconcileScan).toHaveBeenCalledTimes(worktrees.length)
   })
 
   it('still collects process metadata when process creation was fast', async () => {

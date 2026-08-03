@@ -24,6 +24,11 @@ const HTTPS_PORTS = new Set([443, 8443])
 
 const commandTimeoutBackoff = new WorkspacePortScanTimeoutBackoff()
 let loggedWorkerUnavailable = false
+// Why (#11161): a hooked host stalls every spawn, so gating only on the current
+// scan would drop metadata forever. Never skip twice running, so attribution —
+// and the Stop action and advertised-URL matching that ride on it — recovers on
+// the next tick.
+let skippedMetadataOnLastScan = false
 
 type RawListeningPort = {
   host: string
@@ -45,6 +50,12 @@ type NormalizedWorkspacePortProbe = {
   normalizedPath: string
 }
 
+type PlatformListeningPortScan = {
+  ports: RawListeningPort[]
+  /** False when a stalled spawn made the scan skip its cwd/command-line probes. */
+  metadataAvailable: boolean
+}
+
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
@@ -59,10 +70,15 @@ export async function scanWorkspacePorts(
   }
 
   try {
-    const rawPorts = await scanPlatformListeningPorts()
+    const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts()
     commandTimeoutBackoff.recordSuccess()
     const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
-    reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
+    // Why (#11161): without cwd/command-line every port looks unattributed, and
+    // reconciling that would read as "the listener vanished" and evict cached
+    // advertised URLs that only live PTY output can ever restore.
+    if (metadataAvailable) {
+      reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
+    }
     const ports = rawPorts
       .map((port) => enrichPort(port, normalizedWorktrees, urlWatcher))
       .sort(compareWorkspacePorts)
@@ -80,6 +96,13 @@ export async function scanWorkspacePorts(
 export function resetWorkspacePortScanTimeoutBackoffForTests(): void {
   commandTimeoutBackoff.reset()
   loggedWorkerUnavailable = false
+  skippedMetadataOnLastScan = false
+}
+
+function shouldSkipMetadataCommands(spawnMs: number): boolean {
+  const skip = spawnMs > SLOW_SPAWN_SKIP_METADATA_MS && !skippedMetadataOnLastScan
+  skippedMetadataOnLastScan = skip
+  return skip
 }
 
 // Why: a mispackaged probe worker fails identically forever, so logging it on
@@ -212,7 +235,7 @@ export function parseProcNetTcp(content: string): { host: string; port: number; 
   return results
 }
 
-async function scanPlatformListeningPorts(): Promise<RawListeningPort[]> {
+async function scanPlatformListeningPorts(): Promise<PlatformListeningPortScan> {
   if (process.platform === 'linux') {
     return scanLinuxProcPorts()
   }
@@ -225,7 +248,7 @@ async function scanPlatformListeningPorts(): Promise<RawListeningPort[]> {
   throw new Error(`Port scanning is not supported on ${process.platform}`)
 }
 
-async function scanDarwinLsofPorts(): Promise<RawListeningPort[]> {
+async function scanDarwinLsofPorts(): Promise<PlatformListeningPortScan> {
   const { stdout, spawnMs } = await runPortScanCommand('lsof', [
     '-nP',
     '-iTCP',
@@ -234,28 +257,34 @@ async function scanDarwinLsofPorts(): Promise<RawListeningPort[]> {
     'pcn'
   ])
   const ports = parseLsofListeningOutput(stdout)
-  if (spawnMs > SLOW_SPAWN_SKIP_METADATA_MS) {
-    return ports
+  if (shouldSkipMetadataCommands(spawnMs)) {
+    return { ports, metadataAvailable: false }
   }
   const metadata = await loadDarwinProcessMetadata(
     new Set(ports.flatMap((p) => (p.pid ? [p.pid] : [])))
   )
-  return ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port }))
+  return {
+    ports: ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
+    metadataAvailable: true
+  }
 }
 
-async function scanWindowsNetstatPorts(): Promise<RawListeningPort[]> {
+async function scanWindowsNetstatPorts(): Promise<PlatformListeningPortScan> {
   const { stdout, spawnMs } = await runPortScanCommand('netstat', ['-ano', '-p', 'tcp'])
   const ports = parseNetstatListeningOutput(stdout)
-  if (spawnMs > SLOW_SPAWN_SKIP_METADATA_MS) {
-    return ports
+  if (shouldSkipMetadataCommands(spawnMs)) {
+    return { ports, metadataAvailable: false }
   }
   const metadata = await loadWindowsProcessMetadata(
     new Set(ports.flatMap((p) => (p.pid ? [p.pid] : [])))
   )
-  return ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port }))
+  return {
+    ports: ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
+    metadataAvailable: true
+  }
 }
 
-async function scanLinuxProcPorts(): Promise<RawListeningPort[]> {
+async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
   const [tcp4, tcp6] = await Promise.all([
     readProcNet('/proc/net/tcp'),
     readProcNet('/proc/net/tcp6')
@@ -278,7 +307,7 @@ async function scanLinuxProcPorts(): Promise<RawListeningPort[]> {
     })
   }
 
-  return dedupeRawPorts(rawPorts)
+  return { ports: dedupeRawPorts(rawPorts), metadataAvailable: true }
 }
 
 async function readProcNet(
