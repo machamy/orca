@@ -582,16 +582,28 @@ function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean
   return entry.state === 'done' && entry.interrupted !== true
 }
 
+// Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
+// sleep or quit capture is the pane's only resume handle once its live row is gone.
+function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
+  return record.origin === 'worktree-sleep' || record.origin === 'quit'
+}
+
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   records: Record<string, SleepingAgentSessionRecord>,
   worktreeId: string,
-  paneKeys?: readonly string[]
+  paneKeys?: readonly string[],
+  replacements?: Readonly<Record<string, SleepingAgentSessionRecord>>
 ): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
   let next = records
   let changed = false
   for (const [paneKey, record] of Object.entries(records)) {
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
+      continue
+    }
+    // Why: a repeat sleep must not delete a durable record this capture cannot re-derive — the
+    // pane was never woken, so it has no live status row to rebuild it from (#11598).
+    if (!replacements?.[paneKey] && isDurableSleepingCapture(record)) {
       continue
     }
     if (next === records) {
@@ -2740,7 +2752,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const replaced = removeSleepingRecordsReplacedByManualWorktreeSleep(
           s.sleepingAgentSessionsByPaneKey,
           worktreeId,
-          paneKeys
+          paneKeys,
+          records
         )
         const next: Record<string, SleepingAgentSessionRecord> = { ...replaced.records }
         let changed = replaced.changed

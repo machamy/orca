@@ -223,6 +223,45 @@ describe('manual sleep agent session capture', () => {
     })
   })
 
+  // Why: a slept `done` pane stays passive until its tab is opened, so a second sleep finds no
+  // live row to re-derive its record from — the wipe must leave it alone (#11598).
+  it('keeps a durable slept record whose pane was never woken across a second sleep', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
+          makeTab({ id: 'tab-2', worktreeId: 'wt-1' })
+        ]
+      },
+      agentStatusByPaneKey: {
+        'tab-1:leaf-1': makeAgentEntry({ paneKey: 'tab-1:leaf-1', state: 'done' })
+      },
+      sleepingAgentSessionsByPaneKey: {
+        'tab-2:leaf-1': makeSleepingRecord({
+          paneKey: 'tab-2:leaf-1',
+          agent: 'claude',
+          state: 'done',
+          providerSession: { key: 'session_id', id: 'claude-never-woken' },
+          origin: 'worktree-sleep'
+        })
+      }
+    } as Partial<AppState>)
+
+    await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
+
+    const records = store.getState().sleepingAgentSessionsByPaneKey
+    expect(records['tab-2:leaf-1']).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'done',
+      providerSession: { key: 'session_id', id: 'claude-never-woken' }
+    })
+    expect(records['tab-1:leaf-1']).toMatchObject({ origin: 'worktree-sleep', state: 'done' })
+  })
+
+  // Why: an unresumable `live` checkpoint is provisional, so the wipe must still clear it.
   it('does not promote Pi identity without an authoritative transcript', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
