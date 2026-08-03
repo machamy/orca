@@ -27,6 +27,10 @@ jobs:
           build-essential
           dbus-x11
           dconf-gsettings-backend
+          fcitx5
+          fcitx5-chinese-addons
+          fcitx5-frontend-gtk3
+          fcitx5-hangul
           ibus
           ibus-hangul
           ibus-libpinyin
@@ -59,6 +63,7 @@ jobs:
 
       - name: Run native IBus exact-byte tests
         env:
+          ORCA_E2E_NATIVE_IME: ibus
           SKIP_BUILD: '1'
         run: pnpm run test:e2e:terminal-ime-native
 
@@ -67,6 +72,21 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: terminal-ime-native-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Run native Fcitx5 exact-byte tests
+        env:
+          ORCA_E2E_NATIVE_IME: fcitx5
+          SKIP_BUILD: '1'
+        run: pnpm run test:e2e:terminal-ime-native
+
+      - name: Upload native Fcitx5 evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-ime-native-fcitx5-evidence
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

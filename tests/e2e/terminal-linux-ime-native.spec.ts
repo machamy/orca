@@ -27,25 +27,27 @@ const MAX_REPETITIONS = 30
 const DEFAULT_KEY_DELAY_MS = 20
 const MAX_KEY_DELAY_MS = 100
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
+const inputFramework = process.env.ORCA_E2E_NATIVE_IME ?? 'ibus'
+const isFcitx = inputFramework === 'fcitx5'
 
 test.use({
   orcaAppExtraEnv: {
-    GTK_IM_MODULE: 'ibus',
-    IBUS_ENABLE_SYNC_MODE: '1',
-    QT_IM_MODULE: 'ibus',
-    XMODIFIERS: '@im=ibus'
+    GTK_IM_MODULE: isFcitx ? 'fcitx' : 'ibus',
+    ...(isFcitx ? {} : { IBUS_ENABLE_SYNC_MODE: '1' }),
+    QT_IM_MODULE: isFcitx ? 'fcitx' : 'ibus',
+    XMODIFIERS: isFcitx ? '@im=fcitx' : '@im=ibus'
   }
 })
 
 function nativeRepetitions(): number {
-  const parsed = Number(process.env.ORCA_E2E_NATIVE_IBUS_REPETITIONS ?? DEFAULT_REPETITIONS)
+  const parsed = Number(process.env.ORCA_E2E_NATIVE_IME_REPETITIONS ?? DEFAULT_REPETITIONS)
   return Number.isInteger(parsed) && parsed > 0
     ? Math.min(parsed, MAX_REPETITIONS)
     : DEFAULT_REPETITIONS
 }
 
 function nativeKeyDelayMs(): number {
-  const parsed = Number(process.env.ORCA_E2E_NATIVE_IBUS_KEY_DELAY_MS ?? DEFAULT_KEY_DELAY_MS)
+  const parsed = Number(process.env.ORCA_E2E_NATIVE_IME_KEY_DELAY_MS ?? DEFAULT_KEY_DELAY_MS)
   return Number.isInteger(parsed) && parsed >= 0
     ? Math.min(parsed, MAX_KEY_DELAY_MS)
     : DEFAULT_KEY_DELAY_MS
@@ -55,7 +57,30 @@ function runXdotool(...args: string[]): void {
   execFileSync('xdotool', args, { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
 }
 
-async function selectIbusEngine(engine: string): Promise<void> {
+async function selectInputMethod(engine: string): Promise<void> {
+  if (isFcitx) {
+    const fcitxEngine = engine === 'libpinyin' ? 'pinyin' : engine
+    execFileSync('fcitx5-remote', ['-s', fcitxEngine], {
+      stdio: 'pipe',
+      timeout: NATIVE_COMMAND_TIMEOUT_MS
+    })
+    execFileSync('fcitx5-remote', ['-o'], {
+      stdio: 'pipe',
+      timeout: NATIVE_COMMAND_TIMEOUT_MS
+    })
+    await expect
+      .poll(
+        () =>
+          execFileSync('fcitx5-remote', ['-n'], {
+            encoding: 'utf8',
+            timeout: NATIVE_COMMAND_TIMEOUT_MS
+          }).trim(),
+        { timeout: 20_000 }
+      )
+      .toBe(fcitxEngine)
+    return
+  }
+
   const request = spawn('ibus', ['engine', engine], { stdio: 'ignore' })
   try {
     await expect
@@ -75,16 +100,37 @@ async function selectIbusEngine(engine: string): Promise<void> {
   }
 }
 
+async function selectOrdinaryInput(): Promise<void> {
+  if (!isFcitx) {
+    await selectInputMethod('xkb:us::eng')
+    return
+  }
+  execFileSync('fcitx5-remote', ['-c'], {
+    stdio: 'pipe',
+    timeout: NATIVE_COMMAND_TIMEOUT_MS
+  })
+  await expect
+    .poll(
+      () =>
+        execFileSync('fcitx5-remote', [], {
+          encoding: 'utf8',
+          timeout: NATIVE_COMMAND_TIMEOUT_MS
+        }).trim(),
+      { timeout: 20_000 }
+    )
+    .not.toBe('2')
+}
+
 async function focusNativeTerminalWindow(page: Page, engine: string): Promise<string> {
   await focusActiveTerminalInput(page)
-  const title = `ORCA_NATIVE_IBUS_${randomUUID()}`
+  const title = `ORCA_NATIVE_IME_${randomUUID()}`
   await page.evaluate((nextTitle) => {
     document.title = nextTitle
   }, title)
   await expect.poll(() => page.title(), { timeout: 5_000 }).toBe(title)
 
   runXdotool('search', '--onlyvisible', '--name', title, 'windowfocus', '--sync')
-  await selectIbusEngine(engine)
+  await selectInputMethod(engine)
   return title
 }
 
@@ -119,14 +165,14 @@ async function typeNumericCandidateSequence(repetitions: number): Promise<void> 
     runXdotool('key', '1')
     runXdotool('key', 'Return')
   }
-  await selectIbusEngine('xkb:us::eng')
+  await selectOrdinaryInput()
   for (let index = 0; index < repetitions; index += 1) {
     runXdotool('type', '--delay', delay, '--clearmodifiers', '1')
     runXdotool('key', 'Return')
   }
 }
 
-async function runNativeIbusScenario(
+async function runNativeImeScenario(
   page: Page,
   testInfo: TestInfo,
   testRepoPath: string,
@@ -169,9 +215,10 @@ async function runNativeIbusScenario(
     expect(trace.onData.join('')).toBe(expectedLines.map((line) => `${line}\r`).join(''))
     completed = true
   } finally {
-    await attachTerminalImeBoundaryEvidence(page, testInfo, 'native-ibus-boundaries', {
+    await attachTerminalImeBoundaryEvidence(page, testInfo, `native-${inputFramework}-boundaries`, {
       display: process.env.DISPLAY,
       engine,
+      inputFramework,
       expectedLines,
       keyDelayMs: nativeKeyDelayMs(),
       receivedBytes,
@@ -185,10 +232,10 @@ async function runNativeIbusScenario(
   }
 }
 
-test.describe('Native IBus terminal input @headful', () => {
+test.describe('Native Linux terminal input @headful', () => {
   test.skip(
-    process.env.ORCA_E2E_NATIVE_IBUS !== '1',
-    'Run through config/scripts/run-terminal-ibus-e2e.mjs'
+    process.env.ORCA_E2E_NATIVE_IME === undefined,
+    'Run through config/scripts/run-terminal-linux-ime-e2e.mjs'
   )
 
   test('forwards the issue exact-byte sequence without loss or duplication', async ({
@@ -196,7 +243,7 @@ test.describe('Native IBus terminal input @headful', () => {
     testRepoPath
   }, testInfo) => {
     const repetitions = nativeRepetitions()
-    await runNativeIbusScenario(
+    await runNativeImeScenario(
       orcaPage,
       testInfo,
       testRepoPath,
@@ -212,7 +259,7 @@ test.describe('Native IBus terminal input @headful', () => {
     testRepoPath
   }, testInfo) => {
     const repetitions = nativeRepetitions()
-    await runNativeIbusScenario(
+    await runNativeImeScenario(
       orcaPage,
       testInfo,
       testRepoPath,
@@ -228,7 +275,7 @@ test.describe('Native IBus terminal input @headful', () => {
     testRepoPath
   }, testInfo) => {
     const repetitions = nativeRepetitions()
-    await runNativeIbusScenario(
+    await runNativeImeScenario(
       orcaPage,
       testInfo,
       testRepoPath,

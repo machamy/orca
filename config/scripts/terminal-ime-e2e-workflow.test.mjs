@@ -16,7 +16,7 @@ describe('terminal IME e2e workflow', () => {
     expect(workflow.on.schedule).toEqual([{ cron: '30 9 * * *' }])
   })
 
-  it('installs native IBus engines and X11 input tools', () => {
+  it('installs native IBus and Fcitx5 engines with X11 input tools', () => {
     const runs = workflow.jobs['linux-x11'].steps
       .map((step) => step.run)
       .filter((run) => typeof run === 'string')
@@ -25,6 +25,9 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toBeDefined()
     expect(installRun).toContain('ibus-hangul')
     expect(installRun).toContain('ibus-libpinyin')
+    expect(installRun).toContain('fcitx5-chinese-addons')
+    expect(installRun).toContain('fcitx5-frontend-gtk3')
+    expect(installRun).toContain('fcitx5-hangul')
     expect(installRun).toContain('xdotool')
     expect(installRun).toContain('xfwm4')
     expect(installRun).toContain('xvfb')
@@ -33,28 +36,27 @@ describe('terminal IME e2e workflow', () => {
     expect(installRun).toContain('libglib2.0-bin')
   })
 
-  it('runs the real IBus suite before deterministic boundaries', () => {
+  it('runs both native framework suites before deterministic boundaries', () => {
     const steps = workflow.jobs['linux-x11'].steps
     const deterministicIndex = steps.findIndex((step) =>
       step.run?.includes('terminal-ime-exact-byte.spec.ts')
     )
-    const nativeIndex = steps.findIndex((step) =>
-      step.run?.includes('test:e2e:terminal-ime-native')
-    )
+    const nativeIndexes = steps
+      .map((step, index) => (step.run?.includes('test:e2e:terminal-ime-native') ? index : -1))
+      .filter((index) => index >= 0)
 
     expect(deterministicIndex).toBeGreaterThanOrEqual(0)
-    expect(nativeIndex).toBeGreaterThanOrEqual(0)
-    expect(deterministicIndex).toBeGreaterThan(nativeIndex)
-    const nativeEvidenceIndex = steps.findIndex(
-      (step) => step.with?.name === 'terminal-ime-native-evidence'
+    expect(nativeIndexes).toHaveLength(2)
+    expect(nativeIndexes.every((index) => deterministicIndex > index)).toBe(true)
+    expect(steps.some((step) => step.with?.name === 'terminal-ime-native-evidence')).toBe(true)
+    expect(steps.some((step) => step.with?.name === 'terminal-ime-native-fcitx5-evidence')).toBe(
+      true
     )
-    expect(nativeEvidenceIndex).toBeGreaterThan(nativeIndex)
-    expect(nativeEvidenceIndex).toBeLessThan(deterministicIndex)
   })
 
-  it('keeps IBus lifecycle scoped to owned processes', () => {
+  it('keeps native input framework lifecycle scoped to owned processes', () => {
     const runner = readFileSync(
-      join(projectDir, 'config/scripts/run-terminal-ibus-e2e.mjs'),
+      join(projectDir, 'config/scripts/run-terminal-linux-ime-e2e.mjs'),
       'utf8'
     )
 
@@ -64,13 +66,16 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).toContain("spawn('xfwm4', ['--compositor=off']")
     expect(runner).toContain("['initial-input-mode', 'hangul']")
     expect(runner).toContain("['hangul-keyboard', '2']")
-    expect(runner).toContain("await waitForIbusEngine(ibusProcess, 'libpinyin')")
+    expect(runner).toContain("await waitForIbusEngine(inputMethodProcess, 'libpinyin')")
+    expect(runner).toContain("inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'")
+    expect(runner).toContain("['--disable=wayland']")
+    expect(runner).toContain("for (const engine of ['hangul', 'pinyin'])")
     expect(runner.match(/spawnSync\('ibus', \['engine', engine\]/g)).toHaveLength(1)
     expect(runner).toContain("process.kill(-processGroupId, 'SIGTERM')")
     expect(runner).toContain("process.kill(-processGroupId, 'SIGKILL')")
     expect(runner).toContain('const killDeadline = Date.now() + processKillTimeoutMs')
     expect(runner).toMatch(
-      /'test:e2e:headful',\s*'--workers=1',\s*'--',\s*'tests\/e2e\/terminal-ibus-native\.spec\.ts'/
+      /'test:e2e:headful',[\s\S]*'--workers=1',[\s\S]*'--',[\s\S]*'tests\/e2e\/terminal-linux-ime-native\.spec\.ts'/
     )
     expect(runner).not.toContain("'--replace'")
     expect(runner).not.toContain('killall')
@@ -79,11 +84,11 @@ describe('terminal IME e2e workflow', () => {
 
   it('bounds blocking native input commands', () => {
     const nativeSpec = readFileSync(
-      join(projectDir, 'tests/e2e/terminal-ibus-native.spec.ts'),
+      join(projectDir, 'tests/e2e/terminal-linux-ime-native.spec.ts'),
       'utf8'
     )
 
-    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(2)
+    expect(nativeSpec.match(/timeout: NATIVE_COMMAND_TIMEOUT_MS/g)).toHaveLength(7)
     expect(nativeSpec).toContain('{ timeout: 20_000 }')
   })
 })

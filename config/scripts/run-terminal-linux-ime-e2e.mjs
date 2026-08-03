@@ -8,6 +8,11 @@ const scriptPath = import.meta.filename
 const insideSessionFlag = '--inside-session'
 const processStopTimeoutMs = 5_000
 const processKillTimeoutMs = 1_000
+const inputFramework = process.env.ORCA_E2E_NATIVE_IME ?? 'ibus'
+
+if (!['ibus', 'fcitx5'].includes(inputFramework)) {
+  throw new Error(`Unsupported native IME framework: ${inputFramework}`)
+}
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -97,6 +102,34 @@ function configureHangulEngine() {
   }
 }
 
+function configureFcitxProfile(evidenceDir) {
+  const fcitxConfigDir = path.join(evidenceDir, 'config', 'fcitx5')
+  mkdirSync(fcitxConfigDir, { recursive: true })
+  writeFileSync(
+    path.join(fcitxConfigDir, 'profile'),
+    `[Groups/0]
+Name=Default
+Default Layout=us
+DefaultIM=hangul
+
+[Groups/0/Items/0]
+Name=keyboard-us
+Layout=
+
+[Groups/0/Items/1]
+Name=hangul
+Layout=
+
+[Groups/0/Items/2]
+Name=pinyin
+Layout=
+
+[GroupOrder]
+0=Default
+`
+  )
+}
+
 async function waitForIbusEngine(ibusProcess, engine) {
   const busDeadline = Date.now() + 15_000
   while (Date.now() < busDeadline) {
@@ -122,26 +155,52 @@ async function waitForIbusEngine(ibusProcess, engine) {
   throw new Error(`Timed out while selecting the IBus ${engine} engine`)
 }
 
+async function waitForFcitx(fcitxProcess) {
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    if (fcitxProcess.exitCode !== null) {
+      throw new Error(`fcitx5 exited early with code ${fcitxProcess.exitCode}`)
+    }
+    const result = spawnSync('fcitx5-remote', ['--check'], { encoding: 'utf8' })
+    if (result.status === 0) {
+      for (const engine of ['hangul', 'pinyin']) {
+        const addon = spawnSync('fcitx5-remote', ['-m', engine], { encoding: 'utf8' })
+        if (addon.status !== 0 || addon.stdout.trim().length === 0) {
+          throw new Error(`Fcitx5 input method is unavailable: ${engine}`)
+        }
+      }
+      return
+    }
+    await delay(100)
+  }
+  throw new Error('Timed out while starting Fcitx5')
+}
+
 async function runInsideSession(evidenceDir) {
-  const ibusLogPath = path.join(evidenceDir, 'ibus-daemon.log')
-  const ibusLogFd = openSync(ibusLogPath, 'w')
+  const inputMethodLogPath = path.join(evidenceDir, `${inputFramework}-daemon.log`)
+  const inputMethodLogFd = openSync(inputMethodLogPath, 'w')
   const windowManagerLogPath = path.join(evidenceDir, 'xfwm4.log')
   const windowManagerLogFd = openSync(windowManagerLogPath, 'w')
   const evidence = {
     display: process.env.DISPLAY ?? null,
-    ibusDaemonPid: null,
-    ibusGroupBeforeCleanup: [],
-    ibusGroupAfterCleanup: [],
+    inputFramework,
+    inputMethodDaemonPid: null,
+    inputMethodGroupBeforeCleanup: [],
+    inputMethodGroupAfterCleanup: [],
     playwrightPid: null,
     windowManagerPid: null,
     windowManagerGroupAfterCleanup: []
   }
-  let ibusProcess
+  let inputMethodProcess
   let windowManagerProcess
   let testExitCode = 1
 
   try {
-    configureHangulEngine()
+    if (inputFramework === 'ibus') {
+      configureHangulEngine()
+    } else {
+      configureFcitxProfile(evidenceDir)
+    }
     windowManagerProcess = spawn('xfwm4', ['--compositor=off'], {
       detached: true,
       env: process.env,
@@ -153,51 +212,65 @@ async function runInsideSession(evidenceDir) {
     evidence.windowManagerPid = windowManagerProcess.pid
     console.error(`[terminal-ime] started xfwm4 PID ${windowManagerProcess.pid}`)
 
-    ibusProcess = spawn(
-      'ibus-daemon',
-      ['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable'],
-      {
-        detached: true,
-        env: process.env,
-        stdio: ['ignore', ibusLogFd, ibusLogFd]
-      }
-    )
-    if (!ibusProcess.pid) {
-      throw new Error('ibus-daemon did not return a PID')
+    const inputMethodCommand = inputFramework === 'ibus' ? 'ibus-daemon' : 'fcitx5'
+    const inputMethodArgs =
+      inputFramework === 'ibus'
+        ? ['--xim', '--verbose', '--panel=disable', '--emoji-extension=disable']
+        : ['--disable=wayland']
+    inputMethodProcess = spawn(inputMethodCommand, inputMethodArgs, {
+      detached: true,
+      env: process.env,
+      stdio: ['ignore', inputMethodLogFd, inputMethodLogFd]
+    })
+    if (!inputMethodProcess.pid) {
+      throw new Error(`${inputMethodCommand} did not return a PID`)
     }
-    evidence.ibusDaemonPid = ibusProcess.pid
-    console.error(`[terminal-ime] started ibus-daemon PID ${ibusProcess.pid}`)
-    await waitForIbusEngine(ibusProcess, 'hangul')
-    await waitForIbusEngine(ibusProcess, 'libpinyin')
-    await waitForIbusEngine(ibusProcess, 'hangul')
-    console.error(`[terminal-ime] IBus version: ${commandOutput('ibus', ['version'])}`)
-    console.error(`[terminal-ime] IBus engine: ${commandOutput('ibus', ['engine'])}`)
+    evidence.inputMethodDaemonPid = inputMethodProcess.pid
+    console.error(`[terminal-ime] started ${inputMethodCommand} PID ${inputMethodProcess.pid}`)
+    if (inputFramework === 'ibus') {
+      await waitForIbusEngine(inputMethodProcess, 'hangul')
+      await waitForIbusEngine(inputMethodProcess, 'libpinyin')
+      await waitForIbusEngine(inputMethodProcess, 'hangul')
+      console.error(`[terminal-ime] IBus version: ${commandOutput('ibus', ['version'])}`)
+      console.error(`[terminal-ime] IBus engine: ${commandOutput('ibus', ['engine'])}`)
+      console.error(
+        `[terminal-ime] Hangul initial mode: ${commandOutput('gsettings', [
+          'get',
+          'org.freedesktop.ibus.engine.hangul',
+          'initial-input-mode'
+        ])}`
+      )
+      console.error(
+        `[terminal-ime] Hangul keyboard: ${commandOutput('gsettings', [
+          'get',
+          'org.freedesktop.ibus.engine.hangul',
+          'hangul-keyboard'
+        ])}`
+      )
+    } else {
+      await waitForFcitx(inputMethodProcess)
+      console.error(`[terminal-ime] Fcitx5 version: ${commandOutput('fcitx5', ['--version'])}`)
+    }
+    evidence.inputMethodGroupBeforeCleanup = processGroupMembers(inputMethodProcess.pid)
     console.error(
-      `[terminal-ime] Hangul initial mode: ${commandOutput('gsettings', [
-        'get',
-        'org.freedesktop.ibus.engine.hangul',
-        'initial-input-mode'
-      ])}`
+      `[terminal-ime] owned ${inputFramework} group: ${evidence.inputMethodGroupBeforeCleanup.join('; ')}`
     )
-    console.error(
-      `[terminal-ime] Hangul keyboard: ${commandOutput('gsettings', [
-        'get',
-        'org.freedesktop.ibus.engine.hangul',
-        'hangul-keyboard'
-      ])}`
-    )
-    evidence.ibusGroupBeforeCleanup = processGroupMembers(ibusProcess.pid)
-    console.error(`[terminal-ime] owned IBus group: ${evidence.ibusGroupBeforeCleanup.join('; ')}`)
 
     const testProcess = spawn(
       process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-      ['run', 'test:e2e:headful', '--workers=1', '--', 'tests/e2e/terminal-ibus-native.spec.ts'],
+      [
+        'run',
+        'test:e2e:headful',
+        '--workers=1',
+        '--',
+        'tests/e2e/terminal-linux-ime-native.spec.ts'
+      ],
       {
         cwd: projectDir,
         env: {
           ...process.env,
           ORCA_E2E_FORWARD_APP_LOGS: '1',
-          ORCA_E2E_NATIVE_IBUS: '1'
+          ORCA_E2E_NATIVE_IME: inputFramework
         },
         stdio: 'inherit'
       }
@@ -209,35 +282,35 @@ async function runInsideSession(evidenceDir) {
     console.error(`[terminal-ime] started Playwright PID ${testProcess.pid}`)
     testExitCode = await waitForExit(testProcess)
   } finally {
-    if (ibusProcess?.pid) {
-      evidence.ibusGroupBeforeCleanup = processGroupMembers(ibusProcess.pid)
-      evidence.ibusGroupAfterCleanup = await stopOwnedProcessGroup(ibusProcess.pid)
+    if (inputMethodProcess?.pid) {
+      evidence.inputMethodGroupBeforeCleanup = processGroupMembers(inputMethodProcess.pid)
+      evidence.inputMethodGroupAfterCleanup = await stopOwnedProcessGroup(inputMethodProcess.pid)
     }
     if (windowManagerProcess?.pid) {
       evidence.windowManagerGroupAfterCleanup = await stopOwnedProcessGroup(
         windowManagerProcess.pid
       )
     }
-    closeSync(ibusLogFd)
+    closeSync(inputMethodLogFd)
     closeSync(windowManagerLogFd)
     mkdirSync(path.join(projectDir, 'test-results'), { recursive: true })
     copyFileSync(
-      ibusLogPath,
-      path.join(projectDir, 'test-results', 'terminal-ibus-native-daemon.log')
+      inputMethodLogPath,
+      path.join(projectDir, 'test-results', `terminal-${inputFramework}-native-daemon.log`)
     )
     copyFileSync(
       windowManagerLogPath,
-      path.join(projectDir, 'test-results', 'terminal-ibus-native-xfwm4.log')
+      path.join(projectDir, 'test-results', `terminal-${inputFramework}-native-xfwm4.log`)
     )
     writeFileSync(
-      path.join(projectDir, 'test-results', 'terminal-ibus-native-processes.json'),
+      path.join(projectDir, 'test-results', `terminal-${inputFramework}-native-processes.json`),
       `${JSON.stringify(evidence, null, 2)}\n`
     )
   }
 
-  if (evidence.ibusGroupAfterCleanup.length > 0) {
+  if (evidence.inputMethodGroupAfterCleanup.length > 0) {
     throw new Error(
-      `Owned IBus processes survived cleanup: ${evidence.ibusGroupAfterCleanup.join('; ')}`
+      `Owned ${inputFramework} processes survived cleanup: ${evidence.inputMethodGroupAfterCleanup.join('; ')}`
     )
   }
   if (evidence.windowManagerGroupAfterCleanup.length > 0) {
@@ -250,7 +323,7 @@ async function runInsideSession(evidenceDir) {
 
 async function runOuter() {
   if (process.platform !== 'linux') {
-    throw new Error('The native IBus E2E runner requires Linux/X11')
+    throw new Error('The native Linux IME E2E runner requires Linux/X11')
   }
 
   const evidenceDir = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-ime-e2e-'))
@@ -276,14 +349,14 @@ async function runOuter() {
       detached: true,
       env: {
         ...process.env,
-        GTK_IM_MODULE: 'ibus',
-        IBUS_ENABLE_SYNC_MODE: '1',
+        GTK_IM_MODULE: inputFramework === 'fcitx5' ? 'fcitx' : 'ibus',
+        ...(inputFramework === 'ibus' ? { IBUS_ENABLE_SYNC_MODE: '1' } : {}),
         LANG: process.env.LANG || 'C.UTF-8',
-        QT_IM_MODULE: 'ibus',
+        QT_IM_MODULE: inputFramework === 'fcitx5' ? 'fcitx' : 'ibus',
         XDG_CACHE_HOME: path.join(evidenceDir, 'cache'),
         XDG_CONFIG_HOME: path.join(evidenceDir, 'config'),
         XDG_RUNTIME_DIR: runtimeDir,
-        XMODIFIERS: '@im=ibus'
+        XMODIFIERS: inputFramework === 'fcitx5' ? '@im=fcitx' : '@im=ibus'
       },
       stdio: 'inherit'
     }
