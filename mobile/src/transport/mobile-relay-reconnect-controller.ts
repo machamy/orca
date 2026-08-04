@@ -51,7 +51,10 @@ export class RelayReconnectController {
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
     if (!wasForeground) {
-      // Why: an app resume is a fresh signal, unlike repeated network-flap nudges.
+      // Why: an app resume is a fresh signal, unlike repeated network-flap
+      // nudges — it resets the gated cadence even when it cannot lift the
+      // credential gate, so reopening the app never waits out a 15min tick.
+      this.gateReprobeStreak = 0
       if (this.recoveryGate !== 'fresh-credential') {
         this.reset()
       }
@@ -111,6 +114,7 @@ export class RelayReconnectController {
       this.nextAttemptAt = 0
       this.recoveryGate = 'fresh-credential'
       this.gateReprobePending = false
+      this.gateReprobeStreak = 0
       this.clearTimer()
     } else {
       this.reset()
@@ -155,10 +159,10 @@ export class RelayReconnectController {
     // Why: a merely missing or expired bundle must not enter the credential
     // gate — that gate forces a rotation on the next direct connect. A plain
     // cooldown retries the read on the same escalating cadence.
-    const delay = this.nextGateReprobeDelayMs()
+    const delay = this.gateReprobeDelayMs()
     this.nextAttemptAt = this.dependencies.now() + delay
     this.clearTimer()
-    this.scheduleRetry(delay)
+    this.scheduleReprobeTick(delay, false)
   }
 
   // A durable bundle whose current version is not rejected reopens the gate.
@@ -312,27 +316,32 @@ export class RelayReconnectController {
   }
 
   private scheduleGateReprobe(): void {
+    this.scheduleReprobeTick(this.gateReprobeDelayMs(), true)
+  }
+
+  private scheduleReprobeTick(delay: number, mintToken: boolean): void {
     if (this.timer) {
       return
     }
-    const delay = this.nextGateReprobeDelayMs()
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
+      // Why: the streak advances once per fired tick — arm attempts within one
+      // cycle recompute the same delay instead of triple-escalating it.
+      this.gateReprobeStreak = Math.min(this.gateReprobeStreak + 1, 8)
       // Why: the tick token is only minted while its gate still holds; a later
       // gate must not spend a stale token and bypass its own cooldown.
-      if (this.recoveryGate) {
+      if (mintToken && this.recoveryGate) {
         this.gateReprobePending = true
       }
       this.onRetry()
     }, delay)
   }
 
-  private nextGateReprobeDelayMs(): number {
+  private gateReprobeDelayMs(): number {
     const base = Math.min(
       RELAY_GATE_REPROBE_CEILING_MS,
       RELAY_GATE_REPROBE_BASE_MS * 2 ** Math.min(this.gateReprobeStreak, 8)
     )
-    this.gateReprobeStreak += 1
     return Math.floor(base * (0.75 + 0.5 * this.jitterFraction()))
   }
 

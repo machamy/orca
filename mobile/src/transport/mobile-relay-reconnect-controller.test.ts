@@ -88,6 +88,29 @@ describe('relay reconnect controller', () => {
     expect(onRetry).toHaveBeenCalledTimes(2)
   })
 
+  it('resets the gated cadence when the app returns to the foreground', () => {
+    // Why: reopening the app is the strongest "conditions changed" signal a
+    // phone produces — it must not wait out an escalated 15-minute tick even
+    // when it cannot lift the credential gate itself.
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const logical = { getState: () => 'disconnected' } as never
+
+    reconnect.registerFailure(new RelayOuterError(4401))
+    vi.advanceTimersByTime(60_000)
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    // A failed gated attempt escalates the next tick beyond the base cadence.
+    reconnect.registerFailure(new RelayOuterError(4401))
+
+    reconnect.clear()
+    reconnect.handleForeground(logical, false)
+    expect(onRetry).toHaveBeenCalledTimes(2)
+
+    expect(reconnect.shouldDefer()).toBe(true)
+    vi.advanceTimersByTime(60_000)
+    expect(onRetry).toHaveBeenCalledTimes(3)
+  })
+
   it('does not let an orphaned reprobe timer swallow the next fast backoff', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
