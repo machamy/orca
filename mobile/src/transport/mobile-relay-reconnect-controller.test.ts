@@ -6,7 +6,9 @@ import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
-vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
+vi.mock('expo-crypto', () => ({
+  getRandomBytes: (length: number) => new Uint8Array(length)
+}))
 
 describe('relay reconnect controller', () => {
   beforeEach(() => {
@@ -47,16 +49,61 @@ describe('relay reconnect controller', () => {
     expect(onRetry).not.toHaveBeenCalled()
   })
 
-  it('waits for an external signal after rejected E2EE authentication', () => {
+  it('reprobes slowly after rejected E2EE authentication instead of parking forever', () => {
+    // Why: on a relay-only phone a permanent gate is a permanent outage — the
+    // desktop can commit pairing credentials moments after the first rejection.
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
 
     reconnect.registerFailure(new MobileE2EEAuthenticationError())
 
     expect(reconnect.shouldDefer()).toBe(true)
-    expect(vi.getTimerCount()).toBe(0)
-    vi.advanceTimersByTime(60_000)
     expect(onRetry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(59_000)
+    expect(onRetry).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1_000)
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    // The reprobe tick passes the gate exactly once, then defers again.
+    expect(reconnect.shouldDefer()).toBe(false)
+    expect(reconnect.shouldDefer()).toBe(true)
+  })
+
+  it('keeps the fresh-credential gate reprobing after each failed gated attempt', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+
+    reconnect.registerFailure(new RelayOuterError(4401))
+    expect(reconnect.shouldDefer()).toBe(true)
+
+    vi.advanceTimersByTime(60_000)
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    expect(reconnect.shouldDefer()).toBe(false)
+    // The gated attempt fails again with only rejected credentials on hand.
+    reconnect.registerFailure(new RelayOuterError(4401))
+
+    vi.advanceTimersByTime(60_000)
+    expect(onRetry).toHaveBeenCalledTimes(2)
+  })
+
+  it('lifts the fresh-credential gate when a durable bundle carries a new version', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+
+    reconnect.recordRejectedCredential(2)
+    reconnect.armCredentialReprobe()
+    expect(reconnect.shouldDefer()).toBe(true)
+
+    reconnect.acceptFreshCredential(2)
+    expect(reconnect.shouldDefer()).toBe(true)
+
+    reconnect.acceptFreshCredential(3)
+    expect(reconnect.shouldDefer()).toBe(false)
+    expect(
+      reconnect.eligibleCredentials(
+        { token: 'fresh', version: 3, expiresAt: Number.MAX_SAFE_INTEGER },
+        null
+      )
+    ).toHaveLength(1)
   })
 
   it('upgrades host-revival gating to fresh credentials without later downgrading it', () => {

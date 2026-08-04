@@ -17,6 +17,9 @@ const RELAY_BACKOFF_CEILING_MS = 30_000
 const RELAY_STABLE_CONNECTION_MS = RELAY_BACKOFF_CEILING_MS
 const RELAY_HOST_OFFLINE_RETRY_MIN_MS = 5_000
 const RELAY_HOST_OFFLINE_RETRY_MAX_MS = 15_000
+// Why: gates must slow recovery down, never end it — a relay-only phone has no
+// direct path to refresh credentials, so a timerless gate is a permanent outage.
+const RELAY_GATE_REPROBE_MS = 60_000
 
 export type RelayReconnectDependencies = {
   now: () => number
@@ -34,6 +37,7 @@ export class RelayReconnectController {
   private timer: ReturnType<typeof setTimeout> | null = null
   private activeSession: MobileRelayRpcSession | null = null
   private recoveryGate: RecoveryGate | null = null
+  private gateReprobePending = false
   private readonly rejectedCredentialVersions = new Set<number>()
 
   constructor(
@@ -88,6 +92,7 @@ export class RelayReconnectController {
     this.activeRelayConnectedAt = this.dependencies.now()
     this.nextAttemptAt = 0
     this.recoveryGate = null
+    this.gateReprobePending = false
     this.clearTimer()
   }
 
@@ -128,8 +133,24 @@ export class RelayReconnectController {
     if (eligible.length === 0 && this.rejectedCredentialVersions.size > 0) {
       this.recoveryGate = 'fresh-credential'
       this.clearTimer()
+      this.scheduleGateReprobe()
     }
     return eligible
+  }
+
+  // For callers that found no dialable credential at all (missing or expired
+  // bundle): keep a slow reprobe alive so a later durable write can recover.
+  armCredentialReprobe(): void {
+    this.recoveryGate = 'fresh-credential'
+    this.clearTimer()
+    this.scheduleGateReprobe()
+  }
+
+  // A durable bundle whose current version is not rejected reopens the gate.
+  acceptFreshCredential(version: number): void {
+    if (this.recoveryGate === 'fresh-credential' && !this.rejectedCredentialVersions.has(version)) {
+      this.recoveryGate = null
+    }
   }
 
   recordRejectedCredential(version: number): void {
@@ -154,6 +175,12 @@ export class RelayReconnectController {
   // re-dial. Arms the self-scheduled retry so recovery still happens on its own.
   shouldDefer(): boolean {
     if (this.recoveryGate) {
+      if (this.gateReprobePending) {
+        // Why: the slow reprobe tick gets exactly one attempt through the gate.
+        this.gateReprobePending = false
+        return false
+      }
+      this.scheduleGateReprobe()
       return true
     }
     if (this.dependencies.now() < this.nextAttemptAt) {
@@ -173,8 +200,9 @@ export class RelayReconnectController {
       this.recoveryGate === 'fresh-credential' ||
       (this.recoveryGate === 'external-signal' && recovery?.kind !== 'disable-relay-credential')
     ) {
-      // Why: only the gate's external signal can make a known-fatal recovery retryable.
+      // Why: a failed reprobe stays gated, but the slow cadence must keep going.
       this.clearTimer()
+      this.scheduleGateReprobe()
       return
     }
     const now = this.dependencies.now()
@@ -192,15 +220,20 @@ export class RelayReconnectController {
       recovery?.kind === 'retry-after-host-offline' ? this.hostOfflineDelayMs() : this.delayMs()
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
-      // Why: pairing state cannot change on a timer; polling only wakes the radio.
+      // Why: an E2EE rejection is usually pairing revocation, but it also fires
+      // transiently right after pairing while the desktop commits credentials —
+      // reprobe slowly instead of waiting forever for a UI nudge.
       this.recoveryGate = 'external-signal'
       this.clearTimer()
+      this.scheduleGateReprobe()
       return
     }
     if (recovery?.kind === 'disable-relay-credential') {
-      // Why: a rejected outer credential cannot recover until direct connectivity refreshes it.
+      // Why: never redial a rejected credential fast, but keep a slow reprobe
+      // alive — the caller re-reads durable state before each gated attempt.
       this.recoveryGate = 'fresh-credential'
       this.clearTimer()
+      this.scheduleGateReprobe()
       return
     }
     if (recovery?.kind === 'retry-after-host-offline') {
@@ -236,11 +269,13 @@ export class RelayReconnectController {
     this.activeRelayConnectedAt = null
     this.nextAttemptAt = 0
     this.recoveryGate = null
+    this.gateReprobePending = false
     this.clearTimer()
   }
 
   clear(): void {
     this.clearTimer()
+    this.gateReprobePending = false
     this.activeSession = null
     this.activeRelayConnectedAt = null
   }
@@ -261,6 +296,17 @@ export class RelayReconnectController {
       this.timer = null
       this.onRetry()
     }, delay)
+  }
+
+  private scheduleGateReprobe(): void {
+    if (this.timer) {
+      return
+    }
+    this.timer = this.dependencies.setTimer(() => {
+      this.timer = null
+      this.gateReprobePending = true
+      this.onRetry()
+    }, RELAY_GATE_REPROBE_MS)
   }
 
   private delayMs(): number {
