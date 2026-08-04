@@ -81,7 +81,27 @@ describe('relay reconnect controller', () => {
     // The gated attempt fails again with only rejected credentials on hand.
     reconnect.registerFailure(new RelayOuterError(4401))
 
+    // The gated cadence escalates: the second reprobe waits twice as long.
     vi.advanceTimersByTime(60_000)
+    expect(onRetry).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(60_000)
+    expect(onRetry).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an orphaned reprobe timer swallow the next fast backoff', () => {
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const logical = { getState: () => 'disconnected' } as never
+
+    reconnect.registerFailure(new MobileE2EEAuthenticationError())
+    // A foreground revival nudge clears the external-signal gate and its timer.
+    reconnect.handleForeground(logical, true)
+    expect(onRetry).toHaveBeenCalledTimes(1)
+
+    // A plain transport failure must schedule its own fast retry, not wait
+    // out a leftover 60s reprobe timer.
+    reconnect.registerFailure(new RelayOuterError(4429))
+    vi.advanceTimersByTime(600)
     expect(onRetry).toHaveBeenCalledTimes(2)
   })
 

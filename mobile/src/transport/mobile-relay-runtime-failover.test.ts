@@ -266,6 +266,86 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })
+
+  it('adopts a durable renewal that extends expiry without bumping the version', async () => {
+    // Why: resume confirmations and pairing recovery renew expiresAt while
+    // keeping current.version — version comparison cannot see this freshness.
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const expired = bundleWith(2, Date.now() - 1)
+    const readBundle = vi
+      .fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER))
+      .mockResolvedValueOnce(expired)
+      .mockResolvedValueOnce(expired)
+    const deps = dependencies({ readBundle })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(deps.openRelay).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(deps.openRelay).toHaveBeenLastCalledWith(
+      relay,
+      expect.objectContaining({ version: 2 }),
+      expect.any(String)
+    )
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('adopts a re-paired credential whose version counter restarted', async () => {
+    // Why: re-pairing overwrites the same keychain slot with a NEW credential
+    // record whose counter restarts at 1 — lower than the rejected version.
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const openRelay = vi
+      .fn()
+      .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4401)))
+      .mockImplementation(() => new FakeRelaySession('connected'))
+    const readBundle = vi
+      .fn(async () => bundleWith(1, Number.MAX_SAFE_INTEGER))
+      .mockResolvedValueOnce(bundleWith(4, Number.MAX_SAFE_INTEGER))
+    const deps = dependencies({ openRelay, readBundle })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(openRelay).toHaveBeenLastCalledWith(
+      relay,
+      expect.objectContaining({ version: 1 }),
+      expect.any(String)
+    )
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('recovers immediately on a background/foreground cycle after an E2EE rejection', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const openRelay = vi
+      .fn()
+      .mockReturnValueOnce(
+        new FakeRelaySession('disconnected', new MobileE2EEAuthenticationError())
+      )
+      .mockImplementation(() => new FakeRelaySession('connected'))
+    const deps = dependencies({ openRelay })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    supervisor.setForeground(false)
+    supervisor.setForeground(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
 })
 
 // The field failure's first symptom: a real direct rpc-client dialing an
