@@ -40,9 +40,9 @@ import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { AppState } from '../types'
 import type { WorktreeRefreshAllOptions } from './worktree-refresh-options'
+import type { DefaultSwitchProgress } from '@/lib/default-worktree-switch-progress'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
 export type WorktreeDeleteState = {
@@ -117,6 +117,29 @@ export type WorktreeSlice = {
   // Why: signals the matching worktree card's inline title editor to open. The
   // workspace.rename shortcut sets this; the card clears it on consume.
   renamingWorktreeId: WorktreeRenameRequest | null
+  /** Worktrees mid default-switch (sleep -> swap -> wake); cards show a moving
+   *  indicator while their id is listed. startedAt bounds staleness. */
+  defaultSwitchInFlight: {
+    worktreeIds: string[]
+    startedAt: number
+    /** Refreshed by every progress update. Staleness judges THIS, not
+     *  startedAt: a healthy switch on a big repo runs longer than any fixed
+     *  bound measured from its start, and judging the start let a rival treat
+     *  a live switch as wedged. */
+    heartbeatAt: number
+    /** False while the flow is still waiting to be let in. Only an admitted
+     *  switch excludes another one; an unadmitted marker is display only. */
+    admitted: boolean
+    /** False once recovery is confirmed: the card still says it is verifying,
+     *  but another switch may start. Splits the lock from the indicator so a
+     *  healthy swap does not sit behind 75s of checks it does not need. */
+    blocking: boolean
+    /** Owner token. Every mutation presents it; a mismatch is ignored, so a
+     *  rejected rival, a stale fallback timer, or another repo's flow can no
+     *  longer clear or downgrade a claim it does not own. */
+    token: string
+    progress?: DefaultSwitchProgress
+  } | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
@@ -327,6 +350,23 @@ export type WorktreeSlice = {
   remountTerminalTabForRecovery: (tabId: string) => boolean
   setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
+  /** Compare-and-set claim. `admitted: false` publishes a display-only marker
+   *  (never excludes or overwrites a live claim). `admitted: true` takes the
+   *  lock — it succeeds only when no LIVE blocking claim by another owner
+   *  exists; pass the display marker's token to upgrade in place. Returns the
+   *  owner token, or null when a rival holds the lock. */
+  claimDefaultSwitch: (
+    worktreeIds: readonly string[],
+    options?: { admitted?: boolean; token?: string; progress?: DefaultSwitchProgress }
+  ) => string | null
+  /** No-op unless `token` owns the current claim. Refreshes the heartbeat. */
+  setDefaultSwitchProgress: (progress: DefaultSwitchProgress, token: string | null) => void
+  /** Keeps an owned claim alive without reporting a stage. */
+  touchDefaultSwitchHeartbeat: (token: string | null) => void
+  /** Hands the lock back while keeping the indicator; owner-checked. */
+  downgradeDefaultSwitchBlocking: (token: string | null, progress?: DefaultSwitchProgress) => void
+  /** Clears the marker; owner-checked, so it can only clear its own. */
+  releaseDefaultSwitch: (token: string | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (
     worktreeId: string,
@@ -376,67 +416,7 @@ export function findWorktreeById(
   return undefined
 }
 
-type RequiredKey<T> = { [K in keyof T]-?: undefined extends T[K] ? never : K }[keyof T]
-
-// Why: a present-but-undefined key in a spread ERASES the field. That is the
-// intended wire signal for clearing optional metadata (pushTarget), but on a
-// field Worktree declares required it produced a live `displayName: undefined`
-// that crashed the worktree palette (crash a1f81ea1). Typed off Worktree so a
-// newly-required field is protected automatically.
-const ERASURE_PROTECTED_KEYS: Record<Extract<RequiredKey<Worktree>, keyof WorktreeMeta>, true> = {
-  displayName: true,
-  comment: true,
-  linkedIssue: true,
-  linkedPR: true,
-  linkedLinearIssue: true,
-  isArchived: true,
-  isUnread: true,
-  isPinned: true,
-  sortOrder: true,
-  lastActivityAt: true
-}
-
-export function withoutErasedRequiredWorktreeFields(
-  updates: Partial<WorktreeMeta>
-): Partial<WorktreeMeta> {
-  const erased = Object.keys(ERASURE_PROTECTED_KEYS).filter(
-    (key) => updates[key as keyof WorktreeMeta] === undefined && Object.hasOwn(updates, key)
-  )
-  if (erased.length === 0) {
-    return updates
-  }
-
-  const next = { ...updates }
-  for (const key of erased) {
-    delete next[key as keyof WorktreeMeta]
-  }
-  return next
-}
-
-export function applyWorktreeUpdates(
-  worktreesByRepo: Record<string, Worktree[]>,
-  worktreeId: string,
-  rawUpdates: Partial<WorktreeMeta>
-): Record<string, Worktree[]> {
-  const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const worktrees = worktreesByRepo[repoId]
-  if (!worktrees) {
-    return worktreesByRepo
-  }
-
-  let changed = false
-  const nextWorktrees = worktrees.map((worktree) => {
-    if (worktree.id !== worktreeId) {
-      return worktree
-    }
-
-    changed = true
-    return { ...worktree, ...updates }
-  })
-  if (!changed) {
-    return worktreesByRepo
-  }
-
-  return { ...worktreesByRepo, [repoId]: nextWorktrees }
-}
+export {
+  withoutErasedRequiredWorktreeFields,
+  applyWorktreeUpdates
+} from './worktree-meta-erasure-guard'

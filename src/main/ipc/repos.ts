@@ -25,6 +25,7 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import { resolveUnitySidebarTintMode } from '../../shared/repo-types'
 import type { SparsePreset } from '../../shared/worktree/create-types'
 import type { FolderWorkspacePathStatusRequest } from '../../shared/folder-workspace-path-status'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -2126,6 +2127,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
             | 'projectGroupOrder'
+            | 'unityAutoSeedCache'
+            | 'unityWorktreeTint'
+            | 'unityTintInSidebar'
+            | 'unityTintOverrides'
           >
         > & {
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
@@ -2156,6 +2161,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.forkSyncMode !== 'off'
       ) {
         delete updates.forkSyncMode
+      }
+      // Why: the sidebar tint is a string union at rest; an unknown value would out-live this session in repos.json.
+      if ('unityTintInSidebar' in updates && updates.unityTintInSidebar !== undefined) {
+        const v = updates.unityTintInSidebar as unknown
+        if (v !== resolveUnitySidebarTintMode(v)) {
+          delete updates.unityTintInSidebar
+        }
       }
       // Why: worktree materialization calls .trim() per entry, so strip non-string[] at the boundary to avoid a silent throw later.
       if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {

@@ -11,6 +11,7 @@ import {
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import {
   hasUnsupportedRevParsePathFormatEcho,
+  isUnsupportedWorktreeRepairError,
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
@@ -148,6 +149,14 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     const remaining = await runGit(['worktree', 'list', '--porcelain'])
     expect(remaining.stdout).not.toContain('deferred-wt')
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
+  })
+
+  it('recognizes the worktree repair boundary', async () => {
+    await expectPreferredOrRecognizedFallback(
+      ['worktree', 'repair'],
+      supports(2, 29),
+      isUnsupportedWorktreeRepairError
+    )
   })
 
   it('recognizes ref and merge-tree compatibility boundaries', async () => {

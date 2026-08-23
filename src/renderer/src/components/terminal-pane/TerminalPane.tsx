@@ -100,7 +100,11 @@ import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
-import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
+import {
+  collectTerminalLayoutLeafIds,
+  resolveTerminalLayoutActiveLeafId
+} from './terminal-layout-leaf-ids'
+import { isInDefaultSwitchTeardownWindow } from '@/lib/default-worktree-switch-sleep-guard'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
   getMobileFitOverridePtyIds,
@@ -894,13 +898,26 @@ function TerminalPane(
     }
     const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
     const leafIdByPaneId = manager.getLeafIdMap()
-    const layout = serializeTerminalLayout(
+    const serializedLayout = serializeTerminalLayout(
       container,
       activePaneId,
       expandedPaneIdRef.current,
       leafIdByPaneId
     )
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+    // Why only inside the switch window: this rebuilds the tree from the panes
+    // the manager currently holds, which is correct when the user closes one and
+    // wrong while a default-worktree switch is tearing panes down around us. A
+    // 3-pane all-claude split persisted as 2 panes that way — no teardown, no
+    // breadcrumb, just a smaller tree written from a half-mounted manager.
+    // Outside the window a shrink is the user's intent and must stand.
+    const mountedLeafIds = new Set<string>(manager.getPanes().map((pane) => String(pane.leafId)))
+    const layout =
+      existing?.root &&
+      isInDefaultSwitchTeardownWindow(worktreeId) &&
+      [...collectTerminalLayoutLeafIds(existing.root)].some((leafId) => !mountedLeafIds.has(leafId))
+        ? { ...serializedLayout, root: existing.root }
+        : serializedLayout
     const currentPanes = manager.getPanes()
     const currentLeafIds = new Set(currentPanes.map((p) => p.leafId))
     const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current

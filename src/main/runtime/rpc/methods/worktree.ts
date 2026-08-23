@@ -22,6 +22,8 @@ import {
 } from './worktree-schemas'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 
+import { DEFAULT_SET_METHOD } from './worktree-default-set-method'
+
 export const WORKTREE_METHODS: RpcMethod[] = [
   ...WORKTREE_CATALOG_METHODS,
   defineMethod({
@@ -49,6 +51,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       worktree: await runtime.showManagedWorktree(params.worktree)
     })
   }),
+  DEFAULT_SET_METHOD,
   defineMethod({
     name: 'worktree.sleep',
     params: WorktreeSelector,

@@ -7,6 +7,7 @@ export type GitCapability =
   | 'merge-tree-merge-base'
   | 'merge-tree-write-tree'
   | 'rev-parse-path-format'
+  | 'worktree-repair'
   | 'worktree-list-z'
 
 type GitCapabilityProbeOutcome = 'supported' | 'unsupported' | 'unknown'

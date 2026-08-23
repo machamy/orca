@@ -23,24 +23,18 @@ import {
 } from './worktree-card-compact-agents'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
-import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+import { revealCompactAgentCard } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
+import { WorktreeCardTerminalTabRows } from './worktree-card-terminal-tab-rows'
 import { translate } from '@/i18n/i18n'
+import { DEFAULT_SWITCH_IN_FLIGHT_STALE_MS } from '@/lib/default-worktree-switch-readiness'
+import { WorktreeCardSwitchStageRow } from './worktree-card-switch-stage-row'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
 
 const dispatchSuppressScrollAdjustment = () => {
   window.dispatchEvent(new CustomEvent(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT))
-}
-
-function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
-  const sidebarElement = agentListRoot?.closest('[data-worktree-sidebar]')
-  const worktreeOptionElement = agentListRoot?.closest('[role="option"]')
-  if (!(sidebarElement instanceof HTMLElement) || !worktreeOptionElement) {
-    return
-  }
-  revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto')
 }
 
 type Props = {
@@ -58,11 +52,50 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
 }: Props) {
   const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined)
   const agents = precomputedAgents ?? selectedAgents
-  if (agents.length === 0) {
+  // Why keep a boolean here: the card must still render (with the stage row)
+  // when a switch has slept its agents and there are no rows to show yet.
+  const switchInFlight = useAppStore((s) => {
+    const inFlight = s.defaultSwitchInFlight
+    return Boolean(
+      inFlight &&
+      inFlight.worktreeIds.includes(worktreeId) &&
+      Date.now() - inFlight.startedAt < DEFAULT_SWITCH_IN_FLIGHT_STALE_MS
+    )
+  })
+  // Why: terminal tabs with no agent row (bare shells, dead agents, agents
+  // still booting before their first hook) were invisible in the sidebar —
+  // open windows must be discoverable from the card, not only agent activity.
+  const terminalTabs = useAppStore((s) => s.tabsByWorktree[worktreeId])
+  const uncoveredTabs = useMemo(() => {
+    const covered = new Set(agents.map((agent) => agent.tab.id))
+    // Plain unnamed shells stay hidden — only agent tabs (dead or still booting
+    // before their first hook) and user-titled tabs are worth a sidebar row.
+    return (terminalTabs ?? []).filter(
+      (tab) => !covered.has(tab.id) && (tab.launchAgent || tab.customTitle)
+    )
+  }, [agents, terminalTabs])
+
+  // Why not only when the card is empty: rows survive a switch (retained and
+  // title-derived ones), and gating on an empty card meant the busiest cards —
+  // the ones whose agents are actually moving — showed nothing at all for the
+  // minute the switch takes. The stage belongs above whatever rows remain.
+  const movingIndicator = switchInFlight ? (
+    <WorktreeCardSwitchStageRow worktreeId={worktreeId} />
+  ) : null
+
+  if (agents.length === 0 && uncoveredTabs.length === 0 && !movingIndicator) {
     return null
   }
-  // Why: mount the inner body (owns the 30s useNow tick) only for non-empty rows, so idle worktrees pay no timer cost.
-  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
+  return (
+    <div className={className}>
+      {movingIndicator}
+      {agents.length > 0 ? (
+        // Why: mount the inner body (owns the 30s useNow tick) only for non-empty rows, so idle worktrees pay no timer cost.
+        <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} />
+      ) : null}
+      <WorktreeCardTerminalTabRows worktreeId={worktreeId} tabs={uncoveredTabs} />
+    </div>
+  )
 })
 
 type BodyProps = {

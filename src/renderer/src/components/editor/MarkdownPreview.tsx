@@ -18,9 +18,10 @@ import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
-import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import rehypeSlug from 'rehype-slug'
 import { extractFrontMatter } from './markdown-frontmatter'
+import { detectLimitedMarkdownHtml } from './markdown-limited-html-detection'
 import {
   Check,
   ChevronDown,
@@ -293,7 +294,7 @@ function hasMarkdownPreviewNestedBlock(node: MarkdownPreviewPositionNode | undef
   return Boolean(node?.children?.some((child) => child.tagName && blockTags.has(child.tagName)))
 }
 
-const markdownPreviewSanitizeSchema = {
+export const markdownPreviewSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
   protocols: {
@@ -344,10 +345,60 @@ const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkMath,
   remarkMarkdownDocLinks
 ]
+// GitHub-flavored HTML mode (fork feature): the default schema strips tags and
+// attributes GitHub renders — <video>, <picture>, <center>, width/align — so a
+// README written for GitHub shows holes. This schema mirrors GitHub's own
+// sanitizer closely enough for those documents while still dropping scripts,
+// styles and event handlers.
+export const markdownGithubSanitizeSchema: SanitizeSchema = {
+  ...markdownPreviewSanitizeSchema,
+  protocols: {
+    ...markdownPreviewSanitizeSchema.protocols,
+    // Why here and not only upstream: `poster` is absent from hast-util-sanitize's
+    // protocol list, so today only react-markdown's urlTransform blocks a
+    // `javascript:` poster. A schema that claims to be a sanitizer should not
+    // depend on the layer above it.
+    poster: ['http', 'https', 'file']
+  },
+  tagNames: [
+    ...(markdownPreviewSanitizeSchema.tagNames ?? []),
+    'video',
+    'source',
+    'picture',
+    'audio',
+    'center',
+    'font',
+    'u',
+    'mark',
+    'figure',
+    'figcaption',
+    'abbr',
+    'dl',
+    'dt',
+    'dd'
+  ],
+  attributes: {
+    ...markdownPreviewSanitizeSchema.attributes,
+    video: ['src', 'poster', 'controls', 'muted', 'loop', 'playsInline', 'width', 'height'],
+    audio: ['src', 'controls', 'muted', 'loop'],
+    source: ['src', 'type', 'srcSet', 'media'],
+    img: [...(markdownPreviewSanitizeSchema.attributes?.img ?? []), 'srcSet', 'loading'],
+    font: ['color', 'face', 'size'],
+    abbr: ['title']
+  }
+}
+
 // Why: sanitize raw HTML before KaTeX/highlight expand it, so their generated markup needn't be whitelisted in the schema.
 const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginList = [
   rehypeRaw,
   [rehypeSanitize, markdownPreviewSanitizeSchema],
+  rehypeSlug,
+  rehypeHighlight,
+  rehypeKatex
+]
+const MARKDOWN_GITHUB_REHYPE_PLUGINS: MarkdownPluginList = [
+  rehypeRaw,
+  [rehypeSanitize, markdownGithubSanitizeSchema],
   rehypeSlug,
   rehypeHighlight,
   rehypeKatex
@@ -361,10 +412,12 @@ const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginList = [
 // re-renders still re-run the pipeline; that's required to update the live annotation markup.)
 const MarkdownBody = memo(function MarkdownBody({
   content,
-  components
+  components,
+  htmlMode = 'default'
 }: {
   content: string
   components: Components
+  htmlMode?: 'default' | 'github'
 }) {
   return (
     <Markdown
@@ -372,7 +425,9 @@ const MarkdownBody = memo(function MarkdownBody({
       // Why: react-markdown filters file:// after sanitize; click handlers need the target to authorize and open it.
       urlTransform={markdownPreviewUrlTransform}
       remarkPlugins={MARKDOWN_REMARK_PLUGINS}
-      rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+      rehypePlugins={
+        htmlMode === 'github' ? MARKDOWN_GITHUB_REHYPE_PLUGINS : MARKDOWN_REHYPE_PLUGINS
+      }
     >
       {content}
     </Markdown>
@@ -677,6 +732,15 @@ export default function MarkdownPreview({
   const frontmatterVisible = toggleableSourceFileId
     ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? true)
     : true
+  // Fork feature: the default preview sanitizes raw HTML down to a small
+  // whitelist, so a README written for GitHub renders with holes and nothing
+  // says why. Detect that case and offer the wider, GitHub-flavored schema.
+  const [htmlMode, setHtmlMode] = useState<'default' | 'github'>('default')
+  const limitedHtml = useMemo(() => detectLimitedMarkdownHtml(renderedContent), [renderedContent])
+  // Opening another file must not inherit the previous one's opt-in.
+  useEffect(() => {
+    setHtmlMode('default')
+  }, [filePath])
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const activeAnnotationBlockKeyRef = useRef(activeAnnotationBlockKey)
   // Why: mirror in an effect (not render body) so a discarded render can't leak into the ref; keydown paths still write eagerly.
@@ -2000,7 +2064,40 @@ export default function MarkdownPreview({
               </pre>
             </div>
           ) : null}
-          <MarkdownBody content={renderedContent} components={components} />
+          {limitedHtml.limited ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs">
+              <span className="min-w-0 flex-1 text-muted-foreground">
+                {htmlMode === 'github'
+                  ? translate(
+                      'auto.components.editor.MarkdownPreview.githubHtmlOn',
+                      'Showing GitHub-flavored HTML ({{tags}}). This wider rendering is an Orca fork feature.',
+                      { tags: limitedHtml.tags.join(', ') }
+                    )
+                  : translate(
+                      'auto.components.editor.MarkdownPreview.githubHtmlOffer',
+                      'This file uses HTML the preview strips ({{tags}}), so parts of it are missing.',
+                      { tags: limitedHtml.tags.join(', ') }
+                    )}
+              </span>
+              <Button
+                size="sm"
+                variant={htmlMode === 'github' ? 'ghost' : 'outline'}
+                className="h-6 shrink-0 px-2 text-xs"
+                onClick={() => setHtmlMode(htmlMode === 'github' ? 'default' : 'github')}
+              >
+                {htmlMode === 'github'
+                  ? translate(
+                      'auto.components.editor.MarkdownPreview.githubHtmlRevert',
+                      'Back to standard view'
+                    )
+                  : translate(
+                      'auto.components.editor.MarkdownPreview.githubHtmlApply',
+                      'View as GitHub-flavored'
+                    )}
+              </Button>
+            </div>
+          ) : null}
+          <MarkdownBody content={renderedContent} components={components} htmlMode={htmlMode} />
         </div>
       </div>
     </div>

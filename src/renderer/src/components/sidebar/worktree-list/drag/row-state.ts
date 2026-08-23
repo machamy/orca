@@ -51,12 +51,15 @@ export type WorktreePointerDrag = {
 
 export type WorktreeSidebarLineageDropTarget = WorktreeSidebarStatusDropTarget & {
   lineageParentId: string | null
+  // Fork: worktree id of the default row whose "Make default" zone is under the pointer.
+  defaultSwitchTargetId: string | null
 }
 
 export const NO_WORKTREE_SIDEBAR_DROP_TARGET: WorktreeSidebarLineageDropTarget = {
   status: null,
   isPinDrop: false,
-  lineageParentId: null
+  lineageParentId: null,
+  defaultSwitchTargetId: null
 }
 
 export function areWorktreeDragPreviewOffsetsEqual(
@@ -83,7 +86,7 @@ export function updateLatestWorktreeStatusDropTarget(
   preview: WorktreeSidebarDropPreview | null
 ): void {
   drag.latestStatusDropTarget =
-    target.status || target.isPinDrop || target.lineageParentId
+    target.status || target.isPinDrop || target.lineageParentId || target.defaultSwitchTargetId
       ? {
           target,
           preview,

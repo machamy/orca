@@ -288,3 +288,23 @@ export function collectLeafIdsInReplayCreationOrder(
   }
   return leafIdsInReplayCreationOrder
 }
+
+/** Every leaf id a layout tree names, mounted or not. */
+export function collectTerminalLayoutLeafIds(
+  node: TerminalPaneLayoutNode | null | undefined
+): Set<string> {
+  const ids = new Set<string>()
+  const walk = (current: TerminalPaneLayoutNode | null | undefined): void => {
+    if (!current) {
+      return
+    }
+    if (current.type === 'split') {
+      walk(current.first)
+      walk(current.second)
+      return
+    }
+    ids.add(current.leafId)
+  }
+  walk(node)
+  return ids
+}

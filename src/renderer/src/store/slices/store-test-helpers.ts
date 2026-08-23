@@ -49,6 +49,8 @@ import { createNewIssueDraftSlice } from './new-issue-draft'
 import { createTaskCreationDraftsSlice } from './task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
+import { createUnityProjectRepoProbeSlice } from './unity-project-repo-probe'
+import { createUnityTintSidebarPreviewSlice } from './unity-tint-sidebar-preview'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -103,7 +105,9 @@ export function createTestStore() {
     ...createNewIssueDraftSlice(...a),
     ...createTaskCreationDraftsSlice(...a),
     ...createRemoteServerUpdatesSlice(...a),
-    ...createTerminalQuickCommandHostsSlice(...a)
+    ...createTerminalQuickCommandHostsSlice(...a),
+    ...createUnityProjectRepoProbeSlice(...a),
+    ...createUnityTintSidebarPreviewSlice(...a)
   }))
 }
 

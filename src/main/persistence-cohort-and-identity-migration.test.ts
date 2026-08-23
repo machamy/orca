@@ -213,6 +213,66 @@ describe('Store.migrateWorktreeIdentity', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  // The default-worktree switch does not rename one worktree; it EXCHANGES two,
+  // as three re-keys through a throwaway id. Every step overwrites its
+  // destination unguarded, so this pins that no side loses its tabs.
+  it("exchanges two worktrees' tabs through the temp id without losing either side", async () => {
+    const store = await createStore()
+    const A = 'repo1::/ws/alpha'
+    const B = 'repo1::/ws/beta'
+    const TEMP = 'repo1::/ws/.orca-default-switch-11111111-2222-3333-4444-555555555555'
+    store.setWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorkspaceKey: worktreeWorkspaceKey(A),
+      activeWorktreeId: A,
+      activeTabId: 'a1',
+      tabsByWorktree: {
+        [A]: [makeTerminalTab({ id: 'a1', worktreeId: A })],
+        [B]: [
+          makeTerminalTab({ id: 'b1', worktreeId: B }),
+          makeTerminalTab({ id: 'b2', worktreeId: B })
+        ]
+      }
+    } as unknown as WorkspaceSessionState)
+
+    // A -> TEMP, B -> A, TEMP -> B (exactly what RuntimeDefaultWorktree emits).
+    store.migrateWorktreeIdentity(A, TEMP)
+    store.migrateWorktreeIdentity(B, A)
+    store.migrateWorktreeIdentity(TEMP, B)
+
+    const tabs = store.getWorkspaceSession().tabsByWorktree ?? {}
+    expect(tabs[A]?.map((tab) => tab.id)).toEqual(['b1', 'b2'])
+    expect(tabs[B]?.map((tab) => tab.id)).toEqual(['a1'])
+    expect(tabs[TEMP]).toBeUndefined()
+    // Every tab still belongs to the worktree it now lives under.
+    expect(tabs[A]?.every((tab) => tab.worktreeId === A)).toBe(true)
+    expect(tabs[B]?.every((tab) => tab.worktreeId === B)).toBe(true)
+  })
+
+  // Why: `moveKey`/`moveSessionKey` assign into the destination without checking
+  // it, so anything already there is discarded with no error and no log line.
+  it("does not discard the destination worktree's tabs on a colliding re-key", async () => {
+    const store = await createStore()
+    const A = 'repo1::/ws/alpha'
+    const B = 'repo1::/ws/beta'
+    store.setWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorkspaceKey: worktreeWorkspaceKey(A),
+      activeWorktreeId: A,
+      activeTabId: 'a1',
+      tabsByWorktree: {
+        [A]: [makeTerminalTab({ id: 'a1', worktreeId: A })],
+        [B]: [makeTerminalTab({ id: 'b1', worktreeId: B })]
+      }
+    } as unknown as WorkspaceSessionState)
+
+    store.migrateWorktreeIdentity(A, B)
+
+    const tabs = store.getWorkspaceSession().tabsByWorktree ?? {}
+    const ids = (tabs[B] ?? []).map((tab) => tab.id).sort()
+    expect(ids).toEqual(['a1', 'b1'])
+  })
+
   it('moves meta, lineage, tabs, active pointers, and records the prior id', async () => {
     const store = await createStore()
     store.setWorktreeMeta(OLD, { displayName: 'Cunner', linkedIssue: 42 })
@@ -323,7 +383,9 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(session.activeWorktreeIdsOnShutdown).toEqual([NEW])
     expect(session.openFilesByWorktree?.[OLD]).toBeUndefined()
     expect(session.openFilesByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
-    expect(session.activeFileIdByWorktree?.[NEW]).toBe('/ws/cunner/a.ts')
+    // Fork: absolute paths are remapped into the new home, so a restart cannot
+    // hydrate the swapped workspace pointing at the other checkout.
+    expect(session.activeFileIdByWorktree?.[NEW]).toBe('/ws/worktree-creation-spinner/a.ts')
     expect(session.browserTabsByWorktree?.[OLD]).toBeUndefined()
     expect(session.browserTabsByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(session.browserPagesByWorkspace?.browser1?.[0]?.worktreeId).toBe(NEW)

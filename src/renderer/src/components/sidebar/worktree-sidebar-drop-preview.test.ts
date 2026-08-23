@@ -293,7 +293,12 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 101
       })
     ).toEqual({
-      target: { status: 'completed', isPinDrop: false, lineageParentId: null },
+      target: {
+        status: 'completed',
+        isPinDrop: false,
+        lineageParentId: null,
+        defaultSwitchTargetId: null
+      },
       preview
     })
   })
@@ -313,7 +318,12 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 101
       })
     ).toEqual({
-      target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+      target: {
+        status: null,
+        isPinDrop: false,
+        lineageParentId: 'parent-worktree',
+        defaultSwitchTargetId: null
+      },
       preview: null
     })
   })

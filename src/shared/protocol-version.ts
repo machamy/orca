@@ -103,6 +103,15 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
+
+/** Host honours `includeUntracked: false` on worktree.defaultSet. Why a
+ *  capability rather than a plain optional field: a host that ignores the field
+ *  does not fall back to something harmless — it stashes untracked files and
+ *  moves them to the other worktree, which is exactly what the user asked it
+ *  NOT to do. Rule 1 in docs/reference/remote-wire-compatibility.md only covers
+ *  fields a client does not depend on. */
+export const DEFAULT_SWITCH_KEEP_UNTRACKED_RUNTIME_CAPABILITY =
+  'worktree.default-set-keep-untracked.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
@@ -125,6 +134,7 @@ export const RUNTIME_CAPABILITIES = [
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',
   'workspace-ports.v1',
+  DEFAULT_SWITCH_KEEP_UNTRACKED_RUNTIME_CAPABILITY,
   'mobile.tasks.v1',
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,

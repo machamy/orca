@@ -36,7 +36,8 @@ export function finalizeImportedRepoAfterSkip(
   if (
     importedWorktrees.length > 0 &&
     state.hideDefaultBranchWorkspace &&
-    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree))
+    // repo lookup unavailable here; at import time git-main and repo path coincide.
+    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree, undefined))
   ) {
     state.setHideDefaultBranchWorkspace(false)
   }

@@ -3,13 +3,22 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-se
 
 const RUNTIME_WORKTREE_ID_SELECTOR_PREFIX = 'id:'
 
-/** Address a raw worktree id as a runtime `id:` selector; passes through empty or already-prefixed values. */
+/**
+ * Address a raw worktree id as a runtime `id:` selector; passes through empty or
+ * already-prefixed values.
+ *
+ * Why the id itself is never trimmed: it is `repoId::path`, and a POSIX path may
+ * legally end in a space or newline. Trimming produced the id of a DIFFERENT
+ * worktree, which main then resolved and mutated — the switch swapped the wrong
+ * branch, and follow mode slept one worktree while migrating another. Only a
+ * selector string (already `id:`-prefixed) is normalized.
+ */
 export function toRuntimeWorktreeSelector(worktreeId: string): string {
   const trimmed = worktreeId.trim()
   if (!trimmed || trimmed.startsWith(RUNTIME_WORKTREE_ID_SELECTOR_PREFIX)) {
     return trimmed
   }
-  return `${RUNTIME_WORKTREE_ID_SELECTOR_PREFIX}${trimmed}`
+  return `${RUNTIME_WORKTREE_ID_SELECTOR_PREFIX}${worktreeId}`
 }
 
 /**

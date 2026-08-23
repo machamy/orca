@@ -65,9 +65,11 @@ import {
   pushRecentlyClosedTabKind
 } from './recently-closed-tabs'
 import { isClaudeAgent } from '@/lib/agent-status'
+import { planFollowSwitchShellPtyRelease } from '@/lib/default-worktree-switch-shell-pty-release'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   applyGeneratedTabTitleUpdates,
   applyTerminalTabTitleUpdates,
@@ -683,6 +685,12 @@ export type TerminalSlice = {
     directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
   ) => void
   clearTabPtyId: (tabId: string, ptyId?: string) => void
+  /** Mode-B default switch: drop the migrated worktrees' recordless PTY bindings
+   *  so plain shells respawn in place instead of attaching to a killed session. */
+  /** Drop a tab's PTY bindings that no longer name a live session, so the next
+   *  mount spawns fresh instead of reattaching to a dead one. */
+  clearDeadLeafPtyBindings: (tabIds: readonly string[]) => number
+  releaseFollowSwitchShellPtyBindings: (worktreeIds: readonly string[]) => number
   clearDirectSshTargetPtyBindings: (targetId: string) => number
   invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
   retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number
@@ -859,6 +867,17 @@ function replaceHydratedRecordKeys<T>(
   hydrated: Record<string, T>,
   replaceKeys: ReadonlySet<string>
 ): Record<string, T> {
+  // TEMP swap-2 diagnostics: a key in replaceKeys that the hydrated snapshot
+  // does not carry is dropped outright.
+  for (const key of replaceKeys) {
+    const before = current[key]
+    if (before !== undefined && hydrated[key] === undefined) {
+      recordRendererCrashBreadcrumb('scoped_hydrate_drop', {
+        key: key.slice(-28),
+        had: Array.isArray(before) ? before.length : 1
+      })
+    }
+  }
   return {
     ...Object.fromEntries(Object.entries(current).filter(([key]) => !replaceKeys.has(key))),
     ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => replaceKeys.has(key)))
@@ -1307,6 +1326,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     let tab!: TerminalTab
     set((s) => {
       const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
+      // TEMP mode-B diagnostics: createTab sweeps orphans as a side effect.
+      if (orphanTerminalIds.size > 0) {
+        recordRendererCrashBreadcrumb('orphan_sweep_create_tab', {
+          worktreeId,
+          tabIds: [...orphanTerminalIds].map((id) => id.slice(0, 8)).join(',')
+        })
+      }
       const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
       const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
         (entry) => !orphanTerminalIds.has(entry.id)
@@ -1557,6 +1583,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   closeTab: (tabId, opts) => {
     const closeReason = opts?.reason ?? 'user'
+    // TEMP mode-B diagnostics: every tab removal funnels through here, so a
+    // switch that loses tabs records which reason took them.
+    recordRendererCrashBreadcrumb('tab_close', { tabId: tabId.slice(0, 8), reason: closeReason })
     const retiresSession = closeReason === 'user' || closeReason === 'cleanup'
     const retirementPlan =
       opts?.precomputedRetirementPlan?.tabId === tabId
@@ -2629,6 +2658,89 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
+  clearDeadLeafPtyBindings: (tabIds) => {
+    const state = get()
+    let cleared = 0
+    set((s) => {
+      const nextLayouts = { ...s.terminalLayoutsByTabId }
+      const nextTabsByWorktree = { ...s.tabsByWorktree }
+      for (const tabId of tabIds) {
+        const livePtyIds = new Set(s.ptyIdsByTabId[tabId] ?? [])
+        const layout = s.terminalLayoutsByTabId[tabId]
+        const bindings = layout?.ptyIdsByLeafId
+        if (bindings) {
+          const kept: Record<string, string> = {}
+          for (const [leafId, ptyId] of Object.entries(bindings)) {
+            if (livePtyIds.has(ptyId)) {
+              kept[leafId] = ptyId
+            } else {
+              cleared += 1
+            }
+          }
+          if (Object.keys(kept).length !== Object.keys(bindings).length) {
+            nextLayouts[tabId] = { ...layout, ptyIdsByLeafId: kept }
+          }
+        }
+        for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
+          const index = tabs.findIndex((tab) => tab.id === tabId)
+          if (index === -1 || !tabs[index].ptyId || livePtyIds.has(tabs[index].ptyId as string)) {
+            continue
+          }
+          const nextTabs = (nextTabsByWorktree[worktreeId] ?? tabs).slice()
+          nextTabs[index] = { ...nextTabs[index], ptyId: null }
+          nextTabsByWorktree[worktreeId] = nextTabs
+        }
+      }
+      return { terminalLayoutsByTabId: nextLayouts, tabsByWorktree: nextTabsByWorktree }
+    })
+    void state
+    return cleared
+  },
+
+  releaseFollowSwitchShellPtyBindings: (worktreeIds) => {
+    const state = get()
+    const plan = planFollowSwitchShellPtyRelease({
+      worktreeIds,
+      tabsByWorktree: state.tabsByWorktree,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey ?? {}
+    })
+    const releasedTabIds = new Set(plan.tabIds)
+    const touchedTabIds = new Set([...plan.tabIds, ...Object.keys(plan.leafIdsByTabId)])
+    if (touchedTabIds.size === 0) {
+      return 0
+    }
+    set((s) => {
+      const nextTabsByWorktree = { ...s.tabsByWorktree }
+      for (const worktreeId of worktreeIds) {
+        const tabs = s.tabsByWorktree[worktreeId]
+        if (!tabs?.some((tab) => releasedTabIds.has(tab.id) && tab.ptyId)) {
+          continue
+        }
+        nextTabsByWorktree[worktreeId] = tabs.map((tab) =>
+          releasedTabIds.has(tab.id) && tab.ptyId ? { ...tab, ptyId: null } : tab
+        )
+      }
+      const nextTerminalLayoutsByTabId = { ...s.terminalLayoutsByTabId }
+      for (const [tabId, leafIds] of Object.entries(plan.leafIdsByTabId)) {
+        const layout = s.terminalLayoutsByTabId[tabId]
+        if (!layout?.ptyIdsByLeafId) {
+          continue
+        }
+        const nextPtyIdsByLeafId = { ...layout.ptyIdsByLeafId }
+        for (const leafId of leafIds) {
+          delete nextPtyIdsByLeafId[leafId]
+        }
+        nextTerminalLayoutsByTabId[tabId] = { ...layout, ptyIdsByLeafId: nextPtyIdsByLeafId }
+      }
+      return {
+        tabsByWorktree: nextTabsByWorktree,
+        terminalLayoutsByTabId: nextTerminalLayoutsByTabId
+      }
+    })
+    return touchedTabIds.size
+  },
+
   shutdownCompletedAgentPaneForHibernation: async (worktreeId, opts) => {
     const paneKeys = [opts.paneKey]
     const expectedRuntimePtyIds = sortedUniquePtyIds(
@@ -2773,7 +2885,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: pty.kill can flush final data before exit; unregister first so stale handlers can't fire phantom notifications during hibernation.
       const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
       try {
-        await window.api.pty.kill(opts.ptyId, { keepHistory: true })
+        await window.api.pty.kill(opts.ptyId, { keepHistory: true, retainSurface: true })
       } catch (err) {
         restorePtyDataHandlersAfterFailedShutdown(handlerSnapshots)
         rollbackTargetShutdownState()
@@ -3019,7 +3131,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }> => {
       const localPtyIds = rendererShutdownPtyIds.filter((ptyId) => !ptyId.startsWith('remote:'))
       const results = await Promise.allSettled(
-        localPtyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
+        localPtyIds.map((ptyId) =>
+          // Fork: keepIdentifiers is the sleep — the surface must survive the
+          // exit so the wake finds the tab where it left it.
+          window.api.pty.kill(ptyId, {
+            keepHistory: keepIdentifiers,
+            ...(keepIdentifiers ? { retainSurface: true } : {})
+          })
+        )
       )
       const stoppedPtyIds = [
         ...(runtimeEnvironmentId
@@ -3837,6 +3956,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
+      // Why: suppress restored mounts so only real activity updates Recent.
+      // TEMP swap-2 diagnostics: hydration rebuilds both maps and drops whatever
+      // is not "valid", with no breadcrumb of its own.
+      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree)) {
+        if (!validWorktreeIds.has(worktreeId) && (tabs?.length ?? 0) > 0) {
+          recordRendererCrashBreadcrumb('hydrate_drop_worktree', {
+            worktreeId: worktreeId.slice(-28),
+            tabs: tabs.length,
+            tabIds: tabs.map((tab) => tab.id.slice(0, 8)).join(',')
+          })
+        }
+      }
       // Why: rows for these keys came off the remote wire, which carries no unifiedTabs, so the
       // session's canonical list describes a different snapshot and must not arbitrate their PTYs.
       const remoteSnapshotWorkspaceKeys = new Set(

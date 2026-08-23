@@ -116,8 +116,33 @@ ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
+ORCA worktree default set --worktree active --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
+
+Default switching swaps the two worktrees' branches in place: the selected branch
+checks out at the repo path and the old default branch at the selected worktree.
+No folders move, so git's main worktree stays at the repo path; uncommitted and
+staged changes follow their branch (ignored files like node_modules stay put).
+Drag the previous worktree back onto the Default card, or run the command again for
+it, to switch back. Not available for folder workspaces, WSL, or direct SSH repos.
+
+By default terminals and agents keep their paths — their working tree just switches
+branches under them. `--follow-agents` instead sleeps both worktrees and resumes each
+agent where its branch now lives, so an agent stays with the work it was doing rather
+than with the folder. Pair it with `--ui-flow`, which hands the whole sleep → swap →
+wake sequence to the desktop app; without it a remote caller would sleep agents the
+host cannot wake. Only sleep/resume-capable agents (Claude, Codex) follow.
+
+`--notify-agents` sends each moved agent a one-line note naming its new path and
+branch, delivered on its next turn and only while it is idle. Agents are not told
+otherwise: an agent that moved keeps reasoning about the path it started in.
+
+`--keep-untracked-in-place` leaves untracked files in the folder they are in; by
+default they travel with their branch alongside the tracked changes.
+
+Reading a switch: the folder name no longer implies the branch. Always resolve the
+branch from `orca worktree list --json` rather than from a path you remember.
 
 Selectors:
 

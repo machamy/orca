@@ -1,6 +1,5 @@
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
@@ -10,6 +9,11 @@ import {
   WORKTREE_TEARDOWN_TIMEOUT_PREFIX
 } from '../../shared/worktree/removal'
 import { settleBeforeDeadline } from './settle-before-deadline'
+import {
+  clearStoppedPtyState,
+  sweepRegistryForWorktree,
+  WORKTREE_TEARDOWN_CONCURRENCY
+} from './worktree-registry-sweep'
 import { createWorktreeSweepTracker, settleSweepsForForcedRemoval } from './forced-sweep-settlement'
 import {
   describeError,
@@ -18,12 +22,13 @@ import {
   resolveUnstoppedPtyVerdict
 } from './unstopped-pty-verification'
 
-// Why: normal inventories still coalesce into one process scan, while a stale
-// or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
-const WORKTREE_TEARDOWN_CONCURRENCY = 32
-
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
+  /** Session ids embed the spawn-time worktree id; after an identity migration
+   *  (default-worktree swap) that id names ANOTHER live worktree. Returning true
+   *  excludes the pty from prefix/registry sweeps so deleting the displaced
+   *  worktree can't kill the promoted workspace's agents. */
+  isPtyOwnedByAnotherWorktree?: (ptyId: string, sweptWorktreeId: string) => boolean
   /** Authoritative id for callers whose selector no longer resolves (orphaned workspace). */
   resolvedWorktreeId?: string
   /** SSH connection owning `resolvedWorktreeId`; prevents same-id cross-host graph matches. */
@@ -158,7 +163,8 @@ export async function killAllProcessesForWorktree(
               deadline,
               stopPty,
               deps.onPtyStopped,
-              deps.requirePhysicalStop
+              deps.requirePhysicalStop,
+              deps.isPtyOwnedByAnotherWorktree
             )
           ),
           0,
@@ -174,8 +180,10 @@ export async function killAllProcessesForWorktree(
               worktreeId,
               deps.localProvider,
               deadline,
+              teardownRpcDeadline(deadline),
               stopPty,
-              deps.onPtyStopped
+              deps.onPtyStopped,
+              deps.isPtyOwnedByAnotherWorktree
             )
           ),
           0,
@@ -268,7 +276,8 @@ async function sweepProviderByPrefix(
     stop: () => Promise<boolean>
   ) => Promise<{ stopped: boolean; owner: boolean }>,
   onPtyStopped?: (ptyId: string) => void,
-  failClosed = false
+  failClosed = false,
+  isPtyOwnedByAnotherWorktree?: (ptyId: string, sweptWorktreeId: string) => boolean
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   // Why (#10252): the cwd fallback only proves ownership when the filesystem path
@@ -294,7 +303,11 @@ async function sweepProviderByPrefix(
       typeof session.cwd === 'string' &&
       session.cwd.length > 0 &&
       isPathInsideOrEqual(cwdFallbackPath, session.cwd)
-    return session.id.startsWith(prefix) || session.worktreeId === worktreeId || cwdOwned
+    if (!(session.id.startsWith(prefix) || session.worktreeId === worktreeId || cwdOwned)) {
+      return false
+    }
+    // A migrated pty matches the swept id only through its frozen spawn-time id.
+    return !isPtyOwnedByAnotherWorktree?.(session.id, worktreeId)
   })
   // Why: agent shutdown snapshots coalesce only when requests begin together;
   // bounded concurrency avoids serial process scans without unbounded fanout.
@@ -324,54 +337,4 @@ async function sweepProviderByPrefix(
     }
   )
   return stopped.reduce<number>((count, value) => count + value, 0)
-}
-
-async function sweepRegistryForWorktree(
-  worktreeId: string,
-  localProvider: IPtyProvider,
-  deadline: number,
-  stopPty: (
-    ptyId: string,
-    stop: () => Promise<boolean>
-  ) => Promise<{ stopped: boolean; owner: boolean }>,
-  onPtyStopped?: (ptyId: string) => void
-): Promise<number> {
-  const rpcDeadline = teardownRpcDeadline(deadline)
-  const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
-  const stopped = await mapWithConcurrency(
-    entries,
-    WORKTREE_TEARDOWN_CONCURRENCY,
-    async (entry) => {
-      if (Date.now() >= deadline) {
-        return 0
-      }
-      const stopResult = await stopPty(entry.ptyId, async () => {
-        if (Date.now() >= deadline) {
-          return false
-        }
-        try {
-          await localProvider.shutdown(entry.ptyId, { immediate: true, deadlineMs: rpcDeadline })
-          return Date.now() < deadline
-        } catch {
-          return false
-        }
-      })
-      if (stopResult.owner && Date.now() < deadline) {
-        clearStoppedPtyState(entry.ptyId, onPtyStopped)
-        return 1
-      }
-      return 0
-    }
-  )
-  return stopped.reduce<number>((count, value) => count + value, 0)
-}
-
-function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {
-  try {
-    // Why: daemon shutdown does not always fan a local pty:exit event back
-    // through pty.ts, but removed worktrees must immediately drop memory rows.
-    onPtyStopped?.(ptyId)
-  } catch {
-    /* cleanup is best-effort and must not block git-level removal */
-  }
 }

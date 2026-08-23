@@ -53,6 +53,7 @@ import {
   isDetachedHeadWorkspace,
   isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
+import { isDefaultCheckoutWorkspace } from '../../../shared/worktree/ownership'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/default-branch-workspace'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
@@ -957,7 +958,10 @@ function WorktreeJumpPaletteContent({
         if (filterPredicate && !filterPredicate.matchesWorktree(worktree)) {
           return false
         }
-        if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
+        if (
+          hideDefaultBranchWorkspace &&
+          isDefaultBranchWorkspace(worktree, repoMap.get(worktree.repoId))
+        ) {
           return false
         }
         if (hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(worktree)) {
@@ -979,7 +983,11 @@ function WorktreeJumpPaletteContent({
           !showSleepingWorkspaces &&
           // Why the exemption here too: Cmd+J re-implements the sidebar's
           // filter pass, so the shared predicate is what keeps them in step.
-          !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
+          !isSleepingSweepExemptWorkspace(
+            worktree,
+            repoMap.get(worktree.repoId),
+            alwaysShowDefaultBranchWorkspace
+          ) &&
           isInactiveWorkspace(
             worktree.id,
             tabsByWorktree,
@@ -1004,6 +1012,7 @@ function WorktreeJumpPaletteContent({
       hideWorkspacesFromOtherDevices,
       pairedDeviceIdsByEnvironment,
       ptyIdsByTabId,
+      repoMap,
       showSleepingWorkspaces,
       tabsByWorktree,
       worktreeIdsWithLiveAgent
@@ -3288,7 +3297,7 @@ function WorktreeJumpPaletteContent({
                                 )}
                               </span>
                             )}
-                            {worktree.isMainWorktree && (
+                            {isDefaultCheckoutWorkspace(worktree, repoMap.get(worktree.repoId)) && (
                               <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
                                 {translate(
                                   'auto.components.WorktreeJumpPalette.739bda980c',

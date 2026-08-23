@@ -1,3 +1,5 @@
+import { DefaultWorktreeSwitchDialog } from './DefaultWorktreeSwitchDialog'
+import { useDefaultWorktreeSwitchDialog } from './use-default-worktree-switch-dialog'
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -114,6 +116,15 @@ const WorktreeList = React.memo(function WorktreeList({
     settings,
     agentSendTargetWorktreeId
   })
+  // Fork: default-worktree switch UI — context-menu request → confirm dialog.
+  const {
+    defaultSwitchDropTargetId,
+    findDefaultWorktree,
+    defaultSwitchDialogRequest,
+    setDefaultSwitchDialogRequest,
+    requestDefaultSwitch,
+    confirmDefaultSwitch
+  } = useDefaultWorktreeSwitchDialog(repoMap, visibleWorktrees)
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
     collapsedGroups,
     agentSendTargetWorktreeId,
@@ -285,6 +296,9 @@ const WorktreeList = React.memo(function WorktreeList({
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={handleCreateForRepo}
         handleOpenRepoSettings={handleOpenRepoSettings}
+        defaultSwitchDropTargetId={defaultSwitchDropTargetId}
+        onDefaultSwitchRequest={requestDefaultSwitch}
+        findDefaultWorktree={findDefaultWorktree}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={externalWorktreeCards.handleKeepImportedWorktreesHidden}
@@ -344,6 +358,20 @@ const WorktreeList = React.memo(function WorktreeList({
         onReorderWorktrees={statusMutations.reorderWorktrees}
         scrollOffsetRef={scrollOffsetRef}
         scrollAnchorRef={scrollAnchorRef}
+      />
+      <DefaultWorktreeSwitchDialog
+        key={
+          defaultSwitchDialogRequest
+            ? `${defaultSwitchDialogRequest.source.id}:${defaultSwitchDialogRequest.currentDefault.id}`
+            : 'idle'
+        }
+        request={defaultSwitchDialogRequest}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDefaultSwitchDialogRequest(null)
+          }
+        }}
+        onConfirm={confirmDefaultSwitch}
       />
     </>
   )

@@ -59,6 +59,12 @@ vi.mock('@/store', () => ({
       sshTargetLabels: new Map(),
       tabsByWorktree: {},
       updateWorktreeMeta,
+      // Fork: the Unity sidebar tint. The probe is pre-answered 'yes' so these
+      // cases test the per-surface opt-in, not the probe.
+      unityProjectRepoProbeByRepoId: { 'repo-1': { path: '/repo', state: 'yes' } },
+      unityTintSidebarPreviewByRepoId: {},
+      probeUnityProjectRepo: vi.fn(),
+      worktreesByRepo: {},
       workspacePortScan,
       worktreeCardProperties
     })
@@ -179,6 +185,27 @@ function expectParentBodyIsHoverTrigger(markup: string): void {
   expect(triggerTag).toContain('data-hover-card-trigger=""')
   expect(triggerTag).toContain('group/worktree-card')
 }
+
+describe('WorktreeCard Unity tint surface opt-in', () => {
+  it('draws no Unity colour unless the surface asked for it', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    // The kanban tile and the folder-workspace panel render exactly this way:
+    // the treatments are sidebar-row geometry, and neither surface offers the
+    // context menu that would change or clear the colour.
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+    expect(markup).not.toContain('data-worktree-unity-tint')
+  })
+
+  it('draws it for a sidebar row, which opts in', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} showUnityTint />
+    )
+    expect(markup).toContain('data-worktree-unity-tint-mode="bar"')
+  })
+})
 
 describe('WorktreeCard compact hover details', () => {
   beforeEach(() => {

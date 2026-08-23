@@ -1,6 +1,7 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { WORKTREE_DEFAULT_SET_SPECS } from './worktree-default-set'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -72,6 +73,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca worktree show --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
+  ...WORKTREE_DEFAULT_SET_SPECS,
   {
     path: ['worktree', 'current'],
     summary: 'Show the Orca-managed worktree for the current directory',

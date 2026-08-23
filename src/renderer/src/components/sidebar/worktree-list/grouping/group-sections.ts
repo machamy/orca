@@ -28,7 +28,7 @@ import type {
   Row,
   WorktreeGroupBy
 } from './row-types'
-import { orderMainWorktreeFirst } from './section-order'
+import { orderDefaultCheckoutFirst } from './section-order'
 
 /** Everything section emission reads that stays fixed for one buildRows call. */
 export type SectionAppendContext = {
@@ -177,7 +177,8 @@ export function appendOrderedGroups(
           }
         }
       }
-      const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items
+      const items =
+        groupBy === 'repo' ? orderDefaultCheckoutFirst(group.items, repoMap) : group.items
       const hostContextLabelByRepoId =
         groupBy === 'repo'
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)

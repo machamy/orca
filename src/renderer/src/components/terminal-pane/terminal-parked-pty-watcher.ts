@@ -15,6 +15,8 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { isInDefaultSwitchTeardownWindow } from '@/lib/default-worktree-switch-sleep-guard'
 import {
   capturedPanesByTabId,
   parkedWatchersByTabId,
@@ -44,6 +46,20 @@ export function startParkedPtyWatcher(args: {
   }
   const handlePtyExit = (_code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
     useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
+    // Why this comes first: the sidecar runs for UNMOUNTED panes and, unlike the
+    // mounted exit handler, is never filtered through the suppressed-exit set —
+    // `deliverPtyExitToHandlers` calls it unconditionally. So a default-worktree
+    // switch's own sleep kills arrived here and were treated as real exits: the
+    // branch below collapsed a background split's leaf, and the one after it
+    // closed the tab outright. Caught live at 01:50:32 (`leaf_collapse_parked`,
+    // 0.1s into a switch, before the sleep had even finished). The switch owns
+    // every teardown inside its window and its wake remounts what it needs.
+    if (isInDefaultSwitchTeardownWindow(worktreeId)) {
+      discardPreHandlerPtyState(ptyId)
+      entry.disposersByPtyId.get(ptyId)?.()
+      entry.disposersByPtyId.delete(ptyId)
+      return
+    }
     if (entry.disposersByPtyId.size > 1) {
       discardPreHandlerPtyState(ptyId)
       collapseParkedExitedLeaf(tab.id, ptyId)
@@ -107,6 +123,14 @@ export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
   if (!detached) {
     return
   }
+  // TEMP swap-2 diagnostics: the parked sidecar is NOT filtered through the
+  // suppressed-exit set the mounted handler uses, so a sleep-driven kill during
+  // a default switch can collapse a background split with no trace at all.
+  recordRendererCrashBreadcrumb('leaf_collapse_parked', {
+    tabId: tabId.slice(0, 8),
+    leafId: leafId.slice(0, 8),
+    ptyId: ptyId.slice(-10)
+  })
   const terminalTab = Object.values(state.tabsByWorktree)
     .flat()
     .find((candidate) => candidate.id === tabId)

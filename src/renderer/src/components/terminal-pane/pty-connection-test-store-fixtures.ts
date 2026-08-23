@@ -98,6 +98,8 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     clearPaneForegroundAgent: vi.fn((paneKey: string) => {
       delete getState().paneForegroundAgentByPaneKey[paneKey]
     }),
+    // Fork: provider-session bookkeeping written after a resume spawn succeeds.
+    recordAgentProviderSession: vi.fn(),
     markTerminalTabUnread: vi.fn(),
     markTerminalPaneUnread: vi.fn(),
     markAgentCompletionPaneUnread: vi.fn()

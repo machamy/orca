@@ -27,6 +27,12 @@ export function useWorktreeDragRuntime(args: {
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
   const [nativeLineageDropTargetId, setNativeLineageDropTargetId] = useState<string | null>(null)
+  // Fork: default-switch hover ring. React state, not the drag ref — an x-only
+  // pointer move can leave every other setter untouched, and a ref alone never
+  // repaints, letting the ring disagree with what pointer-up would commit.
+  const [pointerDefaultSwitchDropTargetId, setPointerDefaultSwitchDropTargetId] = useState<
+    string | null
+  >(null)
   const [worktreeDragState, setWorktreeDragState] = useState<WorktreeRowDragState>(
     WORKTREE_ROW_DRAG_INITIAL_STATE
   )
@@ -59,6 +65,7 @@ export function useWorktreeDragRuntime(args: {
     const drag = worktreePointerDragRef.current
     cancelWorktreePointerAutoscroll()
     setNativeLineageDropTargetId(null)
+    setPointerDefaultSwitchDropTargetId(null)
     if (!drag) {
       return
     }
@@ -97,6 +104,8 @@ export function useWorktreeDragRuntime(args: {
       setPinDragOver,
       nativeLineageDropTargetId,
       setNativeLineageDropTargetId,
+      pointerDefaultSwitchDropTargetId,
+      setPointerDefaultSwitchDropTargetId,
       worktreeDragState,
       setWorktreeDragState,
       worktreePointerDragRef,
@@ -117,6 +126,7 @@ export function useWorktreeDragRuntime(args: {
       dragOverStatus,
       nativeLineageDropTargetId,
       pinDragOver,
+      pointerDefaultSwitchDropTargetId,
       worktreeDragState
     ]
   )

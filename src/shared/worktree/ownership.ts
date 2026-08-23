@@ -7,6 +7,7 @@ import {
   resolveRuntimePath
 } from '../cross-platform-path'
 import { parseWslUncPath } from '../wsl-paths'
+import { isFolderRepo } from '../repo-kind'
 import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
@@ -234,6 +235,50 @@ export function areRuntimePathsEqual(leftPath: string, rightPath: string): boole
   return (
     normalizeRuntimePathForComparison(leftPath) === normalizeRuntimePathForComparison(rightPath)
   )
+}
+
+/** The row occupying the repo's default path — what users read as the primary
+ *  workspace. After a default-worktree switch, git's main worktree (the .git
+ *  holder) moves away with the displaced checkout, so user-facing badges,
+ *  sorting, visibility and delete guards must key on the path. Falls back to
+ *  isMainWorktree when the owning repo is unknown.
+ *
+ *  Git repos only: folder-mode projects seat N instances at the repo path, so a
+ *  path match there is not a "default checkout" — those instances are ordinary
+ *  deletable rows. Their own root row is handled by the isMainWorktree fallback. */
+export function isDefaultCheckoutWorkspace(
+  worktree: Pick<Worktree, 'path' | 'isMainWorktree'>,
+  repo: Pick<Repo, 'path' | 'kind'> | null | undefined
+): boolean {
+  if (!repo) {
+    return worktree.isMainWorktree
+  }
+  if (isFolderRepo(repo)) {
+    return false
+  }
+  return areRuntimePathsEqual(worktree.path, repo.path)
+}
+
+/** The row that IS the project folder and so can't be deleted as a worktree —
+ *  git's main worktree, or (after a default-worktree switch) the linked checkout
+ *  now sitting at the repo path. Deleting it goes through project removal. */
+export function isProjectFolderRow(
+  worktree: Pick<Worktree, 'path' | 'isMainWorktree'>,
+  repo: Pick<Repo, 'path' | 'kind'> | null | undefined
+): boolean {
+  return worktree.isMainWorktree || isDefaultCheckoutWorkspace(worktree, repo)
+}
+
+/** The repo's guaranteed entry-point row (the checkout at the repo path), used
+ *  to protect a project from vanishing under "Hide sleeping" (#8873). Unlike
+ *  isDefaultCheckoutWorkspace this INCLUDES folder-mode roots/instances, which
+ *  also sit at the repo path and often have no sibling row. A displaced Git main
+ *  (path ≠ repo path after a switch) is NOT an entry point and sweeps normally. */
+export function isRepoPathEntryPoint(
+  worktree: Pick<Worktree, 'path' | 'isMainWorktree'>,
+  repo: Pick<Repo, 'path'> | null | undefined
+): boolean {
+  return repo ? areRuntimePathsEqual(worktree.path, repo.path) : worktree.isMainWorktree
 }
 
 function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {

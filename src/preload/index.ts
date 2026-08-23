@@ -175,7 +175,8 @@ import type {
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalDriverState,
-  RuntimeTerminalPresentation
+  RuntimeTerminalPresentation,
+  RuntimeWorktreeIdentityMigration
 } from '../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
@@ -894,11 +895,18 @@ const api = {
       callback: (data: {
         repoId: string
         renamed?: { oldWorktreeId: string; newWorktreeId: string }
+        migrations?: readonly RuntimeWorktreeIdentityMigration[]
+        shieldOnly?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { repoId: string; renamed?: { oldWorktreeId: string; newWorktreeId: string } }
+        data: {
+          repoId: string
+          renamed?: { oldWorktreeId: string; newWorktreeId: string }
+          migrations?: readonly RuntimeWorktreeIdentityMigration[]
+          shieldOnly?: boolean
+        }
       ) => callback(data)
       ipcRenderer.on('worktrees:changed', listener)
       return () => ipcRenderer.removeListener('worktrees:changed', listener)
@@ -1135,8 +1143,12 @@ const api = {
       ipcRenderer.send('pty:terminalViewAttributes', attributes)
     },
 
-    kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
-      ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+    kill: (id: string, opts?: { keepHistory?: boolean; retainSurface?: boolean }): Promise<void> =>
+      ipcRenderer.invoke('pty:kill', {
+        id,
+        keepHistory: opts?.keepHistory ?? false,
+        retainSurface: opts?.retainSurface ?? false
+      }),
 
     listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
     getAuthoritativeBufferSnapshotCapabilities: (
@@ -2544,6 +2556,32 @@ const api = {
     reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
   },
 
+  unity: {
+    worktreeStatus: (args: { worktreePath: string; sourcePath: string }) =>
+      ipcRenderer.invoke('unity:worktreeStatus', args),
+    seedWorktreeCache: (args: {
+      worktreePath: string
+      sourcePath: string
+      tint?: boolean
+      tintSiblingLabels?: string[]
+      tintOverridesByLabel?: Record<string, string>
+    }) => ipcRenderer.invoke('unity:seedWorktreeCache', args),
+    openProject: (args: {
+      worktreePath: string
+      tint?: boolean
+      tintSiblingLabels?: string[]
+      tintOverridesByLabel?: Record<string, string>
+    }) => ipcRenderer.invoke('unity:openProject', args),
+    applyWorktreeTint: (args: {
+      worktreePath: string
+      enabled: boolean
+      label?: string
+      tintSiblingLabels?: string[]
+      tintOverridesByLabel?: Record<string, string>
+    }) => ipcRenderer.invoke('unity:applyWorktreeTint', args),
+    openInRider: (args: { worktreePath: string; sourcePath?: string }) =>
+      ipcRenderer.invoke('unity:openInRider', args)
+  },
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 
@@ -4023,6 +4061,34 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:activateWorktree', listener)
       return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
+    },
+    onDefaultWorktreeSwitchRequest: (
+      callback: (data: {
+        repoId: string
+        worktreeId: string
+        followAgents: boolean
+        notifyAgents: boolean
+        includeUntracked?: boolean
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          repoId: string
+          worktreeId: string
+          followAgents: boolean
+          notifyAgents: boolean
+          includeUntracked?: boolean
+        }
+      ) => callback(data)
+      ipcRenderer.on('ui:defaultWorktreeSwitchRequest', listener)
+      return () => ipcRenderer.removeListener('ui:defaultWorktreeSwitchRequest', listener)
+    },
+    onUnityAutoSeedOffer: (callback: (data: { repoId: string; worktreePath: string }) => void) => {
+      const listener = (_e: unknown, data: { repoId: string; worktreePath: string }) =>
+        callback(data)
+      ipcRenderer.on('ui:unityAutoSeedOffer', listener)
+      return () => ipcRenderer.removeListener('ui:unityAutoSeedOffer', listener)
     },
     onCreateTerminal: (
       callback: (data: {

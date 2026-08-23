@@ -146,6 +146,10 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** Last provider session confirmed for this pane's agent; survives the
+   *  metadata-less done→working strip. Capture fallback ONLY — never keys live
+   *  turn behavior. */
+  lastKnownProviderSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
@@ -359,32 +363,7 @@ function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | unde
 
 /** Structural equality for subagent lists so stores can reuse the previous
  *  array reference (and skip fanout) when nothing actually changed. */
-export function agentSubagentsEqual(
-  a: AgentSubagentSnapshot[] | undefined,
-  b: AgentSubagentSnapshot[] | undefined
-): boolean {
-  if (a === b) {
-    return true
-  }
-  if (!a || !b || a.length !== b.length) {
-    return !a && !b
-  }
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i]
-    const y = b[i]
-    if (
-      x.id !== y.id ||
-      x.state !== y.state ||
-      x.startedAt !== y.startedAt ||
-      x.agentType !== y.agentType ||
-      x.model !== y.model ||
-      x.description !== y.description
-    ) {
-      return false
-    }
-  }
-  return true
-}
+export { agentSubagentsEqual } from './agent-subagents-equality'
 
 /**
  * Normalize and validate an already-parsed agent status object. Shared by the

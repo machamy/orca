@@ -45,6 +45,8 @@ import { createNewIssueDraftSlice } from './slices/new-issue-draft'
 import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
+import { createUnityProjectRepoProbeSlice } from './slices/unity-project-repo-probe'
+import { createUnityTintSidebarPreviewSlice } from './slices/unity-tint-sidebar-preview'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import {
@@ -57,10 +59,12 @@ import {
   summarizeStateCollectionSizes
 } from '@/lib/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
+import { installTabRemovalDiagnostic } from './tab-removal-diagnostic'
 
 export const useAppStore = create<AppState>()((...a) => {
   // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
   installStoreListenerCensus(a[2])
+  installTabRemovalDiagnostic(a[2])
   return {
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),
@@ -104,7 +108,9 @@ export const useAppStore = create<AppState>()((...a) => {
     ...createNewIssueDraftSlice(...a),
     ...createTaskCreationDraftsSlice(...a),
     ...createRemoteServerUpdatesSlice(...a),
-    ...createTerminalQuickCommandHostsSlice(...a)
+    ...createTerminalQuickCommandHostsSlice(...a),
+    ...createUnityProjectRepoProbeSlice(...a),
+    ...createUnityTintSidebarPreviewSlice(...a)
   }
 })
 

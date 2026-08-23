@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
+import { isProjectFolderRow } from '../../../../shared/worktree/ownership'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 import {
   composeWorktreeHostIdentity,
@@ -128,10 +129,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     [allWorktrees, isBatchDelete, worktree, worktreeLineageById]
   )
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
-  // Why: the main worktree is the repo's original clone directory — `git worktree remove`
-  // always rejects it. We block the delete button upfront so the user doesn't have to
-  // discover this limitation via a confusing force-delete dead-end.
-  const isMainWorktree = !isBatchDelete && (worktree?.isMainWorktree ?? false)
+  // Why: the project-folder row (git main, or the repo-path checkout after a
+  // switch) can't be worktree-removed; block upfront so the user doesn't hit a
+  // confusing force-delete dead-end.
+  const isMainWorktree =
+    !isBatchDelete && worktree != null && isProjectFolderRow(worktree, repoMap.get(worktree.repoId))
   const childWorkspaceCount = lineageDelete.descendants.length
   const hasLineageChildren = childWorkspaceCount > 0
   const canDeleteAllLineage =

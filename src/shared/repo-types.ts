@@ -34,6 +34,34 @@ export type CustomWorktreeVisibilitySource = {
   rootPath: string
 }
 
+/**
+ * Fork: how — if at all — a sidebar worktree row echoes its Unity colour.
+ * `'bar'` is a left edge stripe, `'wash'` tints the whole row background,
+ * `'chip'` is a colour chip on the right.
+ */
+export type UnitySidebarTintMode = 'off' | 'bar' | 'wash' | 'chip'
+
+const UNITY_SIDEBAR_TINT_MODES: readonly UnitySidebarTintMode[] = ['off', 'bar', 'wash', 'chip']
+
+/** Reads the persisted setting, including records written when it was a boolean. */
+export function resolveUnitySidebarTintMode(value: unknown): UnitySidebarTintMode {
+  // The boolean era was a show/hide toggle, so both of its values carry real
+  // intent and must survive the default flip — `false` meant "don't show".
+  if (typeof value === 'boolean') {
+    return value ? 'bar' : 'off'
+  }
+  if (
+    typeof value === 'string' &&
+    (UNITY_SIDEBAR_TINT_MODES as readonly string[]).includes(value)
+  ) {
+    return value as UnitySidebarTintMode
+  }
+  // Absent = never chosen, which is now the bar. Unreadable values land here
+  // too: they hold no intent either, and a repo showing the default is far
+  // easier to spot and correct than one silently stuck off.
+  return 'bar'
+}
+
 export type WorktreeVisibilitySourcePreferences = {
   builtIn?: Partial<Record<BuiltInWorktreeVisibilitySourceId, ExternalWorktreeVisibility>>
   custom?: Record<string, ExternalWorktreeVisibility>
@@ -80,6 +108,22 @@ export type Repo = {
   externalWorktreeVisibilityPromptDismissedAt?: number
   /** Hidden external worktree paths acknowledged by Keep hidden on the inbox. */
   externalWorktreeInboxBaselinePaths?: string[]
+  /** Fork feature: copy the default checkout's Unity Library into every new
+   *  worktree. undefined = not decided yet (the renderer asks once). */
+  unityAutoSeedCache?: boolean
+  /** Fork: give each worktree a distinct colour in the Unity toolbar.
+   *  Undefined means ON — only an explicit false turns it off. */
+  unityWorktreeTint?: boolean
+  /** Fork: how the Unity worktree colour is echoed on the sidebar row. Undefined
+   *  means `'bar'` — only an explicit `'off'` opts out, and the renderer gates
+   *  the whole thing on the repo actually being a Unity project. Read through
+   *  `resolveUnitySidebarTintMode`: records predating the four-way choice hold a
+   *  boolean. */
+  unityTintInSidebar?: UnitySidebarTintMode
+  /** Fork: manual tint choices from the worktree context menu, keyed by the
+   *  worktree FOLDER name (the colour follows the folder, like the automatic
+   *  assignment). Absent labels fall back to the automatic palette. */
+  unityTintOverrides?: Record<string, string>
   /** External worktree paths explicitly imported while global visibility stays hide. */
   importedExternalWorktreePaths?: string[]
   /** Opt-in repo policy for coding-agent scratch worktrees; absent means hide. */

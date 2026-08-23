@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: OrcaRuntimeService still owns the mutable live graph, PTY handles, waiters, mobile floor/layout state, and managed-worktree reconciliation. Stateless browser and file command adapters live beside it; the remaining split points need state-owner extraction before enforcing max-lines. */
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
+import { autoSeedUnityCacheAfterWorktreeCreate } from '../unity/unity-project-worktree'
 import {
   detectAgentStatusFromTitle,
   extractLastOscTitle,
@@ -57,6 +58,7 @@ import {
 } from '../../shared/agent-status-types'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -123,7 +125,7 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
@@ -450,6 +452,7 @@ import {
   type RuntimeTerminalWaitCondition,
   type RuntimeWorktreePsSummary,
   type RuntimeWorktreeAgentRow,
+  type RuntimeWorktreeIdentityMigration,
   type RuntimeWorktreeStatus,
   type RuntimeSpeechModelSummary,
   type RuntimeSpeechSetupState,
@@ -688,6 +691,7 @@ import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
+import { RuntimeDefaultWorktree } from './orca-runtime-default-worktree'
 import {
   activateClientSessionTabSelection,
   ClientSessionTabSelectionStore,
@@ -1292,6 +1296,7 @@ type RuntimeStore = {
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
   getWorktreeMeta: Store['getWorktreeMeta']
   setWorktreeMeta: Store['setWorktreeMeta']
+  migrateWorktreeIdentity?: Store['migrateWorktreeIdentity']
   removeWorktreeMeta: Store['removeWorktreeMeta']
   getWorktreeLineage?: Store['getWorktreeLineage']
   getAllWorktreeLineage?: Store['getAllWorktreeLineage']
@@ -2134,9 +2139,24 @@ function resolveTerminalPresentation(opts: {
 }
 
 type RuntimeNotifier = {
-  worktreesChanged(repoId: string, renamed?: { oldWorktreeId: string; newWorktreeId: string }): void
+  worktreesChanged(
+    repoId: string,
+    renamed?: { oldWorktreeId: string; newWorktreeId: string },
+    migrations?: readonly RuntimeWorktreeIdentityMigration[],
+    shieldOnly?: boolean
+  ): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
+  /** Ask the desktop renderer to run the full default-switch client flow
+   *  (sleep -> swap -> wake) — the same path the sidebar dialog confirm takes. */
+  /** Ask the renderer whether new worktrees of this Unity repo should get the
+   *  cache automatically — fired once while the setting is undecided. */
+  unityAutoSeedOffer?(repoId: string, worktreePath: string): void
+  defaultWorktreeSwitchRequest?(
+    repoId: string,
+    worktreeId: string,
+    opts: { followAgents: boolean; notifyAgents: boolean; includeUntracked: boolean }
+  ): void
   reposChanged(): void
   activateWorktree(
     repoId: string,
@@ -10245,6 +10265,56 @@ export class OrcaRuntimeService {
     this.fileCommands
   )
 
+  private readonly defaultWorktree = new RuntimeDefaultWorktree({
+    resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+    getRepo: (repoId) => this.store?.getRepo(repoId),
+    getGitOptions: (repo) => getLocalProjectWorktreeGitOptions(this.requireStore(), repo),
+    // Branch swap changes no paths, so a plain refresh updates the branch labels.
+    notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),
+    // Follow mode only (both worktrees slept — no live PTYs to rebind): re-key the
+    // persisted session content, then have renderers re-key their in-memory state.
+    migrateWorktreeIdentity: (oldWorktreeId, newWorktreeId) => {
+      const store = this.requireStore()
+      if (!store.migrateWorktreeIdentity) {
+        throw new Error('default_worktree_switch_identity_store_unavailable')
+      }
+      store.migrateWorktreeIdentity(oldWorktreeId, newWorktreeId)
+      this.clientSessionTabSelections.migrateWorktree(oldWorktreeId, newWorktreeId)
+      // Why: main's mirrored agent-status rows feed snapshot replays; stale
+      // attribution would resurrect chips under the swapped-away worktree.
+      agentHookServer.migrateWorktreeAttribution(oldWorktreeId, newWorktreeId)
+    },
+    notifyIdentitiesChanged: (repoId, migrations) => {
+      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(repoId)
+      this.notifier?.worktreesChanged(repoId, undefined, migrations)
+      this.emitClientEvent({ type: 'worktreesChanged', repoId })
+    }
+  })
+
+  setRuntimeDefaultWorktree: RuntimeDefaultWorktree['set'] = this.defaultWorktree.set.bind(
+    this.defaultWorktree
+  )
+
+  /** CLI/E2E entry for the FULL client switch flow: hand the request to the
+   *  desktop renderer, which runs the same sleep -> swap -> wake path as the
+   *  sidebar dialog confirm. Async completion — observe via worktree state. */
+  async requestUiDefaultWorktreeSwitch(
+    selector: string,
+    opts: { followAgents: boolean; notifyAgents: boolean; includeUntracked: boolean }
+  ): Promise<{ requested: true; repoId: string; worktreeId: string }> {
+    const selected = await this.resolveWorktreeSelector(selector)
+    const repo = this.store?.getRepo(selected.repoId)
+    if (!repo || repo.kind === 'folder') {
+      throw new Error('default_worktree_switch_git_required')
+    }
+    if (!this.notifier?.defaultWorktreeSwitchRequest) {
+      throw new Error('default_worktree_switch_ui_flow_unavailable')
+    }
+    this.notifier.defaultWorktreeSwitchRequest(repo.id, selected.id, opts)
+    return { requested: true, repoId: repo.id, worktreeId: selected.id }
+  }
+
   private readonly gitCommands = new RuntimeGitCommands({
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     getRuntimeSettings: () => this.requireStore().getSettings() as GlobalSettings,
@@ -15046,7 +15116,13 @@ export class OrcaRuntimeService {
     ptyId: string,
     exitCode: number,
     exitIncarnationId?: PtyIncarnationId,
-    options?: { hostExitConfirmed?: boolean; cause?: TerminalExitCause }
+    options?: {
+      hostExitConfirmed?: boolean
+      cause?: TerminalExitCause
+      /** The kill was a sleep (`keepHistory`), so the tab is expected back and
+       *  its persisted surface must survive the exit. */
+      retainSurface?: boolean
+    }
   ): void {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
@@ -15228,7 +15304,13 @@ export class OrcaRuntimeService {
     } else {
       // Why: permanent process exit is absence, not a starting/sleeping tab.
       // Retire before publishing so paired clients never persist a ghost.
-      this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+      if (!options?.retainSurface) {
+        // Why the guard: a sleep's kill is not absence. Retiring here deleted the
+        // tab from the persisted session and raised the topology fence, after
+        // which the renderer's (correct) tab list was rebased away on every
+        // subsequent write and the tab could never come back.
+        this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+      }
     }
 
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
@@ -24846,6 +24928,31 @@ export class OrcaRuntimeService {
         console.warn(`[worktree-include] ${includeCopyWarning}`)
       }
     }
+
+    // Fork feature: a Unity repo's fresh worktree is seeded from the default
+    // checkout in the background — first editor open then skips the full
+    // reimport. Every safety gate (live editors, atomic staging, session-file
+    // purge) lives inside the seeder; a refusal is normal and the context
+    // menu remains the manual path.
+    void autoSeedUnityCacheAfterWorktreeCreate({
+      sourcePath: repo.path,
+      worktreePath: created.path,
+      decision: repo.unityAutoSeedCache,
+      tint: repo.unityWorktreeTint !== false,
+      ...(repo.unityTintOverrides ? { tintOverridesByLabel: repo.unityTintOverrides } : {}),
+      // The repo-path checkout keeps Unity's default grey, so it is not a sibling.
+      tintSiblingLabels: gitWorktrees
+        .filter((entry) => entry.path !== repo.path)
+        .map((entry) => basename(entry.path)),
+      offer: () => this.notifier?.unityAutoSeedOffer?.(repo.id, created.path),
+      onOutcome: (outcome) => {
+        if (outcome.seeded || outcome.reason === 'not_a_unity_project') {
+          return
+        }
+        const detail = 'detail' in outcome && outcome.detail ? ` (${outcome.detail})` : ''
+        console.warn(`[unity] auto-seed skipped for ${created.path}: ${outcome.reason}${detail}`)
+      }
+    })
 
     let setup: CreateWorktreeResult['setup']
     let warning: string | undefined = includeCopyWarning

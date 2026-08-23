@@ -3,6 +3,7 @@ import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '../../../../store/types'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
+import { isDefaultCheckoutWorkspace } from '../../../../../../shared/worktree/ownership'
 import { ALL_GROUP_KEY } from './group-keys'
 import type {
   OrderedGroupEntry,
@@ -63,14 +64,26 @@ export function getRenderedNaturalAnchorRepoIds({
   return renderedRepoIds
 }
 
-export function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
-  const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
-  if (mainWorktrees.length === 0) {
+export function orderDefaultCheckoutFirst(
+  worktrees: Worktree[],
+  repoMap: ReadonlyMap<string, Repo>
+): Worktree[] {
+  // Why the repo-path anchor and not isMainWorktree: the anchored row is the
+  // checkout users read as the default, and after an in-place default-worktree
+  // switch git's isMainWorktree follows the displaced checkout.
+  let defaults = worktrees.filter((worktree) =>
+    isDefaultCheckoutWorkspace(worktree, repoMap.get(worktree.repoId))
+  )
+  if (defaults.length === 0) {
+    // No repo-path match (a repo row without a stored path, or fixtures): fall
+    // back to git's own flag rather than dropping the anchor entirely.
+    defaults = worktrees.filter((worktree) => worktree.isMainWorktree)
+  }
+  if (defaults.length === 0) {
     return worktrees
   }
-  // Why: project groups are scanned by repo; keep the repo's canonical
-  // workspace anchored even when dynamic sorts rank a child workspace first.
-  return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
+  const defaultIds = new Set(defaults.map((worktree) => worktree.id))
+  return [...defaults, ...worktrees.filter((worktree) => !defaultIds.has(worktree.id))]
 }
 
 export function withRepoSectionDisplayLabels(

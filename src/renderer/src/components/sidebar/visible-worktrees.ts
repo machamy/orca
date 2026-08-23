@@ -146,7 +146,11 @@ export function computeVisibleWorktrees(
     // an explicit hide still wins over the exemption.
     all = all.filter(
       (w) =>
-        isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) ||
+        isSleepingSweepExemptWorkspace(
+          w,
+          opts.repoMap.get(w.repoId),
+          opts.alwaysShowDefaultBranchWorkspace
+        ) ||
         !isInactiveWorkspace(
           w.id,
           opts.tabsByWorktree,

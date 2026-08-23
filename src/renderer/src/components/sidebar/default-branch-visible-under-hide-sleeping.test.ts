@@ -40,7 +40,10 @@ function makeDefaultBranchWorktree(): Worktree {
   }
 }
 
-const repoMap = new Map<string, Repo>([['repo1', makeRepo('repo1')]])
+// Why: default-checkout predicates compare the worktree path to the repo path,
+// so the fixture repo must sit at the default worktree's path.
+const repo1: Repo = { ...makeRepo('repo1'), path: '/tmp/repo1' }
+const repoMap = new Map<string, Repo>([['repo1', repo1]])
 
 type VisibleOptions = Parameters<typeof computeVisibleWorktreeIds>[2]
 
@@ -68,7 +71,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
 
 describe('#8873 default-branch workspace under "Hide sleeping"', () => {
   it('is genuinely the default-branch row the "Hide default branch" toggle targets', () => {
-    expect(isDefaultBranchWorkspace(makeDefaultBranchWorktree())).toBe(true)
+    expect(isDefaultBranchWorkspace(makeDefaultBranchWorktree(), repo1)).toBe(true)
   })
 
   it('stays in the sidebar when it is sleeping and "Hide sleeping" is on', () => {
@@ -146,6 +149,7 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
     const feature: Worktree = {
       ...makeDefaultBranchWorktree(),
       id: 'wt-feature',
+      path: '/tmp/feature',
       branch: 'refs/heads/feature',
       isMainWorktree: false
     }
@@ -162,7 +166,7 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
       branch: '',
       head: ''
     }
-    expect(isDefaultBranchWorkspace(folder)).toBe(false)
+    expect(isDefaultBranchWorkspace(folder, repo1)).toBe(false)
 
     expect(visible([folder], { alwaysShowDefaultBranchWorkspace: true })).toEqual([folder.id])
   })

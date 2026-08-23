@@ -116,7 +116,10 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'terminal.sleep' })
     )
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { keepHistory: true })
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', {
+      keepHistory: true,
+      retainSurface: true
+    })
   })
 
   it('asks the owner runtime to converge a runtime-owned worktree', async () => {

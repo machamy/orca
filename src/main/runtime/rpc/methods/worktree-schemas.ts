@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import {
   OptionalBoolean,
+  StrictOptionalBoolean,
   OptionalFiniteNumber,
   OptionalPlainString,
   OptionalString,
@@ -82,6 +83,21 @@ export const WorktreeSelector = z.object({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing worktree selector'))
+})
+
+export const WorktreeDefaultSetSelector = WorktreeSelector.extend({
+  /** Follow mode: swap the two workspaces' slept agent sessions + transcripts so
+   *  each agent resumes where its branch now lives. Requires `uiFlow` — the
+   *  renderer owns the sleep/wake half of the transaction. */
+  followAgents: StrictOptionalBoolean,
+  /** Seed each affected agent with a note about the change on resume. */
+  notifyAgents: StrictOptionalBoolean,
+  /** Omitted/true carries untracked files with their branch; false leaves them
+   *  in the folder they are in. Optional so older clients keep the default. */
+  includeUntracked: StrictOptionalBoolean,
+  /** Route through the desktop renderer's full switch flow (sleep -> swap ->
+   *  wake) — the exact path the sidebar dialog confirm takes. Async completion. */
+  uiFlow: StrictOptionalBoolean
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({

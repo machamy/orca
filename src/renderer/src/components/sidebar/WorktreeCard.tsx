@@ -38,7 +38,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
   lineageChildrenStyle,
   onLineageToggle,
   isLineageDropTarget = false,
+  isDefaultWorktree = false,
+  showDefaultSwitchDropTarget = false,
+  isDefaultSwitchDropTarget = false,
+  onDefaultSwitchRequest,
   affiliateListMode = false,
+  showUnityTint = false,
   statusPrDisplay = null
 }: WorktreeCardProps): React.JSX.Element {
   const card = useWorktreeCardController({
@@ -72,7 +77,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
     lineageChildrenStyle,
     onLineageToggle,
     isLineageDropTarget,
+    isDefaultWorktree,
+    showDefaultSwitchDropTarget,
+    isDefaultSwitchDropTarget,
+    onDefaultSwitchRequest,
     affiliateListMode,
+    showUnityTint,
     statusPrDisplay
   })
 

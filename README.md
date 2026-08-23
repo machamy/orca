@@ -26,7 +26,162 @@
   <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app running agents in parallel worktrees, with the Orca mobile companion app in the corner" width="960" />
 </p>
 
+> [!NOTE]
+> ### This is a fork — [machamy/orca](https://github.com/machamy/orca)
+>
+> A personal fork of [stablyai/orca](https://github.com/stablyai/orca).
+> **Everything upstream still works**; only [What this fork
+> adds](#what-this-fork-adds), immediately below, is not in upstream.
+>
+> - **Changelog**: [`FORK_CHANGELOG.md`](FORK_CHANGELOG.md) (Korean, canonical) ·
+>   [`FORK_CHANGELOG.en.md`](FORK_CHANGELOG.en.md) (English translation). Per-step
+>   detail and commit hashes live there, not in this README.
+> - **Version scheme**: `<upstream version>.machamy.<N>.local.<timestamp>.<commit12>` —
+>   e.g. `1.4.178-rc.2.machamy.7.local.…`. `N` is the value in the root
+>   [`FORK_VERSION`](FORK_VERSION) file and goes up on each fork milestone.
+> - **Not distributable — build it yourself.** Local builds are self-signed
+>   (`Orca Local Signing`), with no Apple Developer ID and no notarization, so a
+>   build handed to someone else is refused by their Gatekeeper (`spctl`
+>   rejected). → [Install](#install)
+> - This fork's docs are written in **Korean first**; the English is a translation.
+
+## What this fork adds
+
+It addresses the two confusions that show up when one Unity project is run across
+several worktrees at once — **"which worktree is this editor?"** and **"which
+branch is sitting in the repo folder?"**
+
+<table>
+<tr>
+<td width="50%" valign="middle">
+
+### A different Unity colour per worktree
+
+For anyone who has had two editors open and lost track of which is which. A
+generated editor script tints **the toolbar holding the play controls** in that
+worktree's colour and **prefixes the worktree name to the window title**. Colours
+are handed out from 20 (10 primary + 10 fallback) so siblings never collide, and
+you can also pick one by hand — right-click a worktree → **Unity Toolbar Color**
+for ten presets or a colour picker (a colour another worktree already picked is
+locked out). The **default worktree stays uncoloured**, so "has a colour" reads
+as "is a side worktree".
+
+The script is only ever written to a gitignored path: **it asks git whether the
+path is ignored before writing, and skips the repo entirely if it isn't** — it
+never creates a file that would be tracked.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/fork-unity-toolbar-tint.png" alt="Two Unity editors whose toolbars are tinted in different per-worktree colours" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### That colour on the sidebar row
+
+The worktree's Unity colour is echoed on its Orca sidebar row. Choose per project
+between **off / left colour bar / row background tint / right colour chip**;
+hovering an option in the repo ⋯ menu previews it on the live rows. The bar is the
+default, and it only turns on for repos confirmed to be Unity projects.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/fork-sidebar-tint-modes.png" alt="The four ways a worktree's Unity colour can appear on a sidebar row" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Unity worktree actions
+
+One right-click on a worktree gets you **Copy Unity Cache** (an APFS copy of the
+default checkout's Library — seconds, near-zero extra disk) · **Open in Unity**
+(at exactly the editor version named in `ProjectVersion.txt`) · **Open in Rider**
+(on the Unity-generated `.sln`, copied over from the default checkout when the
+worktree has none yet).
+
+The cache copy **never copies a live editor's Library** — a lockfile, the process
+table, and a recent-launch TTL all gate it, and it re-checks once more after the
+copy. It lands in a staging folder and is finished by an atomic rename, so a crash
+mid-copy can never leave half a Library behind.
+
+</td>
+<td width="50%">
+  <img src="docs/assets/fork-unity-worktree-menu.png" alt="The worktree right-click menu with Copy Unity Cache, Open in Unity, Open in Rider, and Unity Toolbar Color" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Make Default Worktree
+
+Promote a sub-worktree to the repo's default checkout. Nothing moves on disk:
+it **swaps the two worktrees' branches in place** — git's main worktree (the
+`.git` holder) and the repo folder path stay exactly where they were, so GitHub
+Desktop or an IDE pointed at the repo folder sees the promoted branch right away.
+Uncommitted, staged and untracked changes follow their branch (the switch dialog
+can leave untracked files in place instead); ignored files stay put.
+
+Drag a worktree onto the **Default** card, or run
+`orca worktree default set --worktree <selector>`. The optional **agents follow
+the branch** toggle sleeps both worktrees and resumes each agent where its branch
+now lives (Claude/Codex).
+
+</td>
+<td width="50%">
+  <img src="docs/assets/fork-make-default-worktree.png" alt="Dragging a worktree onto the Default card to promote it to the repo's default checkout" width="100%" />
+</td>
+</tr>
+</table>
+
+**Also added by this fork:**
+
+- **`pnpm test:fork`** — a one-command regression gate over the tests that pin the
+  fork's behavior, for quickly checking the fork survived an upstream merge. The
+  list lives in
+  [`config/fork-contract-tests.mjs`](config/fork-contract-tests.mjs), and a merge
+  that deletes one of its files fails a meta test immediately.
+- **Markdown GitHub-style view** — .md files with raw HTML that the preview blocks
+  can be rendered GitHub-flavored via a button on the notice banner.
+- **First-open Unity crash avoided** — the Firebase plugin regenerates
+  `google-services-desktop.json` on every editor load, and that colliding with the
+  first import storm after a seed killed Unity (the "have to open it twice"
+  symptom). The mtime is aligned so the regeneration is skipped — but only when the
+  generated file is byte-identical to its source.
+- **Sidebar default-row fixes** — the primary star, sort anchor, hide filters and
+  delete guards key on the **repo path** rather than git's `isMainWorktree`, so the
+  correct row still reads as "default" after a switch.
+- **Branch-swap data-safety hardening** — partial-capture restore, post-checkout
+  hook resilience, and up-front rejection of worktrees mid-merge/cherry-pick/revert.
+
+> [!IMPORTANT]
+> **What's verified, and the known limits** — written down rather than hidden.
+>
+> - The branch swap, "agents stay" mode and the data-safety cases are verified
+>   against real git repos with regression tests. **"Agents follow"** passed all 14
+>   contract items for 36 consecutive rounds on a real 12-pane fixture, but on
+>   **macOS arm64 only** — Linux, Windows and SSH are unverified.
+> - The Unity work was checked on a real editor (6000.3.16f1). **The Library copy
+>   and "Open in Rider" are macOS-only** (the copy depends on APFS copy-on-write).
+>   "Open in Unity" and the toolbar tint are written to work on other platforms,
+>   but are **verified on macOS only**.
+> - **The "notify agents" toggle really does write into the panes, but it cannot
+>   guarantee the note is sent.** At 6/15/30/60/90s after the switch it types the
+>   new path and branch into each woken agent pane, once per pane (panes mid-turn
+>   are left alone). The note ends with an Enter, but some agent TUIs do not take
+>   it and leave the text sitting in the prompt — then you press Enter yourself.
+> - A plain shell loses its scrollback across a switch (the process cannot move).
+>   Tabs, placement and splits are preserved.
+> - The toolbar tint paints the main toolbar on Unity 6000.3 and newer, and falls
+>   back to a Scene view bar on older editors. If either fails, the toolbar is
+>   silently left at its default colour.
+
+---
+
 ## Features
+
+Everything below is **upstream Orca** — all of it works in this fork too.
 
 <table>
 <tr>
@@ -209,7 +364,33 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 
 ## Install
 
-### Desktop — macOS, Windows, Linux
+### To use this fork — build from source
+
+Every download channel below is **upstream (stablyai/orca)** and carries none of
+this fork's changes. To get [what this fork adds](#what-this-fork-adds), build it
+yourself.
+
+```bash
+git clone https://github.com/machamy/orca.git
+cd orca
+pnpm install
+pnpm build:mac        # build:linux on Linux, build:win on Windows
+```
+
+The app lands in `dist/mac-arm64/Orca.app` (`dist/mac` for Intel). An app you
+built on your own machine carries no quarantine attribute, so Gatekeeper never
+gets in the way.
+
+- **Requires** Node 24 and pnpm 10.24.0.
+- **Do not touch repo files while `build:mac` runs.** It packages x64 and arm64
+  from one file scan, so a file that changes size in between shifts every
+  `app.asar` offset and the arm64 app then dies at launch with **no log output at
+  all**. The x64 build looks fine, which makes this easy to misdiagnose. To check
+  a build, run the packed binary directly
+  (`dist/mac-arm64/Orca.app/Contents/MacOS/Orca`): a silent exit 1 with zero
+  output means a displaced asar — rebuild without writing to the repo.
+
+### Desktop — macOS, Windows, Linux (upstream builds, without this fork's changes)
 
 - **[Download from onOrca.dev](https://onorca.dev/download)**
 - Or grab a build directly: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [All builds](https://github.com/stablyai/orca/releases/latest)

@@ -1,5 +1,7 @@
 import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { Repo } from '../../../../shared/repo-types'
+import { isRepoPathEntryPoint } from '../../../../shared/worktree/ownership'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
 /**
@@ -11,9 +13,13 @@ import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-displ
 
 export function isSleepingSweepExemptWorkspace(
   worktree: Worktree,
+  repo: Repo | undefined,
   alwaysShowDefaultBranchWorkspace: boolean | undefined
 ): boolean {
-  return alwaysShowDefaultBranchWorkspace !== false && worktree.isMainWorktree
+  // Fork: keyed on the repo-path checkout, not isMainWorktree — after an
+  // in-place default switch, git's main-worktree flag follows the displaced
+  // checkout and the wrong row survived the sleeping sweep.
+  return alwaysShowDefaultBranchWorkspace !== false && isRepoPathEntryPoint(worktree, repo)
 }
 
 /**

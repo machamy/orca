@@ -119,6 +119,11 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       worktreeDragState: runtime.worktreeDragState,
       worktreePointerDragRef: runtime.worktreePointerDragRef,
       nativeLineageDropTargetId: runtime.nativeLineageDropTargetId,
+      defaultSwitchDropTargetId:
+        props.defaultSwitchDropTargetId ?? runtime.pointerDefaultSwitchDropTargetId ?? null,
+      onDefaultSwitchRequest: props.onDefaultSwitchRequest,
+      findDefaultWorktree: props.findDefaultWorktree,
+      worktreeMap: props.worktreeMap,
       activeWorktreeId: props.activeWorktreeId,
       activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
       currentWorktreeId: props.currentWorktreeId,

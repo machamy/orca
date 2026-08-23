@@ -39,7 +39,14 @@ function makeWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
 }
 
 function makeMainWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
-  return makeWorktree(id, { isMainWorktree: true, branch: 'refs/heads/main', ...overrides })
+  // Why: the repo-path checkout is the anchored/default row; seat it at repo1's path
+  // (default-checkout hoisting is path-based, not isMainWorktree-based).
+  return makeWorktree(id, {
+    isMainWorktree: true,
+    branch: 'refs/heads/main',
+    path: '/tmp/repo1',
+    ...overrides
+  })
 }
 
 function makeRepo(id = 'repo1', overrides: Partial<Repo> = {}): Repo {

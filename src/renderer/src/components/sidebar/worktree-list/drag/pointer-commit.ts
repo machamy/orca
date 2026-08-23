@@ -90,6 +90,14 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         : NO_WORKTREE_SIDEBAR_DROP_TARGET,
       drag.draggedIds
     )
+    if (preferredStatusTarget.defaultSwitchTargetId) {
+      ctx.commitWorktreeDefaultSwitchDrop(
+        drag.draggedIds,
+        preferredStatusTarget.defaultSwitchTargetId
+      )
+      ctx.clearWorktreeDrag()
+      return
+    }
     if (preferredStatusTarget.lineageParentId) {
       ctx.commitWorktreeLineageParentDrop(drag.draggedIds, preferredStatusTarget.lineageParentId)
       ctx.clearWorktreeDrag()
@@ -144,7 +152,9 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         x: event.clientX,
         y: event.clientY
       })
-      if (target.lineageParentId) {
+      if (target.defaultSwitchTargetId) {
+        ctx.commitWorktreeDefaultSwitchDrop(drag.draggedIds, target.defaultSwitchTargetId)
+      } else if (target.lineageParentId) {
         ctx.commitWorktreeLineageParentDrop(drag.draggedIds, target.lineageParentId)
       } else {
         commitStatusOrPinDrop(args, target, statusDrop?.dropIndex ?? null)

@@ -188,7 +188,8 @@ export function remapOpenEditorTabsForPathChange({
   toPath,
   worktreePath,
   worktreeId,
-  moveOperationId
+  moveOperationId,
+  includeRefScopedDiffTabs
 }: {
   fromPath: string
   toPath: string
@@ -197,6 +198,9 @@ export function remapOpenEditorTabsForPathChange({
   /** Passed by the move coordinator so dirty destinations get a content-verify
    * gate + provenance installed atomically with the re-home. */
   moveOperationId?: string
+  /** Whole-root moves only (default-worktree swap): relativePaths are unchanged,
+   * so branch/commit diff tab ids stay valid and can be retargeted too. */
+  includeRefScopedDiffTabs?: boolean
 }): RekeyOpenFilesResult {
   const state = useAppStore.getState()
   // The rename only touched the initiating execution host. The same absolute
@@ -307,9 +311,19 @@ export function remapOpenEditorTabsForPathChange({
   // Only single-file staged/unstaged diff ids are purely path-derived, so only
   // they can be retargeted from path. Branch/commit diffs carry extra compare
   // metadata and "Changes" is worktree-rooted — rebuilding those from path alone
-  // would produce the wrong id.
+  // would produce the wrong id. Exception: a whole-root move (default-worktree
+  // swap) keeps every relativePath identical, so ref-scoped diff ids stay valid
+  // and the caller opts in via includeRefScopedDiffTabs.
   for (const file of filesToMove) {
-    if (file.mode !== 'diff' || (file.diffSource !== 'staged' && file.diffSource !== 'unstaged')) {
+    if (
+      file.mode !== 'diff' ||
+      (file.diffSource !== 'staged' &&
+        file.diffSource !== 'unstaged' &&
+        !(
+          includeRefScopedDiffTabs &&
+          (file.diffSource === 'branch' || file.diffSource === 'commit')
+        ))
+    ) {
       continue
     }
     const newRelativePath = relativeOf(file)

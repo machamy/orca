@@ -5,6 +5,7 @@ import {
   sidebarHasActiveFilters
 } from './visible-worktrees'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree {
@@ -47,22 +48,25 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
 }
 
 describe('isDefaultBranchWorkspace', () => {
-  it('returns true for a branch-backed main worktree', () => {
+  const repoAt = (path: string): Repo =>
+    ({ id: 'repo1', path, displayName: 'r', badgeColor: '#000', addedAt: 0 }) as Repo
+
+  it('returns true for the branch-backed repo-path checkout', () => {
     const main = makeWorktree('main')
     main.isMainWorktree = true
-    expect(isDefaultBranchWorkspace(main)).toBe(true)
+    expect(isDefaultBranchWorkspace(main, repoAt(main.path))).toBe(true)
   })
 
   it('returns false for folder-mode main worktrees (empty branch)', () => {
     const folder = makeWorktree('folder')
     folder.isMainWorktree = true
     folder.branch = ''
-    expect(isDefaultBranchWorkspace(folder)).toBe(false)
+    expect(isDefaultBranchWorkspace(folder, repoAt(folder.path))).toBe(false)
   })
 
-  it('returns false for non-main worktrees even on the default branch', () => {
+  it('returns false for non-default-path worktrees even on the default branch', () => {
     const feature = makeWorktree('feature')
-    expect(isDefaultBranchWorkspace(feature)).toBe(false)
+    expect(isDefaultBranchWorkspace(feature, repoAt('/tmp/main'))).toBe(false)
   })
 
   it('keeps a provisioned root visible as the recipe-created workspace', () => {

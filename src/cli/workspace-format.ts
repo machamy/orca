@@ -6,6 +6,7 @@ import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environmen
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
+  RuntimeDefaultWorktreeSwitchResult,
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
@@ -172,6 +173,12 @@ export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }):
       ([key, value]) =>
         `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
     )
+    .join('\n')
+}
+
+export function formatDefaultWorktreeSwitch(result: RuntimeDefaultWorktreeSwitchResult): string {
+  return Object.entries(result)
+    .map(([key, value]) => `${key}: ${value == null ? 'null' : String(value)}`)
     .join('\n')
 }
 

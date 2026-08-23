@@ -26,6 +26,12 @@ Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuf
 
 Always use the primary working directory (the worktree) for all file reads and edits. Never follow absolute paths from subagent results that point to the main repo.
 
+## Never Write to the Repo While a Local Mac Build Is Packaging
+
+`build:mac` packages x64 and arm64 from **one** electron-builder file scan. Any repo file that changes size between the two packs shifts every `app.asar` offset after it, and the arm64 app then dies at launch with exit 1 and **no log output at all** — Electron cannot read `package.json` or `out/main/index.js` from the archive. The x64 build looks fine, which makes this easy to misdiagnose.
+
+So: finish every edit (changelog, docs, source) **before** starting `build:mac`, and touch nothing under the repo root until it exits. After a local build, verify with `docs/reference/local-mac-build-asar-integrity.md` before installing.
+
 ## Cross-Platform Support
 
 Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior behind runtime checks:

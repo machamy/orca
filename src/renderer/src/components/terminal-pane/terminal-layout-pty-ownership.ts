@@ -1,5 +1,13 @@
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { collectLeafIds, pruneLeaves } from './terminal-pane-layout-tree'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../../shared/terminal-tab-types'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import {
+  coalesceLeafRecord,
+  coalesceScrollbackRecords,
+  resolveRetainedLeafId
+} from './terminal-layout-leaf-record-coalesce'
 
 type TerminalLayoutPtyOwnershipNormalization = {
   snapshot: TerminalLayoutSnapshot
@@ -11,113 +19,66 @@ type DuplicatePtyLeafReplacements = {
   retainedLeafIdByRemovedLeafId: Map<string, string>
 }
 
-function resolveRetainedLeafId(
-  leafId: string,
-  retainedLeafIdByRemovedLeafId: ReadonlyMap<string, string>
-): string {
-  let retainedLeafId = leafId
-  while (retainedLeafIdByRemovedLeafId.has(retainedLeafId)) {
-    const nextLeafId = retainedLeafIdByRemovedLeafId.get(retainedLeafId)
-    if (!nextLeafId || nextLeafId === retainedLeafId) {
-      return retainedLeafId
-    }
-    retainedLeafId = nextLeafId
+function collectLeafIds(node: TerminalPaneLayoutNode | null | undefined): string[] {
+  if (!node) {
+    return []
   }
-  return retainedLeafId
-}
-
-function coalesceLeafRecord(
-  source: Record<string, string> | undefined,
-  retainedLeafIdByRemovedLeafId: ReadonlyMap<string, string>
-): Record<string, string> | undefined {
-  if (!source) {
-    return undefined
-  }
-  const retained = Object.fromEntries(
-    Object.entries(source).filter(([leafId]) => {
-      const retainedLeafId = retainedLeafIdByRemovedLeafId.get(leafId)
-      return retainedLeafId === undefined || retainedLeafId === leafId
-    })
-  )
-  for (const [removedLeafId, value] of Object.entries(source)) {
-    if (!retainedLeafIdByRemovedLeafId.has(removedLeafId)) {
+  const leafIds: string[] = []
+  const pending = [node]
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    if (current.type === 'leaf') {
+      leafIds.push(current.leafId)
       continue
     }
-    const retainedLeafId = resolveRetainedLeafId(removedLeafId, retainedLeafIdByRemovedLeafId)
-    if (!Object.hasOwn(retained, retainedLeafId)) {
-      retained[retainedLeafId] = value
-    }
+    pending.push(current.second, current.first)
   }
-  return Object.keys(retained).length > 0 ? retained : undefined
+  return leafIds
 }
 
-function hasLeafRecordValue(source: Record<string, string> | undefined, leafId: string): boolean {
-  return Boolean(source && Object.hasOwn(source, leafId))
-}
-
-function coalesceScrollbackRecords(
-  buffersByLeafId: Record<string, string> | undefined,
-  scrollbackRefsByLeafId: Record<string, string> | undefined,
+function pruneLeaves(
+  node: TerminalPaneLayoutNode,
   retainedLeafIdByRemovedLeafId: ReadonlyMap<string, string>,
-  orderedLeafIds: readonly string[]
-): {
-  buffersByLeafId: Record<string, string> | undefined
-  scrollbackRefsByLeafId: Record<string, string> | undefined
-} {
-  const affectedRetainedLeafIds = new Set<string>()
-  for (const removedLeafId of retainedLeafIdByRemovedLeafId.keys()) {
-    affectedRetainedLeafIds.add(resolveRetainedLeafId(removedLeafId, retainedLeafIdByRemovedLeafId))
-  }
-
-  const sourceLeafIdByRetainedLeafId = new Map<string, string>()
-  for (const retainedLeafId of affectedRetainedLeafIds) {
-    if (
-      hasLeafRecordValue(buffersByLeafId, retainedLeafId) ||
-      hasLeafRecordValue(scrollbackRefsByLeafId, retainedLeafId)
-    ) {
-      sourceLeafIdByRetainedLeafId.set(retainedLeafId, retainedLeafId)
-    }
-  }
-  for (const leafId of orderedLeafIds) {
-    const retainedLeafId = resolveRetainedLeafId(leafId, retainedLeafIdByRemovedLeafId)
-    if (
-      !affectedRetainedLeafIds.has(retainedLeafId) ||
-      sourceLeafIdByRetainedLeafId.has(retainedLeafId)
-    ) {
+  retainedSelfLeafIds: Set<string>
+): TerminalPaneLayoutNode | null {
+  const pending: { node: TerminalPaneLayoutNode; visited: boolean }[] = [{ node, visited: false }]
+  const pruned: (TerminalPaneLayoutNode | null)[] = []
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    if (current.node.type === 'leaf') {
+      const retainedLeafId = retainedLeafIdByRemovedLeafId.get(current.node.leafId)
+      if (!retainedLeafId) {
+        pruned.push(current.node)
+      } else if (
+        retainedLeafId === current.node.leafId &&
+        !retainedSelfLeafIds.has(current.node.leafId)
+      ) {
+        retainedSelfLeafIds.add(current.node.leafId)
+        pruned.push(current.node)
+      } else {
+        pruned.push(null)
+      }
       continue
     }
-    if (
-      hasLeafRecordValue(buffersByLeafId, leafId) ||
-      hasLeafRecordValue(scrollbackRefsByLeafId, leafId)
-    ) {
-      sourceLeafIdByRetainedLeafId.set(retainedLeafId, leafId)
+    if (!current.visited) {
+      pending.push({ node: current.node, visited: true })
+      pending.push({ node: current.node.second, visited: false })
+      pending.push({ node: current.node.first, visited: false })
+      continue
+    }
+    const second = pruned.pop() ?? null
+    const first = pruned.pop() ?? null
+    if (first && second) {
+      pruned.push(
+        first === current.node.first && second === current.node.second
+          ? current.node
+          : { ...current.node, first, second }
+      )
+    } else {
+      pruned.push(first ?? second)
     }
   }
-
-  const coalesce = (
-    source: Record<string, string> | undefined
-  ): Record<string, string> | undefined => {
-    if (!source) {
-      return undefined
-    }
-    const retained = Object.fromEntries(
-      Object.entries(source).filter(([leafId]) => {
-        const retainedLeafId = resolveRetainedLeafId(leafId, retainedLeafIdByRemovedLeafId)
-        return !affectedRetainedLeafIds.has(retainedLeafId)
-      })
-    )
-    for (const [retainedLeafId, sourceLeafId] of sourceLeafIdByRetainedLeafId) {
-      if (hasLeafRecordValue(source, sourceLeafId)) {
-        retained[retainedLeafId] = source[sourceLeafId]!
-      }
-    }
-    return Object.keys(retained).length > 0 ? retained : undefined
-  }
-
-  return {
-    buffersByLeafId: coalesce(buffersByLeafId),
-    scrollbackRefsByLeafId: coalesce(scrollbackRefsByLeafId)
-  }
+  return pruned[0] ?? null
 }
 
 function findDuplicatePtyLeafReplacements(
@@ -190,6 +151,11 @@ export function normalizeTerminalLayoutPtyOwnership(
   }
 
   // Why: one live PTY has one renderer surface; retaining both leaves races input, resize, and teardown.
+  // Traced because this silently shrinks a split — one of only two ways a 2-pane
+  // tab comes back as 1 pane with no teardown breadcrumb of its own.
+  recordRendererCrashBreadcrumb('leaf_prune_dup_pty', {
+    leaves: [...retainedLeafIdByRemovedLeafId.keys()].map((id) => id.slice(0, 8)).join(',')
+  })
   const removedLeafIds = new Set<string>()
   for (const [removedLeafId, retainedLeafId] of retainedLeafIdByRemovedLeafId) {
     if (removedLeafId !== retainedLeafId) {

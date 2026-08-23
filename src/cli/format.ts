@@ -54,6 +54,7 @@ export {
   formatRepoList,
   formatRepoRefs,
   formatRepoShow,
+  formatDefaultWorktreeSwitch,
   formatWorktreeList,
   formatWorktreePs,
   formatWorktreeShow

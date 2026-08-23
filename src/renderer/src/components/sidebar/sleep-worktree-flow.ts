@@ -21,6 +21,11 @@ export async function runSleepWorktree(worktreeId: string): Promise<void> {
   await runSleepWorktrees([worktreeId])
 }
 
+export type SleepWorktreesResult = {
+  /** Worktrees whose teardown failed and were left open (already surfaced via toast). */
+  failedWorktreeIds: string[]
+}
+
 function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-id]')).filter(
     (element) => element.dataset.worktreeId === worktreeId
@@ -131,9 +136,16 @@ function describeSleepFailure(error: unknown): string {
   )
 }
 
-export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise<void> {
+export async function runSleepWorktrees(
+  worktreeIds: readonly string[],
+  options?: {
+    /** Default-worktree switch: keep browser tab/page state (webviews are still
+     *  freed) so the identity migration can move the browser windows too. */
+    preserveBrowserState?: boolean
+  }
+): Promise<SleepWorktreesResult> {
   if (worktreeIds.length === 0) {
-    return
+    return { failedWorktreeIds: [] }
   }
   const {
     activeWorktreeId,
@@ -163,7 +175,9 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // other teardown runs, terminals second so the PTY kill uses the same
         // ordering on both paths. Without the browser thunk here, sleep leaks
         // browserPagesByWorkspace entries and live webviews for the slept worktree.
-        await shutdownWorktreeBrowsers(worktreeId)
+        await (options?.preserveBrowserState
+          ? shutdownWorktreeBrowsers(worktreeId, { keepState: true })
+          : shutdownWorktreeBrowsers(worktreeId))
       } catch (err) {
         console.error('[sleep-worktree] browser shutdown failed', { worktreeId, error: err })
         failedWorktreeIds.add(worktreeId)
@@ -217,4 +231,5 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
       }
     )
   }
+  return { failedWorktreeIds: [...failedWorktreeIds] }
 }

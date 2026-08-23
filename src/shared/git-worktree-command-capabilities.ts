@@ -32,3 +32,16 @@ export function isUnsupportedRevParsePathFormatError(error: unknown): boolean {
 export function hasUnsupportedRevParsePathFormatEcho(output: string): boolean {
   return output.split(/\r?\n/).some((line) => line.startsWith('--path-format'))
 }
+
+export function isUnsupportedWorktreeRepairError(error: unknown): boolean {
+  // Pre-2.29 `git worktree` has no repair subcommand and dies via usage_with_options:
+  // a localized usage block with exit 129 that names neither phrase below. The probe
+  // command is fixed (`worktree repair`, no user args), so 129 is the
+  // locale-independent rejection signal — mirrors isUnsupportedWorktreeListZError.
+  if (getGitErrorCode(error) === '129') {
+    return true
+  }
+  return /(?:unknown subcommand|unknown command).*['`"]?repair|['`"]?repair['`"]? is not a git command/i.test(
+    getGitErrorText(error)
+  )
+}

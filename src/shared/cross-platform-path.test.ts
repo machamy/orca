@@ -6,6 +6,7 @@ import {
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
+  remapPathInsideWorktreeRoot,
   resolveRuntimePath
 } from './cross-platform-path'
 
@@ -186,5 +187,17 @@ describe('cross-platform path containment', () => {
     )
     expect(resolveRuntimePath('C:\\Repos\\app\\repo', 'D:\\worktrees')).toBe('D:/worktrees')
     expect(isRuntimePathAbsolute('/remote/worktrees', 'windows')).toBe(true)
+  })
+
+  it('remaps a path from inside one worktree root to another', () => {
+    expect(remapPathInsideWorktreeRoot('/sel', '/repo', '/sel/packages/app')).toBe(
+      '/repo/packages/app'
+    )
+    expect(remapPathInsideWorktreeRoot('/sel', '/repo', '/sel')).toBe('/repo')
+    expect(remapPathInsideWorktreeRoot('/sel', '/repo', '/elsewhere/file')).toBeNull()
+    expect(remapPathInsideWorktreeRoot('/sel', '/repo', '/selfish/file')).toBeNull()
+    expect(
+      remapPathInsideWorktreeRoot('C:\\wt\\sel', 'C:\\wt\\repo', 'C:\\wt\\sel\\src\\a.ts')
+    ).toBe('C:\\wt\\repo\\src\\a.ts')
   })
 })

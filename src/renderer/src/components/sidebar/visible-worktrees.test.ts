@@ -69,6 +69,18 @@ const repoMap = new Map<string, Repo>([
   ['repo2', makeRepo('repo2', 'Repo 2', '#111')]
 ])
 
+// Why: default-checkout predicates compare the worktree path to the repo path.
+// Build a repo map that seats each given default worktree at its repo's path so
+// fixtures marking isMainWorktree read as the repo-path checkout.
+function repoMapWithDefaults(...defaults: Worktree[]): Map<string, Repo> {
+  const map = new Map(repoMap)
+  for (const worktree of defaults) {
+    const base = map.get(worktree.repoId) ?? makeRepo(worktree.repoId, worktree.repoId, '#000')
+    map.set(worktree.repoId, { ...base, path: worktree.path })
+  }
+  return map
+}
+
 type VisibleOptions = Parameters<typeof computeVisibleWorktreeIds>[2]
 
 function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions {
@@ -382,7 +394,8 @@ describe('computeVisibleWorktreeIds', () => {
       { repo1: [main, feature] },
       [main.id, feature.id],
       visibleOptions({
-        hideDefaultBranchWorkspace: true
+        hideDefaultBranchWorkspace: true,
+        repoMap: repoMapWithDefaults(main)
       })
     )
 
@@ -549,7 +562,10 @@ describe('computeVisibleWorktreeIds', () => {
     const result = computeVisibleWorktreeIds(
       { repo1: [main1, feature1], repo2: [main2, feature2] },
       [main1.id, feature1.id, main2.id, feature2.id],
-      visibleOptions({ hideDefaultBranchWorkspace: true })
+      visibleOptions({
+        hideDefaultBranchWorkspace: true,
+        repoMap: repoMapWithDefaults(main1, main2)
+      })
     )
 
     expect(result).toEqual([feature1.id, feature2.id])
@@ -570,7 +586,8 @@ describe('computeVisibleWorktreeIds', () => {
         showSleepingWorkspaces: false,
         tabsByWorktree: { [feature.id]: [makeTab('t1', feature.id, 'p1')] },
         ptyIdsByTabId: { t1: ['p1'] },
-        hideDefaultBranchWorkspace: true
+        hideDefaultBranchWorkspace: true,
+        repoMap: repoMapWithDefaults(main)
       })
     )
 
@@ -595,7 +612,8 @@ describe('computeVisibleWorktreeIds', () => {
       [main1.id, feature1.id, main2.id, feature2.id],
       visibleOptions({
         filterRepoIds: ['repo2'],
-        hideDefaultBranchWorkspace: true
+        hideDefaultBranchWorkspace: true,
+        repoMap: repoMapWithDefaults(main1, main2)
       })
     )
 
@@ -638,12 +656,13 @@ describe('computeVisibleWorktreeIds', () => {
     }
     const byRepo = { repo1: [awakeA, main, awakeB] }
     const sortedIds = [awakeA.id, main.id, awakeB.id]
+    const withDefault = repoMapWithDefaults(main)
 
     expect(
       computeVisibleWorktreeIds(
         byRepo,
         sortedIds,
-        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: true })
+        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: true, repoMap: withDefault })
       )
     ).toEqual([awakeA.id, main.id, awakeB.id])
 
@@ -651,7 +670,11 @@ describe('computeVisibleWorktreeIds', () => {
       computeVisibleWorktreeIds(
         byRepo,
         sortedIds,
-        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: false })
+        visibleOptions({
+          ...options,
+          alwaysShowDefaultBranchWorkspace: false,
+          repoMap: withDefault
+        })
       )
     ).toEqual([awakeA.id, awakeB.id])
   })
@@ -728,7 +751,12 @@ describe('computeVisibleWorktreeIds', () => {
 
     const defaultBranchParent = makeWorktree('default-parent')
     defaultBranchParent.isMainWorktree = true
-    expect(run(defaultBranchParent, { hideDefaultBranchWorkspace: true })).toEqual([child.id])
+    expect(
+      run(defaultBranchParent, {
+        hideDefaultBranchWorkspace: true,
+        repoMap: repoMapWithDefaults(defaultBranchParent)
+      })
+    ).toEqual([child.id])
 
     const automationParent = makeWorktree('automation-parent')
     automationParent.automationProvenance = {
@@ -902,7 +930,8 @@ describe('computeVisibleWorktreeIds', () => {
       [child.id, parent.id],
       visibleOptions({
         hideDefaultBranchWorkspace: true,
-        worktreeLineageById: { [child.id]: lineage }
+        worktreeLineageById: { [child.id]: lineage },
+        repoMap: repoMapWithDefaults(parent)
       })
     )
 

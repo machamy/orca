@@ -206,27 +206,41 @@ describe('WorktreeJumpPalette', () => {
   })
 
   it('keeps every inactive main workspace visible when sleeping workspaces are hidden', async () => {
+    // Fork semantics: the exemption keys on the repo-path entry point
+    // (isRepoPathEntryPoint), so the fixtures mirror real data — the main
+    // worktree lives at the repo path, a folder workspace at its folder repo's.
     const defaultBranch = makeWorktree('default-branch', 'Default branch workspace', {
       isMainWorktree: true,
-      branch: 'refs/heads/main'
+      branch: 'refs/heads/main',
+      path: '/repos/repo-1'
     })
     const feature = makeWorktree('feature', 'Feature workspace', {
       branch: 'refs/heads/feature'
     })
     const folderMain = makeWorktree('folder-main', 'Folder workspace', {
       isMainWorktree: true,
-      branch: ''
+      branch: '',
+      repoId: 'repo-2'
     })
 
     await renderPalette({
-      worktreesByRepo: { 'repo-1': [defaultBranch, feature, folderMain] },
+      repos: [
+        makeRepo(),
+        {
+          id: 'repo-2',
+          path: '/tmp/folder-main',
+          displayName: 'Folder repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [defaultBranch, feature], 'repo-2': [folderMain] },
       showSleepingWorkspaces: false
     })
 
     expect(testContainer.textContent).toContain('Default branch workspace')
     expect(testContainer.textContent).not.toContain('Feature workspace')
-    // Why kept: the exemption keys on isMainWorktree, not the branch name, so a
-    // branchless folder workspace is the project's entry point too.
+    // Why kept: a branchless folder workspace is its repo's entry point too.
     expect(testContainer.textContent).toContain('Folder workspace')
   })
 
@@ -248,18 +262,30 @@ describe('WorktreeJumpPalette', () => {
   it('keeps an active non-default workspace visible when sleeping workspaces are hidden', async () => {
     const defaultBranch = makeWorktree('default-branch', 'Default branch workspace', {
       isMainWorktree: true,
-      branch: 'refs/heads/main'
+      branch: 'refs/heads/main',
+      path: '/repos/repo-1'
     })
     const feature = makeWorktree('feature', 'Feature workspace', {
       branch: 'refs/heads/feature'
     })
     const folderMain = makeWorktree('folder-main', 'Folder workspace', {
       isMainWorktree: true,
-      branch: ''
+      branch: '',
+      repoId: 'repo-2'
     })
 
     await renderPalette({
-      worktreesByRepo: { 'repo-1': [defaultBranch, feature, folderMain] },
+      repos: [
+        makeRepo(),
+        {
+          id: 'repo-2',
+          path: '/tmp/folder-main',
+          displayName: 'Folder repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [defaultBranch, feature], 'repo-2': [folderMain] },
       showSleepingWorkspaces: false,
       browserTabsByWorktree: {
         feature: [

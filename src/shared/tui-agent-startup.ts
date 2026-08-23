@@ -229,6 +229,10 @@ export function buildAgentResumeStartupPlan(args: {
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
     launchConfig,
+    // Why: a markerless resume types `codex resume '<id>'` into the PTY before
+    // zsh line-editing is up; the id gets eaten and codex falls back to its
+    // interactive session picker. Same shell-ready delivery as codex prompts.
+    ...(args.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }

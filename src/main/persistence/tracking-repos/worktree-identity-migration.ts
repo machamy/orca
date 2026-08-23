@@ -1,3 +1,8 @@
+import {
+  isDefaultSwitchTempWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../../../shared/worktree/id'
+import { remapPathInsideWorktreeRoot } from '../../../shared/cross-platform-path'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
@@ -8,6 +13,43 @@ import type { StoreOwnedPersistedState } from '../loading-store/store-owned-stat
  * returns whether anything changed so the caller can gate its save. No-op when the ids match.
  * See `Store.migrateWorktreeIdentity` for why the rename happens.
  */
+
+/**
+ * Fork (default-worktree switch): combine a re-key's incoming value with
+ * whatever already sits at the destination. Overwriting is what a plain
+ * assignment does, and for tab lists that silently destroyed the destination
+ * worktree's tabs. Lists merge (by id where the entries have one); for
+ * anything else the incoming value wins, the historical behaviour for scalars.
+ */
+function mergeReKeyedValue<T>(incoming: T, existing: T | undefined): T {
+  if (existing === undefined || incoming === existing) {
+    return incoming
+  }
+  if (!Array.isArray(incoming) || !Array.isArray(existing)) {
+    return incoming
+  }
+  const merged = [...(existing as unknown[])]
+  const seen = new Set(
+    merged.map((entry) =>
+      entry && typeof entry === 'object' && 'id' in entry
+        ? String((entry as { id: unknown }).id)
+        : entry
+    )
+  )
+  for (const entry of incoming as unknown[]) {
+    const key =
+      entry && typeof entry === 'object' && 'id' in entry
+        ? String((entry as { id: unknown }).id)
+        : entry
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    merged.push(entry)
+  }
+  return merged as unknown as T
+}
+
 export function migrateWorktreeIdentity(
   state: StoreOwnedPersistedState,
   oldWorktreeId: string,
@@ -25,7 +67,10 @@ export function migrateWorktreeIdentity(
     if (!(oldWorktreeId in record)) {
       return false
     }
-    record[newWorktreeId] = mapValue(record[oldWorktreeId])
+    record[newWorktreeId] = mergeReKeyedValue(
+      mapValue(record[oldWorktreeId]),
+      record[newWorktreeId]
+    )
     delete record[oldWorktreeId]
     return true
   }
@@ -52,20 +97,43 @@ export function migrateWorktreeIdentity(
         if (!(oldKey in record)) {
           continue
         }
-        record[newKey] = mapValue(record[oldKey])
+        record[newKey] = mergeReKeyedValue(mapValue(record[oldKey]), record[newKey])
         delete record[oldKey]
         moved = true
       }
       return moved
     }
 
+    // Fork: persisted tab startupCwd / open-file paths are absolute under the
+    // old home; leaving them makes a restart hydrate the swapped workspace
+    // pointing at the other checkout.
+    const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
+    const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+    const remapPathValue = (value: string): string =>
+      oldWorktreePath && newWorktreePath
+        ? (remapPathInsideWorktreeRoot(oldWorktreePath, newWorktreePath, value) ?? value)
+        : value
     sessionChanged =
-      moveSessionKey(session.tabsByWorktree, (tabs) => tabs.map(withNewWorktreeId)) ||
-      sessionChanged
+      moveSessionKey(session.tabsByWorktree, (tabs) =>
+        tabs.map((tab) => {
+          const moved = withNewWorktreeId(tab)
+          return moved.startupCwd
+            ? { ...moved, startupCwd: remapPathValue(moved.startupCwd) }
+            : moved
+        })
+      ) || sessionChanged
     sessionChanged =
-      moveSessionKey(session.openFilesByWorktree, (files) => files.map(withNewWorktreeId)) ||
-      sessionChanged
-    sessionChanged = moveSessionKey(session.activeFileIdByWorktree) || sessionChanged
+      moveSessionKey(session.openFilesByWorktree, (files) =>
+        files.map((file) => {
+          const moved = withNewWorktreeId(file)
+          return moved.filePath ? { ...moved, filePath: remapPathValue(moved.filePath) } : moved
+        })
+      ) || sessionChanged
+    // File ids derive from file paths, so the active pointer moves with them.
+    sessionChanged =
+      moveSessionKey(session.activeFileIdByWorktree, (fileId) =>
+        fileId === null ? fileId : remapPathValue(fileId)
+      ) || sessionChanged
     sessionChanged =
       moveSessionKey(session.browserTabsByWorktree, (workspaces) =>
         workspaces.map(withNewWorktreeId)
@@ -149,10 +217,31 @@ export function migrateWorktreeIdentity(
   const newMeta = state.worktreeMeta[newWorktreeId]
   if (newMeta) {
     const prior = newMeta.priorWorktreeIds ?? []
-    if (!prior.includes(oldWorktreeId)) {
-      newMeta.priorWorktreeIds = [...prior, oldWorktreeId]
+    // Fork: the default switch re-keys through a throwaway
+    // `.orca-default-switch-<uuid>` id, so a plain dedupe can never match and
+    // every switch appended one more entry — unbounded persisted growth. Temp
+    // ids identify nothing after the swap; cap is a backstop, not a limit.
+    const MAX_PRIOR_WORKTREE_IDS = 32
+    const durable = prior.filter((id) => !isDefaultSwitchTempWorktreeId(id))
+    if (!isDefaultSwitchTempWorktreeId(oldWorktreeId) && !durable.includes(oldWorktreeId)) {
+      durable.push(oldWorktreeId)
+    }
+    const capped = durable.slice(-MAX_PRIOR_WORKTREE_IDS)
+    if (capped.length !== prior.length || capped.some((id, index) => id !== prior[index])) {
+      newMeta.priorWorktreeIds = capped
       changed = true
     }
+  }
+
+  // Fork: the renderer re-hydrates cleanup dismissals from here on startup; a
+  // renderer-only remap would revert on restart.
+  const cleanupDismissals = state.ui?.workspaceCleanup?.dismissals
+  if (cleanupDismissals) {
+    changed =
+      moveKey(cleanupDismissals, (dismissal) => ({
+        ...dismissal,
+        worktreeId: newWorktreeId
+      })) || changed
   }
 
   changed = moveKey(state.worktreeLineageById) || changed

@@ -333,12 +333,27 @@ function registerRuntimeWindowLifecycle(
   })
   const send = rendererNotifications.send
   runtime.setNotifier({
-    worktreesChanged: (repoId, renamed) => {
+    worktreesChanged: (repoId, renamed, migrations, shieldOnly) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
       runWorktreeChangeInvalidators(repoId)
-      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
+      send('worktrees:changed', {
+        repoId,
+        ...(renamed ? { renamed } : {}),
+        ...(migrations && migrations.length > 0 ? { migrations } : {}),
+        ...(shieldOnly ? { shieldOnly: true } : {})
+      })
     },
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
+    unityAutoSeedOffer: (repoId, worktreePath) =>
+      send('ui:unityAutoSeedOffer', { repoId, worktreePath }),
+    defaultWorktreeSwitchRequest: (repoId, worktreeId, opts) =>
+      send('ui:defaultWorktreeSwitchRequest', {
+        repoId,
+        worktreeId,
+        followAgents: opts.followAgents,
+        notifyAgents: opts.notifyAgents,
+        includeUntracked: opts.includeUntracked
+      }),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
     activateWorktree: (

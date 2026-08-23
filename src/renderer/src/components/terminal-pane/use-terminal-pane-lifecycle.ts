@@ -157,6 +157,7 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+import { isInDefaultSwitchTeardownWindow } from '@/lib/default-worktree-switch-sleep-guard'
 
 export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
   // Guarded output path so a throwing xterm can't escape the key handler.
@@ -1403,7 +1404,11 @@ export function useTerminalPaneLifecycle({
         const terminalTab = useAppStore
           .getState()
           .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-        if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
+        if (
+          !isDetachedToTab &&
+          !isInDefaultSwitchTeardownWindow(worktreeId) &&
+          shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)
+        ) {
           useAppStore.getState().clearTabLaunchAgent(tabId)
         }
         const panePtyBinding = panePtyBindings.get(paneId)

@@ -2591,6 +2591,27 @@ export class AgentHookServer {
     this.notifyStatusChangeListeners()
   }
 
+  /** Re-attribute mirrored status rows when a worktree identity moves (folder
+   *  rename, default-worktree swap) so snapshot replays and last-status.json
+   *  don't resurrect rows pointing at the swapped-away id. */
+  migrateWorktreeAttribution(oldWorktreeId: string, newWorktreeId: string): void {
+    if (oldWorktreeId === newWorktreeId) {
+      return
+    }
+    let changed = false
+    for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
+      const entry = rawEntry as EnrichedAgentHookEventPayload
+      if (entry.worktreeId === oldWorktreeId) {
+        this.state.lastStatusByPaneKey.set(paneKey, { ...entry, worktreeId: newWorktreeId })
+        changed = true
+      }
+    }
+    if (changed) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+  }
+
   /** Clear statuses proven to belong to one lost SSH transport. */
   clearStatusEntriesForConnection(connectionId: string): void {
     const normalizedConnectionId = connectionId.trim()

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: PTY IPC is centralized in one main-process module so spawn env scoping, lifecycle cleanup, process inspection, and renderer IPC stay behind one audited boundary. */
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import { join, delimiter } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
@@ -923,7 +924,12 @@ async function attachStablePaneOwner(
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
-    runtime?.onPtyExit(owner.ptyId, 0, owner.incarnationId)
+    runtime?.onPtyExit(
+      owner.ptyId,
+      0,
+      owner.incarnationId,
+      ...ptyExitArgs(consumeSurfaceRetainingKill(owner.ptyId))
+    )
     clearProviderPtyState(owner.ptyId)
     ptyOwnership.delete(owner.ptyId)
     if (
@@ -2431,6 +2437,34 @@ export function unbindLocalProviderListeners(): void {
 
 // ─── IPC Registration ───────────────────────────────────────────────
 
+/** PTY ids whose kill asked to keep history — a sleep, so their persisted tab
+ *  must outlive the exit. Bounded: entries are consumed by the exit they
+ *  describe, and the set is capped so a lost exit cannot leak forever. */
+const surfaceRetainingKillPtyIds = new Set<string>()
+const MAX_SURFACE_RETAINING_KILLS = 512
+
+function rememberSurfaceRetainingKill(ptyId: string): void {
+  if (surfaceRetainingKillPtyIds.size >= MAX_SURFACE_RETAINING_KILLS) {
+    surfaceRetainingKillPtyIds.clear()
+  }
+  surfaceRetainingKillPtyIds.add(ptyId)
+}
+
+function consumeSurfaceRetainingKill(ptyId: string): boolean {
+  return surfaceRetainingKillPtyIds.delete(ptyId)
+}
+
+/** Exit options carry the fork's retainSurface only when the kill really was a
+ *  sleep — and are OMITTED (not passed as undefined) otherwise, so every
+ *  pre-fork call keeps its exact observable argument shape. */
+function ptyExitArgs(
+  retain: boolean,
+  extra?: { cause?: TerminalExitCause; hostExitConfirmed?: boolean }
+): [] | [{ retainSurface?: boolean; cause?: TerminalExitCause; hostExitConfirmed?: boolean }] {
+  const options = { ...(retain ? { retainSurface: true } : {}), ...extra }
+  return Object.keys(options).length > 0 ? [options] : []
+}
+
 export function registerPtyHandlers(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService,
@@ -2576,7 +2610,18 @@ export function registerPtyHandlers(
         clearProviderPtyState(id)
         ptyOwnership.delete(id)
         markClaudePtyExited(id)
-        runtime?.onPtyExit(id, code, incarnationId, cause ? { cause } : undefined)
+        runtime?.onPtyExit(
+          id,
+          code,
+          incarnationId,
+          // Upstream shape: explicit undefined when no options — tests pin the
+          // 4-arity. The fork's retainSurface rides in only when armed.
+          consumeSurfaceRetainingKill(id)
+            ? { retainSurface: true, ...(cause ? { cause } : {}) }
+            : cause
+              ? { cause }
+              : undefined
+        )
       },
       onData: (id, data, timestamp, sequenceChars, transformed) =>
         runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
@@ -3978,6 +4023,7 @@ export function registerPtyHandlers(
     },
     finalizeExit: (event) => {
       runtime?.onPtyExit(event.id, event.code, event.ptyIncarnation, {
+        ...(consumeSurfaceRetainingKill(event.id) ? { retainSurface: true } : {}),
         hostExitConfirmed: true
       })
       finalizePtyExitForRenderer(event)
@@ -4125,7 +4171,11 @@ export function registerPtyHandlers(
           payload.id,
           payload.code,
           payload.incarnationId,
-          payload.cause ? { cause: payload.cause } : undefined
+          consumeSurfaceRetainingKill(payload.id)
+            ? { retainSurface: true, ...(payload.cause ? { cause: payload.cause } : {}) }
+            : payload.cause
+              ? { cause: payload.cause }
+              : undefined
         )
       }
       // Why not the whole payload: the exit cause is a main-process fact for the
@@ -5618,7 +5668,12 @@ export function registerPtyHandlers(
             // relay PTY outlives its provider, so report an unconfirmed stop
             // rather than a kill nobody performed.
             const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
-            runtime?.onPtyExit(ptyId, -1, incarnationId)
+            runtime?.onPtyExit(
+              ptyId,
+              -1,
+              incarnationId,
+              ...ptyExitArgs(consumeSurfaceRetainingKill(ptyId))
+            )
             rememberSyntheticKillExit(ptyId)
             sendPtyExitToRenderer({ id: ptyId, code: -1 })
             runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
@@ -5632,7 +5687,12 @@ export function registerPtyHandlers(
             const retired = retiredRejectedPtyIds.has(ptyId)
             const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
             if (!providerExitObserved && !retired) {
-              runtime?.onPtyExit(ptyId, -1, incarnationId)
+              runtime?.onPtyExit(
+                ptyId,
+                -1,
+                incarnationId,
+                ...ptyExitArgs(consumeSurfaceRetainingKill(ptyId))
+              )
               rememberSyntheticKillExit(ptyId)
               sendPtyExitToRenderer({ id: ptyId, code: -1 })
             }
@@ -5642,7 +5702,12 @@ export function registerPtyHandlers(
             if (isPtyAlreadyGoneError(err)) {
               const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
               if (!retired) {
-                runtime?.onPtyExit(ptyId, -1, incarnationId)
+                runtime?.onPtyExit(
+                  ptyId,
+                  -1,
+                  incarnationId,
+                  ...ptyExitArgs(consumeSurfaceRetainingKill(ptyId))
+                )
                 rememberSyntheticKillExit(ptyId)
                 sendPtyExitToRenderer({ id: ptyId, code: -1 })
               }
@@ -5660,7 +5725,12 @@ export function registerPtyHandlers(
                   err instanceof Error ? err.message : String(err)
                 )
               }
-              runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
+              runtime?.onPtyExit(
+                ptyId,
+                -1,
+                ptyIncarnationById.get(ptyId),
+                ...ptyExitArgs(consumeSurfaceRetainingKill(ptyId))
+              )
             }
           })
         return true
@@ -5679,7 +5749,12 @@ export function registerPtyHandlers(
                 err instanceof Error ? err.message : String(err)
               )
             }
-            runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
+            runtime?.onPtyExit(
+              ptyId,
+              -1,
+              ptyIncarnationById.get(ptyId),
+              ...ptyExitArgs(consumeSurfaceRetainingKill(ptyId))
+            )
           }
         })
         return true
@@ -5776,7 +5851,12 @@ export function registerPtyHandlers(
           // provider is lost contact — the remote PTY is designed to survive it,
           // so nothing here observed an exit to report as a confirmed stop.
           const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1, incarnationId)
+          runtime?.onPtyExit(
+            ptyId,
+            -1,
+            incarnationId,
+            ...ptyExitArgs(consumeSurfaceRetainingKill(ptyId))
+          )
           rememberSyntheticKillExit(ptyId)
           sendPtyExitToRenderer({ id: ptyId, code: -1 })
           runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
@@ -5827,7 +5907,12 @@ export function registerPtyHandlers(
       if (!providerExitObserved) {
         // The owning provider's fresh inventory observed absence, so this is a
         // death certificate even when its exit event was missed.
-        runtime?.onPtyExit(ptyId, 0, incarnationId)
+        runtime?.onPtyExit(
+          ptyId,
+          0,
+          incarnationId,
+          ...ptyExitArgs(consumeSurfaceRetainingKill(ptyId))
+        )
         rememberSyntheticKillExit(ptyId)
         sendPtyExitToRenderer({ id: ptyId, code: 0 })
       }
@@ -7716,55 +7801,74 @@ export function registerPtyHandlers(
     runtime?.clearHeadlessTerminalBuffer(args.id).catch(() => {})
   })
 
-  ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
-    if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
-      // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
-      throw new Error('Invalid PTY provider id')
-    }
-    runtime?.markPtyStopRequested?.(args.id)
-    const ownedConnectionId = ptyOwnership.get(args.id)
-    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-    const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-    // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
-    const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
-    if (startupPromise) {
-      await startupPromise
-    }
-    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
-    if (!provider && connectionId) {
-      // Why: detached SSH PTYs intentionally keep ownership after their
-      // provider is unregistered; hydrated app-scoped ids can also arrive
-      // before ownership is rebuilt. Tombstone instead of falling back local.
-      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-      runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
-      return
-    }
-    const shutdownProvider = provider ?? getProviderForPty(args.id)
-    let providerExitObserved = false
-    try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
-        immediate: true,
-        keepHistory: args.keepHistory ?? false
-      })
-    } catch (err) {
-      if (!isPtyAlreadyGoneError(err)) {
-        // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
-        throw err
+  ipcMain.handle(
+    'pty:kill',
+    async (_event, args: { id: string; keepHistory?: boolean; retainSurface?: boolean }) => {
+      // Fork: the sleep announces itself explicitly. keepHistory alone is NOT
+      // the signal — upstream also passes it on ordinary kills for scrollback,
+      // and arming on it retained surfaces for tabs that were genuinely closed.
+      if (args?.retainSurface === true && typeof args.id === 'string') {
+        rememberSurfaceRetainingKill(args.id)
       }
-      /* session already dead — cleanup below handles the rest */
+      if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+        // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
+        throw new Error('Invalid PTY provider id')
+      }
+      runtime?.markPtyStopRequested?.(args.id)
+      const ownedConnectionId = ptyOwnership.get(args.id)
+      const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+      const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+      // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
+      const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+      if (startupPromise) {
+        await startupPromise
+      }
+      const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+      if (!provider && connectionId) {
+        // Why: detached SSH PTYs intentionally keep ownership after their
+        // provider is unregistered; hydrated app-scoped ids can also arrive
+        // before ownership is rebuilt. Tombstone instead of falling back local.
+        const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+        runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
+        runtime?.onPtyExit(
+          args.id,
+          -1,
+          incarnationId,
+          ...ptyExitArgs(consumeSurfaceRetainingKill(args.id))
+        )
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+        return
+      }
+      const shutdownProvider = provider ?? getProviderForPty(args.id)
+      let providerExitObserved = false
+      try {
+        providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
+          immediate: true,
+          keepHistory: args.keepHistory ?? false
+        })
+      } catch (err) {
+        if (!isPtyAlreadyGoneError(err)) {
+          // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
+          throw err
+        }
+        /* session already dead — cleanup below handles the rest */
+      }
+      // Why: some shutdown paths do not emit onExit through the provider listener.
+      // Explicit cleanup is idempotent and covers already-dead PTYs.
+      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+      if (!providerExitObserved) {
+        runtime?.onPtyExit(
+          args.id,
+          -1,
+          incarnationId,
+          ...ptyExitArgs(consumeSurfaceRetainingKill(args.id))
+        )
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+      }
     }
-    // Why: some shutdown paths do not emit onExit through the provider listener.
-    // Explicit cleanup is idempotent and covers already-dead PTYs.
-    const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-    if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
-    }
-  })
+  )
 
   ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
     const deduped = new Map<string, PtyListedSession>()

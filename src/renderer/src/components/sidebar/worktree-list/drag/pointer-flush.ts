@@ -32,6 +32,7 @@ export type WorktreePointerDragFrameArgs = {
   setWorktreeDragState: React.Dispatch<React.SetStateAction<WorktreeRowDragState>>
   setDragOverStatus: (status: WorkspaceStatus | null) => void
   setPinDragOver: (pinDragOver: boolean) => void
+  setPointerDefaultSwitchDropTargetId: (worktreeId: string | null) => void
 }
 
 // Reflect a status/pin hover that has no insertion line of its own.
@@ -122,6 +123,7 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
   }
   if (boardTarget.status || boardTarget.isPinDrop) {
     drag.latestStatusDropTarget = null
+    args.setPointerDefaultSwitchDropTargetId(null)
     clearInsertionLine(args)
     return
   }
@@ -137,7 +139,8 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
       : NO_WORKTREE_SIDEBAR_DROP_TARGET,
     drag.draggedIds
   )
-  if (preferredStatusTarget.lineageParentId) {
+  args.setPointerDefaultSwitchDropTargetId(preferredStatusTarget.defaultSwitchTargetId)
+  if (preferredStatusTarget.lineageParentId || preferredStatusTarget.defaultSwitchTargetId) {
     updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
     clearWorkspaceKanbanSidebarDropTargetVisual()
     clearInsertionLine(args)

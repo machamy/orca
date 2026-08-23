@@ -20,7 +20,16 @@ const STRING_FORM = new RegExp(String.raw`wsl(?:\.exe)?\b[^\n]*?[^-]--\s+${GUEST
 
 const SCANNED_ROOTS = ['src', 'config', 'tests']
 const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js']
-const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
+// .cross-version-checkouts holds historical release code by design; scanning it
+// re-flags patterns the guard already eliminated from the live tree.
+const IGNORED_DIRECTORIES = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'build',
+  '.git',
+  '.cross-version-checkouts'
+])
 
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
@@ -85,7 +94,7 @@ describe('wsl.exe mode separator', () => {
   it('sees a `--` separator split across lines by the formatter', () => {
     // Why: the guard once matched line-by-line and was blind to this exact shape,
     // which is how every multi-element argv array in this repo is formatted.
-    const formatted = ["args: [", "  '-d',", "  distro,", "  '--',", "  'bash'", "]"].join('\n')
+    const formatted = ['args: [', "  '-d',", '  distro,', "  '--',", "  'bash'", ']'].join('\n')
 
     expect(ARGV_FORM.test(codeText(formatted))).toBe(true)
   })

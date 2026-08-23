@@ -122,6 +122,26 @@ describe('createWorktreeChangeRefreshQueue', () => {
     expect(handler).toHaveBeenNthCalledWith(2, 'repo-1', renamed, { forceLocalOwner: undefined })
   })
 
+  it('preserves an identity swap as one ordered migration batch', async () => {
+    const handler = vi.fn(() => Promise.resolve())
+    const queue = createWorktreeChangeRefreshQueue(handler)
+    const migrations = [
+      { oldWorktreeId: 'feature', newWorktreeId: 'temporary' },
+      { oldWorktreeId: 'default', newWorktreeId: 'feature' },
+      { oldWorktreeId: 'temporary', newWorktreeId: 'default' }
+    ]
+
+    queue.enqueue({ repoId: 'repo-1', migrations })
+    await flushPromises()
+
+    expect(handler).toHaveBeenCalledWith(
+      'repo-1',
+      undefined,
+      { forceLocalOwner: undefined },
+      migrations
+    )
+  })
+
   it('keeps a plain refresh queued after a rename', async () => {
     const firstRefresh = deferred()
     const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)

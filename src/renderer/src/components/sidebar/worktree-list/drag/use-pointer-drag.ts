@@ -74,6 +74,7 @@ export function useWorktreePointerDrag(args: {
       onWorkspaceBoardDragPreviewCommit,
       shouldShowWorkspaceBoardDropIndicator,
       setWorktreeDragState,
+      setPointerDefaultSwitchDropTargetId: runtime.setPointerDefaultSwitchDropTargetId,
       setDragOverStatus,
       setPinDragOver
     })

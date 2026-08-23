@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isSleepingSweepExemptWorkspace } from './sidebar/visible-worktrees'
+import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 const source = readFileSync(join(__dirname, 'WorktreeJumpPalette.tsx'), 'utf8')
@@ -40,10 +41,9 @@ describe('Cmd+J empty-query "Hide sleeping" pass (#8873)', () => {
     const end = source.indexOf('const { visibleWorktreesForState', start)
     const filterPass = source.slice(start, end)
 
-    expect(filterPass).toContain(
-      '!isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace)'
-    )
-    expect(filterPass).toContain('alwaysShowDefaultBranchWorkspace,')
+    expect(filterPass).toContain('!isSleepingSweepExemptWorkspace(')
+    expect(filterPass).toContain('repoMap.get(worktree.repoId)')
+    expect(filterPass).toContain('alwaysShowDefaultBranchWorkspace')
   })
 
   it('reads the flag from the same store field the sidebar uses', () => {
@@ -52,18 +52,23 @@ describe('Cmd+J empty-query "Hide sleeping" pass (#8873)', () => {
     )
   })
 
-  it('exempts a project entry point by default and honours an explicit opt-out', () => {
-    const main = makeWorktree()
+  const repoAt = (path: string): Repo =>
+    ({ id: 'repo1', path, displayName: 'r', badgeColor: '#000', addedAt: 0 }) as Repo
 
-    expect(isSleepingSweepExemptWorkspace(main, undefined)).toBe(true)
-    expect(isSleepingSweepExemptWorkspace(main, true)).toBe(true)
-    expect(isSleepingSweepExemptWorkspace(main, false)).toBe(false)
+  it('exempts the repo-path checkout by default and honours an explicit opt-out', () => {
+    const main = makeWorktree()
+    const repo = repoAt(main.path)
+
+    expect(isSleepingSweepExemptWorkspace(main, repo, undefined)).toBe(true)
+    expect(isSleepingSweepExemptWorkspace(main, repo, true)).toBe(true)
+    expect(isSleepingSweepExemptWorkspace(main, repo, false)).toBe(false)
   })
 
-  it('never exempts a non-main workspace', () => {
-    const feature = makeWorktree({ id: 'wt-feature', isMainWorktree: false })
+  it('never exempts a non-default-path workspace (e.g. the git main after a switch)', () => {
+    const feature = makeWorktree({ id: 'wt-feature', isMainWorktree: true, path: '/tmp/feature' })
+    const repo = repoAt('/tmp/repo1')
 
-    expect(isSleepingSweepExemptWorkspace(feature, true)).toBe(false)
-    expect(isSleepingSweepExemptWorkspace(feature, undefined)).toBe(false)
+    expect(isSleepingSweepExemptWorkspace(feature, repo, true)).toBe(false)
+    expect(isSleepingSweepExemptWorkspace(feature, repo, undefined)).toBe(false)
   })
 })

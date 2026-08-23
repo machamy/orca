@@ -28,7 +28,9 @@ import {
   Workflow,
   FolderInput,
   FolderPlus,
-  FolderTree
+  FolderTree,
+  MonitorUp,
+  ExternalLink
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -54,6 +56,7 @@ import {
 } from './worktree-lineage-projection'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
+import { useUnityWorktreeMenu } from './worktree-unity-menu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
@@ -68,6 +71,12 @@ import { translate } from '@/i18n/i18n'
 import { unnestWorktrees } from './worktree-unnest'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { isProjectFolderRow } from '../../../../shared/worktree/ownership'
+import {
+  buildWorktreeBranchWebUrl,
+  worktreeBranchWebHostLabel
+} from '../../../../shared/worktree-branch-web-url'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
 type Props = {
   worktree: Worktree
@@ -77,6 +86,7 @@ type Props = {
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onOpenChange?: (open: boolean) => void
+  onDefaultSwitchRequest?: (worktree: Worktree) => void
   onLifecycleComplete?: () => void
 }
 
@@ -199,17 +209,19 @@ function getWorktreeParentPickerAnchor(
 }
 
 function shouldRemoveProjectFromContextMenu(
-  repo: Pick<Repo, 'id'> | null | undefined,
-  worktree: Pick<Worktree, 'isMainWorktree'>
+  repo: Pick<Repo, 'id' | 'path'> | null | undefined,
+  worktree: Pick<Worktree, 'isMainWorktree' | 'path'>
 ): boolean {
-  return repo != null && worktree.isMainWorktree
+  // The repo-path checkout is the project folder even when a default-worktree
+  // switch left it as a linked worktree — removal goes through project removal.
+  return repo != null && isProjectFolderRow(worktree, repo)
 }
 
 function isContextWorktreeDeletable(
-  worktree: Pick<Worktree, 'isMainWorktree'>,
-  repo: Pick<Repo, 'kind'> | null | undefined
+  worktree: Pick<Worktree, 'isMainWorktree' | 'path'>,
+  repo: Pick<Repo, 'kind' | 'path'> | null | undefined
 ): boolean {
-  return repo != null && !worktree.isMainWorktree
+  return repo != null && !isProjectFolderRow(worktree, repo)
 }
 
 function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
@@ -322,6 +334,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   onContextMenuSelect,
   onAssignWorkspaceStatus,
   onOpenChange,
+  onDefaultSwitchRequest,
   onLifecycleComplete
 }: Props) {
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
@@ -338,6 +351,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
   const [menuOpen, setMenuOpen] = useState(false)
+  const allWorktrees = useAllWorktrees()
+  const isDeletingForUnity = deleteState?.isDeleting ?? false
+  // Fork: Unity cache/open/Rider menu entries + seed-first confirm dialog live
+  // in worktree-unity-menu.tsx; lifecyclePending keeps the Agent Map wrapper
+  // mounted while the dialog or an in-flight seed outlives the menu.
+  const unityMenu = useUnityWorktreeMenu({
+    worktree,
+    repo,
+    menuOpen,
+    isDeleting: isDeletingForUnity,
+    allWorktrees
+  })
   // Why: the Developer submenu is a power-user affordance, so it is revealed by
   // holding Option/Alt at right-click — captured at open time (like the Help
   // menu's admin options) so the submenu can't appear or vanish mid-menu and
@@ -364,7 +389,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const allWorktrees = useAllWorktrees()
   // Why: these maps feed only items rendered inside the OPEN dropdown, yet delete
   // teardown replaces them on every set(). Gate them behind menuOpen via stable
   // empty sentinels so the (common) closed wrapper stays inert to that churn. The
@@ -521,7 +545,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       createGroupDialogOpen ||
       createGroupDialogActiveRef.current ||
       parentPicker !== null ||
-      pendingParentPickerRef.current !== null
+      pendingParentPickerRef.current !== null ||
+      // The unity confirm dialog (and an in-flight seed) outlive the menu; the
+      // Agent Map wrapper unmounting here destroyed the dialog mid-question.
+      unityMenu.lifecyclePending
     ) {
       return
     }
@@ -533,7 +560,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       onLifecycleComplete?.()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [createGroupDialogOpen, menuOpen, onLifecycleComplete, parentPicker])
+  }, [
+    createGroupDialogOpen,
+    menuOpen,
+    onLifecycleComplete,
+    parentPicker,
+    unityMenu.lifecyclePending
+  ])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpenState(false)
@@ -556,6 +589,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)
   }, [worktree.path])
+
+  // Why not gated on "is it pushed": nothing in the store tracks upstream, and a
+  // git call per context-menu render is not worth it. An unpushed branch lands on
+  // the host's own "branch not found" page, which reads clearly enough.
+  const branchWebHost = worktreeBranchWebHostLabel(repo?.gitRemoteIdentity?.canonicalKey)
+  const gitIdentity = getWorktreeGitIdentityDisplay(worktree)
+  const branchWebUrl = buildWorktreeBranchWebUrl({
+    canonicalKey: repo?.gitRemoteIdentity?.canonicalKey,
+    branch: gitIdentity?.kind === 'branch' ? gitIdentity.branchName : null
+  })
+  const handleDefaultSwitch = useCallback(() => {
+    onDefaultSwitchRequest?.(worktree)
+  }, [onDefaultSwitchRequest, worktree])
 
   const handleToggleRead = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
@@ -889,6 +935,31 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
+              {onDefaultSwitchRequest ? (
+                <DropdownMenuItem onSelect={handleDefaultSwitch} disabled={isDeleting}>
+                  <MonitorUp className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.defaultSwitch',
+                    'Make Default Worktree…'
+                  )}
+                </DropdownMenuItem>
+              ) : null}
+              {branchWebUrl ? (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void window.api.shell.openUrl(branchWebUrl)
+                  }}
+                  disabled={isDeleting}
+                >
+                  <ExternalLink className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.openBranchOnHost',
+                    'View branch on {{host}}',
+                    { host: branchWebHost ?? '' }
+                  )}
+                </DropdownMenuItem>
+              ) : null}
+              {unityMenu.menuItems}
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
                 {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
@@ -1089,6 +1160,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {unityMenu.confirmDialog}
       <ProjectGroupNameDialog
         open={createGroupDialogOpen}
         title={translate(

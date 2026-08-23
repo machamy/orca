@@ -843,7 +843,8 @@ function Terminal(): React.JSX.Element | null {
         backgroundMountTabIdsByWorktreeRef.current,
         mountedWorktreeIdsRef.current,
         worktreeId,
-        detail.tabIds
+        detail.tabIds,
+        detail.narrowExisting === true
       )
       // Why: a targeted wake can reveal an earlier activation-deferred tab; drop it from watcher ownership before its pane mounts.
       const worktreeTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map(

@@ -56,6 +56,7 @@ import {
 } from './worktrees/session/worktree-slice-lookups'
 import { createPurgeStaleRuntimeHostState } from './worktrees/teardown/purge-stale-runtime-host-state'
 import { createMigrateWorktreeIdentity } from './worktrees/session/migrate-worktree-identity'
+import { createDefaultSwitchClaimActions } from './worktrees/session/default-switch-claim'
 
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 export { WORKTREE_REFRESH_CONCURRENCY } from './worktrees/listing/worktree-slice-constants'
@@ -114,5 +115,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   getKnownWorktreeById: createGetKnownWorktreeById(set, get),
   purgeWorktreeTerminalState: createPurgeWorktreeTerminalState(set, get),
   purgeStaleRuntimeHostState: createPurgeStaleRuntimeHostState(set, get),
-  migrateWorktreeIdentity: createMigrateWorktreeIdentity(set, get)
+  migrateWorktreeIdentity: createMigrateWorktreeIdentity(set, get),
+  // Fork feature: default-worktree switch marker with owner-token CAS.
+  ...createDefaultSwitchClaimActions(set)
 })

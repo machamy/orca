@@ -22,6 +22,7 @@ import {
   runWorktreeDeletesInParallel,
   runWorktreeDeleteWithToast
 } from './worktree-delete-execution'
+import { isProjectFolderRow } from '../../../../shared/worktree/ownership'
 
 export { runWorktreeDeletesInParallel, runWorktreeDeleteWithToast }
 
@@ -49,16 +50,18 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     }
     return
   }
-  if (target.isMainWorktree) {
-    const repo = findRepoForHost(state.repos, target.repoId, {
-      hostId: target.hostId,
-      settings: state.settings
-    })
-    const hostId = repo ? getRepoExecutionHostId(repo) : target.hostId
-    // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
+  const targetRepo = findRepoForHost(state.repos, target.repoId, {
+    hostId: target.hostId,
+    settings: state.settings
+  })
+  // Why isProjectFolderRow and not isMainWorktree: the row that must route to
+  // project removal is the repo-path checkout — and after an in-place default
+  // switch, git's isMainWorktree follows the displaced checkout.
+  if (isProjectFolderRow(target, targetRepo)) {
+    const hostId = targetRepo ? getRepoExecutionHostId(targetRepo) : target.hostId
     state.openModal('confirm-remove-folder', {
       repoId: target.repoId,
-      displayName: repo?.displayName ?? target.displayName,
+      displayName: targetRepo?.displayName ?? target.displayName,
       ...(hostId ? { hostId } : {})
     })
     return
@@ -122,13 +125,21 @@ export function runWorktreeBatchDelete(
   options: WorktreeBatchDeleteOptions = {}
 ): boolean {
   const state = useAppStore.getState()
-  const targets = resolveWorktreeBatchDeleteTargets(requestedWorktrees, (worktreeId, hostId) =>
-    getWorktreeOnHostFromState(state, worktreeId, hostId)
+  const resolvedTargets = resolveWorktreeBatchDeleteTargets(
+    requestedWorktrees,
+    (worktreeId, hostId) => getWorktreeOnHostFromState(state, worktreeId, hostId)
   )
-  if (!targets) {
+  if (!resolvedTargets) {
     showWorkspaceListChangedToast()
     return false
   }
+  // Why filter here and not in the resolver: a project-folder row is a workspace
+  // the user opened, not a worktree this app created, so a batch delete must
+  // never take its directory with it.
+  const repoById = new Map(state.repos.map((repo) => [repo.id, repo]))
+  const targets = resolvedTargets.filter(
+    (worktree) => !isProjectFolderRow(worktree, repoById.get(worktree.repoId))
+  )
 
   if (targets.length === 0) {
     showNoDeletableWorkspacesToast()

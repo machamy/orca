@@ -35,6 +35,11 @@ export type WorktreeCardProps = {
   lineageChildrenStyle?: React.CSSProperties
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   isLineageDropTarget?: boolean
+  /** This row is the repo's default checkout — the one the sidebar reads as 기본. */
+  isDefaultWorktree?: boolean
+  showDefaultSwitchDropTarget?: boolean
+  isDefaultSwitchDropTarget?: boolean
+  onDefaultSwitchRequest?: (worktree: Worktree) => void
   onActivate?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
@@ -51,6 +56,10 @@ export type WorktreeCardProps = {
   onCardDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void
   nativeDragEnabled?: boolean
   affiliateListMode?: boolean
+  /** Fork: opt this surface into the Unity colour. Off by default — the
+   *  treatments are sidebar-row geometry, and only the sidebar offers the
+   *  context menu that changes or clears the colour. */
+  showUnityTint?: boolean
   statusPrDisplay?: WorktreeCardPrDisplay | null
 }
 
@@ -67,7 +76,11 @@ type DefaultedWorktreeCardProp =
   | 'lineageChildCount'
   | 'lineageCollapsed'
   | 'isLineageDropTarget'
+  | 'isDefaultWorktree'
+  | 'showDefaultSwitchDropTarget'
+  | 'isDefaultSwitchDropTarget'
   | 'affiliateListMode'
+  | 'showUnityTint'
   | 'statusPrDisplay'
 
 export type ResolvedWorktreeCardProps = Omit<WorktreeCardProps, DefaultedWorktreeCardProp> & {
@@ -83,7 +96,11 @@ export type ResolvedWorktreeCardProps = Omit<WorktreeCardProps, DefaultedWorktre
   lineageChildCount: number
   lineageCollapsed: boolean
   isLineageDropTarget: boolean
+  isDefaultWorktree: boolean
+  showDefaultSwitchDropTarget: boolean
+  isDefaultSwitchDropTarget: boolean
   affiliateListMode: boolean
+  showUnityTint: boolean
   statusPrDisplay: WorktreeCardPrDisplay | null
 }
 

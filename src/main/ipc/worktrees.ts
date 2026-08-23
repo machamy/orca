@@ -1,5 +1,7 @@
 /* oxlint-disable max-lines */
 import { app, ipcMain, type BrowserWindow } from 'electron'
+import { listingLooksTruncated } from './worktree-listing-completeness'
+import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
@@ -1140,6 +1142,15 @@ function buildDisconnectedDetectedWorktrees(
   return projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
 }
 
+/** Local worktree paths this repo owns per persisted metadata. */
+function storedLocalWorktreePathsForRepo(store: Store, repo: Repo): string[] {
+  const prefix = `${repo.id}::`
+  return Object.keys(store.getAllWorktreeMeta())
+    .filter((worktreeId) => worktreeId.startsWith(prefix))
+    .map((worktreeId) => worktreeId.slice(prefix.length))
+    .filter((path) => path.startsWith('/'))
+}
+
 function hasConflictingStoredWorktreeOwner(
   store: Store,
   repo: Repo,
@@ -1289,6 +1300,31 @@ async function listDetectedWorktreesForCapturedRepo(
       return null
     }
     const listedWorktreeIds = gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`)
+    // Why this is not the same as the catch below: a process that may open the
+    // repo but not `.git/worktrees` (macOS gates ~/Documents per process) gets
+    // the main worktree back with NO error, so the listing arrives "successful"
+    // and empty of everything else. Trusting it deleted eleven worktrees and
+    // twenty-four tabs while every directory was still on disk. A real removal
+    // takes the directory with it, so a stored worktree whose folder still
+    // exists proves the listing is truncated rather than newly empty.
+    if (
+      !repo.connectionId &&
+      listingLooksTruncated({
+        storedWorktreePaths: storedLocalWorktreePathsForRepo(store, repo),
+        listedPaths: gitWorktrees.map((worktree) => worktree.path)
+      })
+    ) {
+      recordCrashBreadcrumb('worktree_listing_truncated', {
+        repo: repo.id.slice(0, 8),
+        listed: gitWorktrees.length
+      })
+      return {
+        repoId: repo.id,
+        authoritative: false,
+        source: 'metadata-fallback',
+        worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees)
+      }
+    }
     if (hasConflictingStoredWorktreeOwner(store, repo, listedWorktreeIds)) {
       return {
         repoId: repo.id,

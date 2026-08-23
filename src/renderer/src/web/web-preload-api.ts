@@ -2873,6 +2873,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
     onActivateWorktree: () => noopUnsubscribe,
+    // Web clients have no local Unity; the offer never fires there.
+    onUnityAutoSeedOffer: () => () => {},
+    onDefaultWorktreeSwitchRequest: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
     onRequestTerminalCreate: () => noopUnsubscribe,
     onRequestTerminalTabMount: () => noopUnsubscribe,

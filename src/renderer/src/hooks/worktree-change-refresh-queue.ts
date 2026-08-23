@@ -13,6 +13,7 @@ type WorktreeChangeOwner = {
 type WorktreeChangeEvent = {
   repoId: string
   renamed?: WorktreeRename
+  migrations?: readonly WorktreeRename[]
   // Why: set on local worktrees:changed while a remote runtime is active, so the
   // refresh pins to the local host instead of dropping the event (see useIpcEvents).
   forceLocalOwner?: boolean
@@ -22,10 +23,14 @@ type WorktreeChangeEvent = {
 type WorktreeChangeRefreshHandler = (
   repoId: string,
   renamed?: WorktreeRename,
-  options?: WorktreeChangeOwner
+  options?: WorktreeChangeOwner,
+  migrations?: readonly WorktreeRename[]
 ) => Promise<void>
 
-type QueuedWorktreeChange = WorktreeChangeOwner & { renamed?: WorktreeRename }
+type QueuedWorktreeChange = WorktreeChangeOwner & {
+  renamed?: WorktreeRename
+  migrations?: readonly WorktreeRename[]
+}
 
 type RepoRefreshState = {
   running: boolean
@@ -49,10 +54,13 @@ export function createWorktreeChangeRefreshQueue(
       while (!disposed && state.queue.length > 0) {
         const next = state.queue.shift()
         try {
-          await handler(repoId, next?.renamed, {
+          const owner = {
             forceLocalOwner: next?.forceLocalOwner,
             ...(next?.executionHostId ? { executionHostId: next.executionHostId } : {})
-          })
+          }
+          await (next?.migrations?.length
+            ? handler(repoId, next.renamed, owner, next.migrations)
+            : handler(repoId, next?.renamed, owner))
         } catch (error) {
           console.error('Failed to refresh changed worktrees:', error)
         }
@@ -83,9 +91,10 @@ export function createWorktreeChangeRefreshQueue(
         states.set(event.repoId, state)
       }
 
-      if (event.renamed) {
+      if (event.renamed || (event.migrations && event.migrations.length > 0)) {
         state.queue.push({
           renamed: event.renamed,
+          migrations: event.migrations,
           forceLocalOwner: event.forceLocalOwner,
           executionHostId: event.executionHostId
         })

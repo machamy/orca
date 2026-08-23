@@ -22,6 +22,16 @@ import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kit
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree/removal-fence-error'
+import {
+  isDefaultSwitchSleepGuarded,
+  isInDefaultSwitchTeardownWindow
+} from '@/lib/default-worktree-switch-sleep-guard'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import {
+  collectProviderSessionDuplicatePaneKeys,
+  releaseAgentSessionResume,
+  tryClaimAgentSessionResume
+} from '@/lib/agent-provider-session-single-owner'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
@@ -132,6 +142,7 @@ import {
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
@@ -290,6 +301,8 @@ import {
   getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { applyResumedAgentBookkeeping } from './cold-restore-resume-bookkeeping'
+import { shouldClearResumeClaimLoserRecord } from './cold-restore-resume-claim'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
@@ -565,6 +578,8 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   useLiveEntry: boolean
   hasSleepingRecord: boolean
   sleepingRecordEntry: { paneKey: string; record: SleepingAgentSessionRecord } | null
+  /** Marker-waited delivery so a resume argv isn't typed before the shell is ready. */
+  startupCommandDelivery?: StartupCommandDelivery
 }
 
 const e2eTerminalPtyOutputDebugState: E2eTerminalPtyOutputDebugSnapshot = {
@@ -1277,21 +1292,16 @@ export function connectPanePty(
     consumed: { paneKey: string; record: SleepingAgentSessionRecord }
   ): void => {
     state.clearSleepingAgentSession(consumed.paneKey)
-    for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
-      if (
-        paneKey !== consumed.paneKey &&
-        record.worktreeId === consumed.record.worktreeId &&
-        record.agent === consumed.record.agent &&
-        agentProviderSessionsEqual(
-          record.agent,
-          record.providerSession,
-          consumed.record.providerSession
-        )
-      ) {
-        // Why: legacy pane aliases can leave multiple sleeping rows for one
-        // provider session; once this pane resumes it, every alias is stale.
-        state.clearSleepingAgentSession(paneKey)
-      }
+    // Why repo-scoped, not worktree-scoped: the default-worktree switch moves a
+    // session's transcript between paths, so a same-session record in ANOTHER
+    // worktree of this repo is the same conversation — observed live as one
+    // Claude session open in two panes. Another repo's identically-keyed
+    // session is never touched.
+    for (const paneKey of collectProviderSessionDuplicatePaneKeys(
+      state.sleepingAgentSessionsByPaneKey,
+      consumed
+    )) {
+      state.clearSleepingAgentSession(paneKey)
     }
   }
   const launchToken = paneStartup?.launchConfig
@@ -2671,7 +2681,16 @@ export function connectPanePty(
     // Why: the negotiating application died with its PTY; any replacement
     // session starts with kitty keyboard flags at zero.
     kittyKeyboardModes.reset()
-    const isSuppressedExit = deps.consumeSuppressedPtyExit(ptyId) || preserveRendererBinding
+    const isSuppressedExit =
+      deps.consumeSuppressedPtyExit(ptyId) ||
+      preserveRendererBinding ||
+      // Why: the default-switch sleep kills every pane on BOTH worktrees, and a
+      // pane that respawned between the shutdown's ptyId snapshot and the kill
+      // misses the exit guard. Observed live: a recordless pane took the
+      // unsuppressed exit and closed its single-pane tab outright. The kills
+      // land asynchronously — after the spawn guard is lifted for the wake — so
+      // this uses the longer teardown window the switch owns.
+      isInDefaultSwitchTeardownWindow(deps.worktreeId)
     if (!isSuppressedExit) {
       deps.clearExitedPanePtyLayoutBinding(pane.id, ptyId)
     }
@@ -2739,6 +2758,16 @@ export function connectPanePty(
     }
     manager.setPaneGpuRendering(pane.id, true)
     const panes = manager.getPanes()
+    // TEMP mode-B diagnostics: an unsuppressed exit is the only path that closes
+    // a pane/tab here — record which pane took it so a switch that loses panes
+    // names its own killer instead of being inferred from the aftermath.
+    recordRendererCrashBreadcrumb('pane_exit_teardown', {
+      tabId: deps.tabId,
+      paneId: pane.id,
+      panes: panes.length,
+      hasRecord: Boolean(getSleepingRecordForPane(useAppStore.getState())),
+      ptyId: ptyId.slice(-12)
+    })
     if (panes.length <= 1) {
       // Why: a worktree's sole newborn terminal can die on shell startup — e.g.
       // a PR branch ships an .envrc whose direnv command fails, so the login
@@ -5123,7 +5152,10 @@ export function connectPanePty(
         launchToken: coldRestoreLaunchToken,
         useLiveEntry: Boolean(useLiveEntry),
         hasSleepingRecord: Boolean(sleepingRecord),
-        sleepingRecordEntry
+        sleepingRecordEntry,
+        ...(startupPlan.startupCommandDelivery
+          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+          : {})
       }
     }
     const applyColdRestoreAgentResumeStartup = (
@@ -5139,6 +5171,33 @@ export function connectPanePty(
         tabId: deps.tabId,
         leafId: pane.leafId
       })
+      const sleptRecord = startup.sleepingRecordEntry?.record
+      if (sleptRecord && !state.agentStatusByPaneKey[cacheKey]) {
+        // Why: a cold-restored agent emits no hook until its next event (codex:
+        // the next user prompt), leaving the sidebar agent row blank after a
+        // follow switch even though the session is resuming. Seed the row from
+        // the sleeping record, hydration-shaped: restoredUnconfirmed keeps
+        // freshness/attention/send-target gates treating it as unconfirmed
+        // until a real hook overwrites it.
+        state.setAgentStatus(
+          cacheKey,
+          {
+            state: sleptRecord.state,
+            prompt: sleptRecord.prompt,
+            agentType: sleptRecord.agent,
+            restoredUnconfirmed: true
+          },
+          sleptRecord.terminalTitle,
+          undefined,
+          { tabId: deps.tabId, worktreeId: deps.worktreeId },
+          {
+            ...(sleptRecord.providerSession
+              ? { providerSession: sleptRecord.providerSession }
+              : {}),
+            launchToken: startup.launchToken
+          }
+        )
+      }
       return true
     }
     const clearSleepingRecordAfterColdRestoreSpawn = (
@@ -5164,8 +5223,54 @@ export function connectPanePty(
       startup: ColdRestoreAgentResumeStartup | null = buildColdRestoreAgentResumeStartup(),
       options: FreshSpawnOptions = {}
     ): Promise<string | null> => {
+      if (startup && !tryClaimAgentSessionResume(startup.agent, startup.resumeProviderSession)) {
+        // Another pane is already resuming this exact session — this pane's
+        // record is a duplicate of it. Without this gate both panes spawned
+        // `--resume <same id>` when their startups were built inside the same
+        // wake burst, before either post-spawn cleanup landed.
+        recordRendererCrashBreadcrumb('resume_claim_lost', {
+          agent: startup.agent,
+          session: (startup.resumeProviderSession?.id ?? '').slice(-10)
+        })
+        const paneKeyToClear = shouldClearResumeClaimLoserRecord(
+          getSleepingRecordForPane(useAppStore.getState()),
+          startup
+        )
+        if (paneKeyToClear) {
+          useAppStore.getState().clearSleepingAgentSession(paneKeyToClear)
+        }
+        return startFreshSpawn(null, options)
+      }
       applyColdRestoreAgentResumeStartup(startup)
-      return startFreshSpawn(startup, options)
+      const spawned = startFreshSpawn(startup, options)
+      if (startup) {
+        // Release only after the spawn settles: on success the duplicate
+        // cleanup has already run inside the spawn promise, so a later pane
+        // finds no record to resume; on failure the claim must not leak.
+        void spawned.finally(() =>
+          releaseAgentSessionResume(startup.agent, startup.resumeProviderSession)
+        )
+        // Why: a resumed agent emits no hook until its next event (codex: not
+        // until the next prompt), and the sleeping record it restored from is
+        // consumed by the spawn. Nothing then knows which session this pane is
+        // running, so it is not "capturable": the next default switch either
+        // refuses to run or sleeps the pane and captures nothing. Re-record the
+        // resume identity once the spawn lands — no visible turn-status row.
+        void spawned.then((spawnedPtyId) => {
+          if (!spawnedPtyId || disposed) {
+            return
+          }
+          applyResumedAgentBookkeeping(useAppStore.getState(), {
+            cacheKey,
+            tabId: deps.tabId,
+            worktreeId: deps.worktreeId,
+            agent: startup.agent,
+            providerSession: startup.resumeProviderSession,
+            launchToken: startup.launchToken
+          })
+        })
+      }
+      return spawned
     }
     // Why: the hibernation wake fires from noteVisibilityResume in the outer
     // connection scope, long after this deferred-connect closure has run.
@@ -5295,6 +5400,17 @@ export function connectPanePty(
         // about to unmount — so skip the doomed respawn instead of racing it.
         return Promise.resolve(null)
       }
+      if (isDefaultSwitchSleepGuarded(deps.worktreeId)) {
+        // Why: a default-worktree switch just slept this worktree to move its
+        // agents; the pane is about to unmount. Respawning here would consume
+        // the captured resume records and relaunch the agents at the OLD path —
+        // exactly what the switch's own post-migration wake must do instead.
+        recordPtyConnectDiagnostic(
+          `pane=${pane.id} -> SKIP SPAWN (default-switch sleep guard, worktree ${deps.worktreeId})`
+        )
+        recordRendererCrashBreadcrumb('mode_b_guard_skip', { paneId: pane.id })
+        return Promise.resolve(null)
+      }
       authoritativeReattachGeneration += 1
       clearPaneMode2031State()
       clearHiddenOutputRestoreState()
@@ -5344,6 +5460,9 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
         ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+        ...(coldRestoreOverride?.startupCommandDelivery
+          ? { startupCommandDelivery: coldRestoreOverride.startupCommandDelivery }
+          : {}),
         ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
         callbacks: outputCallbacks.callbacks
       })
@@ -8865,6 +8984,9 @@ export function connectPanePty(
                 ? { launchToken: coldRestoreStartup.launchToken }
                 : {}),
               ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+              ...(coldRestoreStartup?.startupCommandDelivery
+                ? { startupCommandDelivery: coldRestoreStartup.startupCommandDelivery }
+                : {}),
               ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
               ...(directSshRetryAttempt ? { admitPtyId: claimCapturedDirectSshRetryPty } : {}),
               callbacks: outputCallbacks.callbacks
@@ -8998,8 +9120,34 @@ export function connectPanePty(
       restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && hasSleepingAgentSession
         ? restoredSessionId
         : null
+    // Why: a default-worktree switch ("agents follow") migrates a slept tab under a
+    // new worktree id while its preserved session id still embeds the spawn-time id.
+    // Ownership correctly vetoes the reattach below, but the stale id must not be
+    // adopted as a detached-live attach either — the session is dead, and a bare
+    // attach leaves a blank pane the missed-exit reconciler then closes. Mirror the
+    // slept-remote path: clear the binding and take the fresh cold-restore --resume.
+    // Local daemon sessions only: SSH/legacy ids embed non-worktree prefixes and
+    // keep their own attach-only recovery paths.
+    const preservedSleptSessionId = restoredSessionId ?? tabFallbackPtyId
+    const sleptForeignLocalSessionId =
+      hasSleepingAgentSession &&
+      !sleptRemoteRuntimeSessionId &&
+      !connectionId &&
+      !isLegacyWorkerAutomaticResumeBlocked() &&
+      preservedSleptSessionId &&
+      !isRemoteRuntimePtyId(preservedSleptSessionId) &&
+      !isSessionOwnedByWorktree(preservedSleptSessionId, deps.worktreeId)
+        ? preservedSleptSessionId
+        : null
     const detachedLivePtyId =
-      tabFallbackPtyId && !hadExistingPaneTransportAtConnect && !sleptRemoteRuntimeSessionId
+      tabFallbackPtyId &&
+      !hadExistingPaneTransportAtConnect &&
+      !sleptRemoteRuntimeSessionId &&
+      !sleptForeignLocalSessionId &&
+      // Why: mid-switch the preserved id names a session the sleep is killing.
+      // Observed live: a recordless pane reconnected during the sleep, attached
+      // to that dying PTY and stayed blank forever. Spawn instead.
+      !isInDefaultSwitchTeardownWindow(deps.worktreeId)
         ? restoredSessionId
           ? restoredSessionId === tabFallbackPtyId
             ? restoredSessionId
@@ -9010,8 +9158,9 @@ export function connectPanePty(
       restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && !hasSleepingAgentSession
         ? restoredSessionId
         : null
-    const candidateReattachSessionId =
-      restoredSessionId && restoredSessionId !== detachedLivePtyId
+    const candidateReattachSessionId = sleptForeignLocalSessionId
+      ? null
+      : restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
     const runtimeHostPtyWakeHint =
@@ -9026,6 +9175,13 @@ export function connectPanePty(
     if (sleptRemoteRuntimeSessionId) {
       deps.syncPanePtyLayoutBinding(pane.id, null)
       deps.clearTabPtyId(deps.tabId, sleptRemoteRuntimeSessionId)
+    }
+    if (sleptForeignLocalSessionId) {
+      recordPtyConnectDiagnostic(
+        `pane=${pane.id} -> SLEPT FOREIGN LOCAL ${sleptForeignLocalSessionId} (worktree ${deps.worktreeId}) — clearing for cold restore`
+      )
+      deps.syncPanePtyLayoutBinding(pane.id, null)
+      deps.clearTabPtyId(deps.tabId, sleptForeignLocalSessionId)
     }
     const currentTabLivePtyIds = storeSnapshot.ptyIdsByTabId[deps.tabId] ?? []
     const candidateHasEagerBuffer = Boolean(
@@ -9066,6 +9222,27 @@ export function connectPanePty(
     recordPtyConnectDiagnostic(
       `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hadExistingPaneTransportAtConnect} pendingKey=${pendingSpawnKey}`
     )
+    // TEMP mode-B diagnostics: after a switch, split panes came back without a
+    // PTY and never respawned. Record which branch each pane takes while the
+    // switch owns the worktree, so "never mounted" and "mounted but chose the
+    // wrong branch" are distinguishable.
+    if (isInDefaultSwitchTeardownWindow(deps.worktreeId)) {
+      recordRendererCrashBreadcrumb('mode_b_pane_connect', {
+        tabId: deps.tabId.slice(0, 8),
+        leafId: pane.leafId.slice(0, 8),
+        branch: deferredReattachSessionId
+          ? 'reattach'
+          : (legacyAttachOnlyPtyId ??
+              detachedRemoteLeafPtyId ??
+              detachedLivePtyId ??
+              eagerLivePtyId)
+            ? 'attach'
+            : 'spawn',
+        hasRecord: hasSleepingAgentSession,
+        restored: restoredPtyId ? restoredPtyId.slice(-10) : null,
+        existing: existingPtyId ? existingPtyId.slice(-10) : null
+      })
+    }
 
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
@@ -9110,6 +9287,9 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
         ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+        ...(coldRestoreStartup?.startupCommandDelivery
+          ? { startupCommandDelivery: coldRestoreStartup.startupCommandDelivery }
+          : {}),
         ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
         ...(directSshRetryAttempt ? { admitPtyId: claimCapturedDirectSshRetryPty } : {}),
         callbacks: outputCallbacks.callbacks
@@ -9450,6 +9630,26 @@ export function connectPanePty(
         }
         claimedProviderSessions?.add(claimKey)
         pendingHibernatedWakeTarget = { ptyId: currentPtyId, record: recordEntry.record }
+        return claimKey
+      }
+      // Why: the default-switch sleep guard skipped this mounted pane's spawn
+      // while its worktree slept for the swap (connect ran, no PTY bound). The
+      // switch's wake is the signal to revive it in place via cold restore.
+      if (
+        recordEntry &&
+        currentPtyId === null &&
+        !disposed &&
+        hibernatedWakeTarget === null &&
+        wakeHibernatedAgentPane !== null &&
+        transportConnectInFlightSince === null &&
+        deps.paneTransportsRef.current.get(pane.id) === transport
+      ) {
+        const claimKey = getProviderSessionClaimKey(recordEntry.record)
+        if (claimedProviderSessions?.has(claimKey)) {
+          return null
+        }
+        claimedProviderSessions?.add(claimKey)
+        void wakeHibernatedAgentPane()
         return claimKey
       }
       return null

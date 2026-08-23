@@ -1,3 +1,4 @@
+import { isDefaultCheckoutWorkspace } from '../../../../shared/worktree/ownership'
 import { canShowWorkspaceDeleteQuickAction } from './workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
@@ -11,6 +12,10 @@ import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-a
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
+  // Why the repo path and not `isMainWorktree`: git's main worktree moves to the
+  // displaced checkout after a default-worktree switch, so the star, the delete
+  // guard and the primary badge would follow the wrong row.
+  const isDefaultCheckout = isDefaultCheckoutWorkspace(worktree, repo)
   const foundation = useWorktreeCardFoundation({ worktree, repo })
   const review = useWorktreeCardReviewDetails({
     worktree,
@@ -87,7 +92,9 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     canShowWorkspaceDeleteQuickAction({
       deleteModifierPressed: linked.deleteModifierPressed,
       isDeleting: linked.isDeleting,
-      isMainWorktree: worktree.isMainWorktree
+      // Why not git's flag alone: after a default-worktree switch the repo-path row
+      // is a linked worktree, but deleting it still deletes the project folder.
+      isMainWorktree: worktree.isMainWorktree || isDefaultCheckout
     })
   const workspaceActions = useWorktreeCardWorkspaceActions({
     worktree,
@@ -145,6 +152,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     ...review,
     ...linked,
     detailsHoverControl,
+    isDefaultCheckout,
     showStatus,
     showIssue,
     showLinearIssue,

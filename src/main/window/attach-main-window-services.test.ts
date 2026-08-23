@@ -760,8 +760,9 @@ describe('attachMainWindowServices', () => {
     attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     expect(runtime.setNotifier).toHaveBeenCalledTimes(1)
+    type IdMove = { oldWorktreeId: string; newWorktreeId: string }
     const notifier = runtime.setNotifier.mock.calls[0][0] as {
-      worktreesChanged: (repoId: string) => void
+      worktreesChanged: (...args: [string, IdMove?, IdMove[]?, boolean?]) => void
       reposChanged: () => void
       activateWorktree: (
         repoId: string,
@@ -770,7 +771,10 @@ describe('attachMainWindowServices', () => {
       ) => void
     }
 
+    const shieldMigration = { oldWorktreeId: 'feature', newWorktreeId: 'temporary' }
     notifier.worktreesChanged('repo-1')
+    notifier.worktreesChanged('repo-1', undefined, [shieldMigration])
+    notifier.worktreesChanged('repo-1', undefined, [shieldMigration], true)
     notifier.reposChanged()
     notifier.activateWorktree('repo-1', 'wt-1', {
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
@@ -782,6 +786,8 @@ describe('attachMainWindowServices', () => {
 
     expect(sendMock.mock.calls).toEqual([
       ['worktrees:changed', { repoId: 'repo-1' }],
+      ['worktrees:changed', { repoId: 'repo-1', migrations: [shieldMigration] }],
+      ['worktrees:changed', { repoId: 'repo-1', migrations: [shieldMigration], shieldOnly: true }],
       ['repos:changed'],
       [
         'ui:activateWorktree',

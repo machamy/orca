@@ -12,6 +12,7 @@ export const worktreeSliceInitialState: Pick<
   | 'pendingWorktreeCreations'
   | 'activePendingCreationId'
   | 'renamingWorktreeId'
+  | 'defaultSwitchInFlight'
   | 'deleteStateByWorktreeId'
   | 'baseStatusByWorktreeId'
   | 'remoteBranchConflictByWorktreeId'
@@ -31,6 +32,8 @@ export const worktreeSliceInitialState: Pick<
   pendingWorktreeCreations: {},
   activePendingCreationId: null,
   renamingWorktreeId: null,
+  // Fork feature: default-worktree switch in-flight marker (owner-token CAS).
+  defaultSwitchInFlight: null,
   deleteStateByWorktreeId: {},
   baseStatusByWorktreeId: {},
   remoteBranchConflictByWorktreeId: {},

@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  beginDefaultSwitchTeardownWindow,
+  endDefaultSwitchTeardownWindow
+} from '@/lib/default-worktree-switch-sleep-guard'
 import type { ParkedTerminalByteWatcherOptions } from './parked-terminal-byte-watcher'
 
 const WORKTREE_ID = 'repo::/worktree'
@@ -140,6 +144,21 @@ function syncParked(args?: {
       ? { restoreTitleOnStartTabIds: new Set(args.restoreTitleOnStartTabIds) }
       : {})
   })
+}
+
+/** Two leaves, one PTY each — the shape every split-collapse case starts from. */
+function giveTabATwoLeafSplit(): void {
+  mockStoreState.terminalLayoutsByTabId[TAB_ID] = {
+    root: {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: LEAF_ID },
+      second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+    },
+    activeLeafId: SECOND_LEAF_ID,
+    expandedLeafId: null,
+    ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
+  }
 }
 
 describe('terminal-parked-tab-watchers', () => {
@@ -318,17 +337,7 @@ describe('terminal-parked-tab-watchers', () => {
       { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
     ])
     syncParked()
-    mockStoreState.terminalLayoutsByTabId[TAB_ID] = {
-      root: {
-        type: 'split',
-        direction: 'vertical',
-        first: { type: 'leaf', leafId: LEAF_ID },
-        second: { type: 'leaf', leafId: SECOND_LEAF_ID }
-      },
-      activeLeafId: SECOND_LEAF_ID,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
-    }
+    giveTabATwoLeafSplit()
 
     const exited = exitSubscriptions.find((entry) => entry.ptyId === SECOND_PTY_ID)
     exited?.callback(0, { hadPrimary: true })
@@ -342,6 +351,50 @@ describe('terminal-parked-tab-watchers', () => {
     expect(startedWatchers[1].dispose).toHaveBeenCalledTimes(1)
     expect(startedWatchers[0].dispose).not.toHaveBeenCalled()
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+  })
+
+  it('leaves a parked split alone while a default-worktree switch owns the teardown', () => {
+    // Caught live: `leaf_collapse_parked {tabId: 8286baf5}` fired 0.1s into a
+    // switch, before its sleep had even finished. Unlike the mounted exit
+    // handler this sidecar is never filtered through the suppressed-exit set,
+    // so the switch's own kills read as real exits and collapsed a background
+    // split — N3 of the swap contract. The switch's wake remounts the panes.
+    beginDefaultSwitchTeardownWindow([WORKTREE_ID])
+    capturePanes([
+      { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+      { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+    ])
+    syncParked()
+    giveTabATwoLeafSplit()
+
+    const exited = exitSubscriptions.find((entry) => entry.ptyId === SECOND_PTY_ID)
+    exited?.callback(0, { hadPrimary: false })
+
+    // The layout keeps both leaves, and the tab is not closed.
+    expect(mockStoreState.setTabLayout).not.toHaveBeenCalled()
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    endDefaultSwitchTeardownWindow([WORKTREE_ID])
+  })
+
+  it('still collapses a parked split once the switch window has closed', () => {
+    beginDefaultSwitchTeardownWindow([WORKTREE_ID])
+    endDefaultSwitchTeardownWindow([WORKTREE_ID])
+    capturePanes([
+      { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+      { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+    ])
+    syncParked()
+    giveTabATwoLeafSplit()
+
+    const exited = exitSubscriptions.find((entry) => entry.ptyId === SECOND_PTY_ID)
+    exited?.callback(0, { hadPrimary: false })
+
+    expect(mockStoreState.setTabLayout).toHaveBeenCalledWith(TAB_ID, {
+      root: { type: 'leaf', leafId: LEAF_ID },
+      activeLeafId: LEAF_ID,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
+    })
   })
 
   it('seeds each watcher with the pane slot last known runtime title', () => {

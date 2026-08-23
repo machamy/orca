@@ -12,4 +12,16 @@ describe('createLocalBuildVersion', () => {
   it('sanitizes commit identifiers', () => {
     expect(createLocalBuildVersion('1.0.0', 1, 'abc/def')).toBe('1.0.0-local.1.abcdef')
   })
+
+  it('stacks the fork revision on the upstream base when provided', () => {
+    expect(createLocalBuildVersion('1.4.169-rc.0', 123456, 'abc123', '1')).toBe(
+      '1.4.169-rc.0.machamy.1.local.123456.abc123'
+    )
+    expect(createLocalBuildVersion('1.4.169', 123456, 'abc123', '2')).toBe(
+      '1.4.169-machamy.2.local.123456.abc123'
+    )
+    // Absent/blank fork rev keeps upstream's plain scheme.
+    expect(createLocalBuildVersion('1.0.0', 1, 'abc', null)).toBe('1.0.0-local.1.abc')
+    expect(createLocalBuildVersion('1.0.0', 1, 'abc', '')).toBe('1.0.0-local.1.abc')
+  })
 })

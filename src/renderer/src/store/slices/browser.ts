@@ -157,7 +157,7 @@ export type BrowserSlice = {
   openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
   openBrowserProfileTabInActiveWorkspace: (url: string, profileId: string) => Promise<boolean>
   closeBrowserTab: (tabId: string) => void
-  shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
+  shutdownWorktreeBrowsers: (worktreeId: string, options?: { keepState?: boolean }) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
   setActiveBrowserTab: (tabId: string) => void
   createBrowserPage: (
@@ -947,8 +947,18 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  shutdownWorktreeBrowsers: async (worktreeId) => {
+  shutdownWorktreeBrowsers: async (worktreeId, options) => {
     const workspaces = get().browserTabsByWorktree[worktreeId] ?? []
+    if (options?.keepState) {
+      // Sleep-preserving mode (default-worktree switch): free the Chromium
+      // guests but keep browserTabsByWorktree/browserPagesByWorkspace and the
+      // active pointers, so the identity migration can carry the browser
+      // windows to their new home and activation re-materializes them there.
+      for (const workspace of workspaces) {
+        destroyWorkspaceWebviews(get().browserPagesByWorkspace, workspace.id)
+      }
+      return
+    }
     // Why: snapshot before the loop — closeBrowserTab empties the array, so set() below couldn't recompute hadBrowserTabs.
     const hadBrowserTabs = workspaces.length > 0
     for (const workspace of workspaces) {

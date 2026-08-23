@@ -42,6 +42,7 @@ import {
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/pi-compatible-live-recovery-record'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -303,6 +304,10 @@ export type AgentStatusSlice = {
   setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
+  /** Restore snapshot records whose paneKey is missing (never overwrites a live
+   *  record) — the default-switch wake's guard against records deleted by state
+   *  churn between the sleep and the post-migration wake. */
+  reseedSleepingAgentSessions: (records: readonly SleepingAgentSessionRecord[]) => void
 
   /** Retain agent snapshots. Accepts an array so simultaneous disappearances produce a single set() with no mid-loop intermediate states. */
   retainAgents: (entries: RetainedAgentEntry[]) => void
@@ -598,10 +603,14 @@ function sleepingRecordFromEntry(args: {
   origin?: SleepingAgentSessionRecord['origin']
 }): SleepingAgentSessionRecord | null {
   const agent = args.entry.agentType
-  if (!isResumableTuiAgent(agent) || !args.entry.providerSession) {
+  // Why: the row's live providerSession is stripped on metadata-less turn
+  // boundaries (routine for codex); the last confirmed session is still the
+  // right thing to capture for a running pane.
+  const providerSession = args.entry.providerSession ?? args.entry.lastKnownProviderSession
+  if (!isResumableTuiAgent(agent) || !providerSession) {
     return null
   }
-  if (!getAgentResumeArgv(agent, args.entry.providerSession)) {
+  if (!getAgentResumeArgv(agent, providerSession)) {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
@@ -610,7 +619,7 @@ function sleepingRecordFromEntry(args: {
     ...(tab ? { tabId: tab.id } : {}),
     worktreeId: args.worktreeId,
     agent,
-    providerSession: args.entry.providerSession,
+    providerSession,
     prompt: args.entry.prompt,
     state: args.entry.state,
     capturedAt: args.capturedAt,
@@ -1433,10 +1442,27 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     queueMicrotask(() => freshness.schedule())
   }
 
+  // TEMP mode-B diagnostics: sleeping records captured by the default-switch
+  // sleep have been observed vanishing before the wake; stamp every deletion
+  // path with a compact caller stack so the trace names the culprit.
+  const recordSleepingRecordDeletionBreadcrumb = (tag: string, count: number): void => {
+    recordRendererCrashBreadcrumb('sleeping_record_delete', {
+      tag,
+      count,
+      stack: String(new Error('sleeping-record-deletion-diagnostic').stack ?? '')
+        .split('\n')
+        .slice(2, 7)
+        .map((line) => line.trim().replace(/^at /, ''))
+        .join(' < ')
+        .slice(0, 400)
+    })
+  }
+
   const clearSleepingAgentSessionsByPaneKey = (paneKeys: readonly string[]): void => {
     if (paneKeys.length === 0) {
       return
     }
+    recordSleepingRecordDeletionBreadcrumb('by-pane-key', paneKeys.length)
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
       let nextSleeping = s.sleepingAgentSessionsByPaneKey
@@ -2109,6 +2135,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const providerSession =
           metadata?.providerSession ??
           (canReuseExistingProviderSession ? existing.providerSession : undefined)
+        // Why: codex frequently delivers the done→working boundary write without
+        // metadata (lost/untrusted hooks, child-hook nulling), so the strip above
+        // leaves a RUNNING pane with no session for sleep capture. Keep the last
+        // confirmed session as a capture-only fallback; an agent-type change (a
+        // genuinely different pane occupant) still clears it, and any metadata
+        // write replaces it.
+        const lastKnownProviderSession =
+          providerSession ??
+          (existing?.agentType === identity.agentType
+            ? (existing.lastKnownProviderSession ?? existing.providerSession)
+            : undefined)
         const existingProviderSession = canReuseExistingProviderSession
           ? existing.providerSession
           : undefined
@@ -2204,6 +2241,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             ? existing?.subagents
             : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
+          ...(lastKnownProviderSession ? { lastKnownProviderSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
           ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
           // Why: never inherited from `existing` — an unstamped write is an unstamped
@@ -3205,6 +3243,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     },
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
+      recordSleepingRecordDeletionBreadcrumb('by-worktree', 1)
       set((s) => {
         let changed = false
         const next: Record<string, SleepingAgentSessionRecord> = {}
@@ -3233,7 +3272,25 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
 
+    reseedSleepingAgentSessions: (records) => {
+      set((s) => {
+        const missing = records.filter(
+          (record) => !s.sleepingAgentSessionsByPaneKey[record.paneKey]
+        )
+        if (missing.length === 0) {
+          return s
+        }
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...s.sleepingAgentSessionsByPaneKey,
+            ...Object.fromEntries(missing.map((record) => [record.paneKey, record]))
+          }
+        }
+      })
+    },
+
     pruneSleepingAgentSessions: (validWorktreeIds) => {
+      recordSleepingRecordDeletionBreadcrumb('prune', validWorktreeIds.size)
       set((s) => {
         let changed = false
         const next: Record<string, SleepingAgentSessionRecord> = {}

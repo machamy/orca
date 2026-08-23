@@ -64,7 +64,7 @@ export function useWorktreeLineageDropCommit(args: {
   const commitWorktreeLineageParentDrop = useCallback(
     (draggedIds: readonly string[], parentId: string): boolean => {
       const target = getEligibleLineageDropTarget(
-        { status: null, isPinDrop: false, lineageParentId: parentId },
+        { status: null, isPinDrop: false, lineageParentId: parentId, defaultSwitchTargetId: null },
         draggedIds
       )
       if (!target.lineageParentId) {

@@ -31,6 +31,17 @@ export function buildTerminalCreateWindow(args: {
         onBaseStatus: () => () => {},
         onRemoteBranchConflict: () => () => {}
       },
+      unity: {
+        worktreeStatus: async () => ({
+          isUnityProject: false,
+          editorVersion: null,
+          editorInstalled: false,
+          worktreeHasLibrary: false,
+          sourceHasLibrary: false
+        }),
+        seedWorktreeCache: async () => ({ seeded: false, reason: 'cow_unsupported' }),
+        openProject: async () => ({ opened: false, reason: 'not_a_unity_project' })
+      },
       ui: {
         onStateChanged: () => () => {},
         onOpenSettings: () => () => {},
@@ -47,6 +58,8 @@ export function buildTerminalCreateWindow(args: {
         onJumpToWorktreeIndex: () => () => {},
         onJumpToTabIndex: () => () => {},
         onActivateWorktree: () => () => {},
+        onDefaultWorktreeSwitchRequest: () => () => {},
+        onUnityAutoSeedOffer: () => () => {},
         onWorktreeHistoryNavigate: () => () => {},
         onCreateTerminal: (
           listener: (data: {

@@ -42,6 +42,14 @@ export const OptionalBoolean = z
   .pipe(z.union([z.boolean(), z.undefined()]))
   .optional()
 
+/**
+ * Reject a non-boolean instead of coercing it to `undefined`. For a flag whose
+ * default is destructive-if-wrong, the lenient form fails OPEN: a buggy peer
+ * sending `includeUntracked: "false"` had the string dropped and got the
+ * carry-untracked default — the opposite of what it asked for.
+ */
+export const StrictOptionalBoolean = z.boolean().optional()
+
 // Why: runtime handlers accept `linkedIssue: number | null | undefined` with
 // distinct meanings — undefined means "no update", null means "clear", number
 // means "set". The ambient JSON decode produces all three shapes as-is.

@@ -64,7 +64,9 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     hasExplicitLinkedReview,
     handleUnlinkReview,
     detailsHoverControl,
-    showDeleteQuickAction
+    showDeleteQuickAction,
+    isDefaultCheckout,
+    isDefaultWorktree
   } = card
 
   // Why: pinned trees mix repos, so the repo icon shows regardless of groupBy's hideRepoBadge.
@@ -85,11 +87,13 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   // Why: rebases already surface in source control, so dense cards skip the persistent rebase chip.
   const showConflictOperationBadge =
     !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
-  const hasMetadataBadge = showConflictOperationBadge
+  const hasMetadataBadge = showConflictOperationBadge || isDefaultWorktree
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
   const showCombinedStatusSlot = showStatus
-  const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
+  // Why isDefaultCheckout: the star must follow the repo-path row users read as
+  // 기본, which after a switch is no longer git's main worktree.
+  const showTitleRowPrimary = compactCards && isDefaultCheckout && !isFolder
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
   const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
   // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.
@@ -100,7 +104,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showBranch ||
     showIdentityInNewCard ||
     showDetachedHeadInMetaRow ||
-    showConflictOperationBadge ||
+    // Fork: the Default badge must mount the meta row even on an otherwise bare card.
+    hasMetadataBadge ||
     cacheStartedAt != null ||
     showMetaRowDetails
   )
@@ -265,6 +270,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showDetachedHeadInMetaRow,
     showBranch,
     showConflictOperationBadge,
+    isDefaultWorktree,
     showUnreadQuickAction,
     showCombinedStatusSlot,
     showTitleRowPrimary,

@@ -319,6 +319,10 @@ vi.mock('./agent-trust', () => ({
   registerAgentTrustHandlers: registerAgentTrustHandlersMock
 }))
 
+vi.mock('./unity-worktree', () => ({
+  registerUnityWorktreeHandlers: vi.fn()
+}))
+
 vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))

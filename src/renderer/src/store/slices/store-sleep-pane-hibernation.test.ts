@@ -123,7 +123,10 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', {
+      keepHistory: true,
+      retainSurface: true
+    })
     expect(mockApi.pty.kill).not.toHaveBeenCalledWith('pty-shell', expect.anything())
     expect(mockUnregisterPtyDataHandlers).toHaveBeenCalledWith(['pty-agent'])
     expect(mockUnregisterPtyDataHandlers.mock.invocationCallOrder[0]).toBeLessThan(
@@ -321,7 +324,10 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyId: 'pty-agent'
     })
 
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', {
+      keepHistory: true,
+      retainSurface: true
+    })
     expect(recordAtKillTime).toMatchObject({
       paneKey: targetPaneKey,
       providerSession: { key: 'session_id', id: 'sess-ordering-1' }
@@ -349,8 +355,14 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([])
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-shell', { keepHistory: true })
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', {
+      keepHistory: true,
+      retainSurface: true
+    })
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-shell', {
+      keepHistory: true,
+      retainSurface: true
+    })
   })
 
   it('does not commit pane sleep state when local target kill fails', async () => {

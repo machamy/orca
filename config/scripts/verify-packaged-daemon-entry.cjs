@@ -34,7 +34,20 @@ function verifyPackagedDaemonEntryBoots(resourcesDir, options = {}) {
   const execPath = options.execPath || process.execPath
   const entryPath = assertPackagedDaemonEntryExists(resourcesDir)
 
-  const result = spawnSync(execPath, [entryPath], { encoding: 'utf8', timeout: 10_000 })
+  // Why: right after packing, dlopen of the freshly written native modules can
+  // block in dyld (fcntl) while the OS still holds them — observed clearing
+  // within seconds, so a timed-out boot waits and retries before failing the
+  // whole build. Only ETIMEDOUT retries; real boot failures surface immediately.
+  let result
+  for (let attempt = 0; ; attempt += 1) {
+    result = spawnSync(execPath, [entryPath], { encoding: 'utf8', timeout: 10_000 })
+    const timedOut = result.error && /ETIMEDOUT/.test(String(result.error.message || ''))
+    if (!timedOut || attempt >= 2) {
+      break
+    }
+    console.log('[verify-packaged-daemon-entry] boot timed out; retrying after settle window')
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5_000)
+  }
   if (result.error) {
     throw new Error(
       `[verify-packaged-daemon-entry] could not launch daemon-entry.js: ${result.error.message}`

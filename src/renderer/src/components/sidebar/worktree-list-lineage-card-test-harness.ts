@@ -233,6 +233,12 @@ export function createDropdownMenuModuleMock(): Record<string, unknown> {
       React.createElement(React.Fragment, null, children),
     DropdownMenuItem: ({ children }: { children: React.ReactNode }) =>
       React.createElement('div', null, children),
+    DropdownMenuCheckboxItem: ({ children }: { children: React.ReactNode }) =>
+      React.createElement('div', null, children),
+    DropdownMenuRadioGroup: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    DropdownMenuRadioItem: ({ children }: { children: React.ReactNode }) =>
+      React.createElement('div', null, children),
     DropdownMenuLabel: ({ children }: { children: React.ReactNode }) =>
       React.createElement('div', null, children),
     DropdownMenuSeparator: () => React.createElement('hr'),

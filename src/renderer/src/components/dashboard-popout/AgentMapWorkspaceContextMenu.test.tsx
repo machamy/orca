@@ -374,4 +374,67 @@ describe('Agent Map workspace context menu', () => {
     })
     expect(screen.queryByText('Create new worktree for Orca')).not.toBeInTheDocument()
   })
+
+  // Fork: the Unity seed-confirm dialog outlives the menu; the Agent Map
+  // wrapper must stay mounted (lifecyclePending) until it settles, or the
+  // dialog dies mid-question when the menu closes.
+  it('keeps the unity confirm dialog mounted after the menu closes', async () => {
+    const localRepo = { ...repo, executionHostId: undefined } satisfies Repo
+    const localWorktree = { ...worktree, hostId: 'local' } satisfies Worktree
+    useAppStore.setState({
+      repos: [localRepo],
+      worktreesByRepo: { [localRepo.id]: [localWorktree, parentWorktree] }
+    })
+    const previousApi = (window as { api?: unknown }).api
+    Object.assign(window, {
+      api: {
+        ...(previousApi as object),
+        unity: {
+          worktreeStatus: vi.fn().mockResolvedValue({
+            isUnityProject: true,
+            editorVersion: '6000.3.16f1',
+            editorInstalled: true,
+            worktreeHasLibrary: false,
+            sourceHasLibrary: true,
+            riderInstalled: false
+          }),
+          seedWorktreeCache: vi.fn().mockResolvedValue({ seeded: true }),
+          openProject: vi.fn().mockResolvedValue({ opened: true }),
+          openInRider: vi.fn().mockResolvedValue({ opened: true, target: 'solution' })
+        }
+      }
+    })
+    try {
+      render(
+        <TooltipProvider>
+          <AgentMap
+            cards={[card]}
+            now={NOW}
+            workspaceContextMenusEnabled
+            onOpenTerminal={() => {}}
+          />
+        </TooltipProvider>
+      )
+      const ring = screen.getByRole('button', { name: 'Open Agent map worktree details' })
+
+      fireEvent.contextMenu(ring)
+      const openUnity = await screen.findByText('Open in Unity', {}, { timeout: 5_000 })
+      fireEvent.pointerDown(openUnity, { button: 0 })
+      fireEvent.click(openUnity)
+
+      // Selecting closes the menu; the confirm dialog must survive that.
+      expect(
+        await screen.findByText('Copy the Unity cache first?', {}, { timeout: 5_000 })
+      ).toBeInTheDocument()
+      await waitFor(() => expect(screen.queryByText('Open in Unity')).not.toBeInTheDocument())
+      expect(screen.getByText('Copy the Unity cache first?')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() =>
+        expect(screen.queryByText('Copy the Unity cache first?')).not.toBeInTheDocument()
+      )
+    } finally {
+      Object.assign(window, { api: previousApi })
+    }
+  })
 })

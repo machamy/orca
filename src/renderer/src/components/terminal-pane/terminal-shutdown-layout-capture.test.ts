@@ -91,6 +91,78 @@ function mockRootForSplit(firstPaneId = 1, secondPaneId = 2): HTMLDivElement {
 }
 
 describe('captureTerminalShutdownLayout', () => {
+  it('keeps split leaves the manager no longer holds', async () => {
+    // Live regression: a default-worktree switch sleeps while panes are being
+    // torn down, so the manager can hold one pane of a three-pane split. The
+    // capture re-serialized the tree from what it could see and the split was
+    // persisted as a single leaf — a 3-pane all-claude tab came back as 1 pane
+    // with no teardown breadcrumb anywhere, because nothing was "torn down".
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const SECOND_LEAF = '99999999-9999-4999-8999-999999999999'
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => '') }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+    const existingRoot = {
+      type: 'split' as const,
+      direction: 'vertical' as const,
+      first: { type: 'leaf' as const, leafId: LEAF_ID },
+      second: { type: 'leaf' as const, leafId: SECOND_LEAF }
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1, LEAF_ID),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: existingRoot,
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null
+      } as never
+    })
+
+    expect(layout.root).toEqual(existingRoot)
+  })
+
+  it('still narrows to what the manager holds when the tree has no extra leaves', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: mockTerminal(1_000),
+      serializeAddon: { serialize: vi.fn(() => '') }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1, LEAF_ID),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: {},
+      existingLayout: {
+        root: { type: 'leaf', leafId: LEAF_ID },
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null
+      } as never
+    })
+
+    expect(layout.root).toEqual({ type: 'leaf', leafId: LEAF_ID })
+  })
+
   it('flushes queued terminal output before serializing shutdown scrollback', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const order: string[] = []

@@ -21,6 +21,7 @@ import {
 } from './indentation'
 import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
+import { canSwitchWorktreeToDefault } from '../../default-worktree-switch-eligibility'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
 import type { WorktreePointerDrag, WorktreeRowDragState } from '../drag/row-state'
@@ -35,6 +36,11 @@ export type WorktreeItemRowContext = {
   worktreeDragState: WorktreeRowDragState
   worktreePointerDragRef: React.MutableRefObject<WorktreePointerDrag | null>
   nativeLineageDropTargetId: string | null
+  // Fork: default-worktree switch entry points (context menu + drag target ring).
+  defaultSwitchDropTargetId: string | null
+  onDefaultSwitchRequest?: (worktree: Worktree) => void
+  findDefaultWorktree?: (repoId: string) => Worktree | undefined
+  worktreeMap: ReadonlyMap<string, Worktree>
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
@@ -147,6 +153,31 @@ export function renderWorktreeItemRow(
     (!ctx.activeWorkspaceExecutionHostId ||
       worktreeIdentity ===
         composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, itemRow.worktree.id))
+  // Fork: the repo-path checkout wears the Default badge; only eligible rows get
+  // the make-default menu action (the default row itself must not offer it).
+  const defaultWorktreeForRepo = ctx.findDefaultWorktree?.(itemRow.worktree.repoId)
+  const canStartDefaultSwitch =
+    ctx.onDefaultSwitchRequest !== undefined &&
+    canSwitchWorktreeToDefault({
+      source: itemRow.worktree,
+      target: defaultWorktreeForRepo,
+      repo: itemRow.repo,
+      draggedCount: 1
+    })
+  // Fork: while an eligible drag is over the list, the default row grows a
+  // "Make default" drop zone; the ring lights up when the pointer is on it.
+  const dragSourceForDefaultSwitch = ctx.worktreeDragState.draggingWorktreeId
+    ? ctx.worktreeMap.get(ctx.worktreeDragState.draggingWorktreeId)
+    : undefined
+  const showDefaultSwitchDropTarget =
+    ctx.onDefaultSwitchRequest !== undefined &&
+    canSwitchWorktreeToDefault({
+      source: dragSourceForDefaultSwitch,
+      target: itemRow.worktree,
+      repo: itemRow.repo,
+      draggedCount: ctx.worktreePointerDragRef.current?.draggedIds.length ?? 1
+    })
+  const isDefaultSwitchDropTarget = ctx.defaultSwitchDropTargetId === itemRow.worktree.id
   return (
     <div
       key={itemRow.rowKey}
@@ -197,6 +228,7 @@ export function renderWorktreeItemRow(
           isActiveWorktree && !forceActiveSurface ? ctx.getActiveSurfaceVariant(itemRow) : 'primary'
         }
         isMultiSelected={ctx.selectedWorktreeIds.has(worktreeIdentity)}
+        showUnityTint
         revealHighlight={ctx.highlightedRevealRowKey === itemRow.rowKey}
         revealHighlightTone={
           ctx.agentSendTargetWorktreeId === itemRow.worktree.id ? 'ai' : 'default'
@@ -212,6 +244,10 @@ export function renderWorktreeItemRow(
         onContextMenuSelect={ctx.onContextMenuSelect}
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
+        isDefaultWorktree={defaultWorktreeForRepo?.id === itemRow.worktree.id}
+        showDefaultSwitchDropTarget={showDefaultSwitchDropTarget}
+        isDefaultSwitchDropTarget={isDefaultSwitchDropTarget}
+        onDefaultSwitchRequest={canStartDefaultSwitch ? ctx.onDefaultSwitchRequest : undefined}
         hideRepoBadge={ctx.groupBy === 'repo'}
         // Why: pinned worktrees mix repos in one section, so only it needs the leading repo identity chip.
         hostContextLabel={itemRow.hostContextLabel}

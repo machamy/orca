@@ -146,6 +146,10 @@ export type RepoUpdate = Partial<
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
     | 'projectGroupOrder'
+    | 'unityAutoSeedCache'
+    | 'unityWorktreeTint'
+    | 'unityTintInSidebar'
+    | 'unityTintOverrides'
   >
 > & {
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null

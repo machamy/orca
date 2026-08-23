@@ -13,7 +13,8 @@ function mergePendingMount(detail: BackgroundMountTerminalWorktreeDetail): void 
   if (!existing) {
     pendingMounts.set(detail.worktreeId, {
       worktreeId: detail.worktreeId,
-      ...(detail.tabIds !== undefined ? { tabIds: [...new Set(detail.tabIds)] } : {})
+      ...(detail.tabIds !== undefined ? { tabIds: [...new Set(detail.tabIds)] } : {}),
+      ...(detail.narrowExisting ? { narrowExisting: true } : {})
     })
     return
   }
@@ -23,7 +24,8 @@ function mergePendingMount(detail: BackgroundMountTerminalWorktreeDetail): void 
   }
   pendingMounts.set(detail.worktreeId, {
     worktreeId: detail.worktreeId,
-    tabIds: [...new Set([...existing.tabIds, ...detail.tabIds])]
+    tabIds: [...new Set([...existing.tabIds, ...detail.tabIds])],
+    ...(existing.narrowExisting || detail.narrowExisting ? { narrowExisting: true } : {})
   })
 }
 
@@ -104,7 +106,8 @@ export function applyBackgroundMountTabRestriction(
   restrictions: Map<string, ReadonlySet<string>>,
   mountedWorktreeIds: ReadonlySet<string>,
   worktreeId: string | undefined,
-  tabIds: readonly string[] | undefined
+  tabIds: readonly string[] | undefined,
+  narrowExisting = false
 ): void {
   if (!worktreeId) {
     return
@@ -113,7 +116,7 @@ export function applyBackgroundMountTabRestriction(
   // Why: a worktree mounted without a restriction is fully mounted (the user
   // visited it, or a legacy whole-worktree mount ran); narrowing it
   // retroactively would unmount live panes.
-  if (mountedWorktreeIds.has(worktreeId) && !existing) {
+  if (mountedWorktreeIds.has(worktreeId) && !existing && !narrowExisting) {
     return
   }
   if (!tabIds) {

@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { remapPathInsideWorktreeRoot } from '../../../../../../shared/cross-platform-path'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
@@ -76,8 +77,21 @@ export function buildWorktreeRenameState(
   }
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
+  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+  const withRemappedStartupCwd = <T extends { startupCwd?: string }>(value: T): T => {
+    if (!value.startupCwd || !oldWorktreePath || !newWorktreePath) {
+      return value
+    }
+    const remapped = remapPathInsideWorktreeRoot(oldWorktreePath, newWorktreePath, value.startupCwd)
+    return remapped === null ? value : { ...value, startupCwd: remapped }
+  }
   const renameValueByKey: Partial<Record<(typeof WORKTREE_ID_KEYED_MAP_KEYS)[number], unknown>> = {
-    tabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
+    // Fork: cold restore spawns at tab.startupCwd ?? workspace.path; a live tab
+    // whose startupCwd still points into the old home would resume in the
+    // wrong checkout after the swap.
+    tabsByWorktree: (tabs: { worktreeId: string; startupCwd?: string }[]) =>
+      tabs.map((tab) => withRemappedStartupCwd(withNewWorktreeId(tab))),
     browserTabsByWorktree: (workspaces: { worktreeId: string }[]) =>
       workspaces.map(withNewWorktreeId),
     recentlyClosedBrowserTabsByWorktree: (
@@ -88,6 +102,16 @@ export function buildWorktreeRenameState(
         workspace: withNewWorktreeId(snapshot.workspace),
         pages: snapshot.pages.map(withNewWorktreeId)
       })),
+    // Fork: the values are absolute dir paths under the old root — without the
+    // remap the file tree renders fully collapsed in both swapped workspaces.
+    expandedDirs: (dirs: Set<string>) =>
+      oldWorktreePath && newWorktreePath
+        ? new Set(
+            [...dirs].map(
+              (dir) => remapPathInsideWorktreeRoot(oldWorktreePath, newWorktreePath, dir) ?? dir
+            )
+          )
+        : dirs,
     fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
       ...searchState,
       resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
@@ -99,12 +123,25 @@ export function buildWorktreeRenameState(
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
   }
   // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
-  renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
-    files.map(withNewWorktreeId)
+  // Fork: reopen-closed-tab loads snapshot.filePath verbatim — an un-remapped
+  // path serves the OTHER checkout's file after a move/swap.
+  renameKey(
+    'recentlyClosedEditorTabsByWorktree',
+    (files: { worktreeId: string; filePath?: string }[]) =>
+      files.map((file) => {
+        const moved = withNewWorktreeId(file)
+        if (!moved.filePath || !oldWorktreePath || !newWorktreePath) {
+          return moved
+        }
+        const remapped = remapPathInsideWorktreeRoot(
+          oldWorktreePath,
+          newWorktreePath,
+          moved.filePath
+        )
+        return remapped === null ? moved : { ...moved, filePath: remapped }
+      })
   )
   // Why: terminal reopen snapshots hold absolute startupCwd paths under the old folder; remap or Cmd+Shift+T respawns into a directory that no longer exists after the rename.
-  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
-  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
   renameKey('recentlyClosedTerminalTabsByWorktree', (snapshots: ClosedTerminalTabSnapshot[]) =>
     oldWorktreePath && newWorktreePath
       ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
@@ -159,8 +196,25 @@ export function buildWorktreeRenameState(
         ])
       )
     : s.sleepingAgentSessionsByPaneKey
+  // Fork (default-worktree switch): live agent rows carry a worktreeId used for
+  // sidebar attribution when the tab lookup misses; stale ids strand the chip
+  // on the swapped-away side.
+  const currentAgentStatuses = s.agentStatusByPaneKey ?? {}
+  const agentStatusByPaneKey = Object.values(currentAgentStatuses).some(
+    (entry) => entry.worktreeId === oldWorktreeId
+  )
+    ? Object.fromEntries(
+        Object.entries(currentAgentStatuses).map(([paneKey, entry]) => [
+          paneKey,
+          entry.worktreeId === oldWorktreeId ? { ...entry, worktreeId: newWorktreeId } : entry
+        ])
+      )
+    : s.agentStatusByPaneKey
 
   return {
+    ...(agentStatusByPaneKey !== s.agentStatusByPaneKey
+      ? { agentStatusByPaneKey, agentStatusEpoch: s.agentStatusEpoch + 1 }
+      : {}),
     ...(renamed as Partial<AppState>),
     ...(openFiles !== s.openFiles ? { openFiles } : {}),
     ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),

@@ -1,5 +1,6 @@
 import React from 'react'
-import { GitMerge } from 'lucide-react'
+import { GitMerge, MonitorUp } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
@@ -39,6 +40,7 @@ export function WorktreeCardMetaRow({
     showBranch,
     showDetachedHeadInMetaRow,
     showConflictOperationBadge,
+    isDefaultWorktree,
     showMetaRowDetails,
     detailsAndPorts
   } = presentation
@@ -102,6 +104,16 @@ export function WorktreeCardMetaRow({
             {CONFLICT_OPERATION_LABELS[conflictOperation]}
           </Badge>
         )}
+
+        {isDefaultWorktree ? (
+          <Badge
+            variant="secondary"
+            className="h-[16px] shrink-0 gap-1 rounded border border-worktree-sidebar-border px-1.5 text-[10px] font-medium"
+          >
+            <MonitorUp className="size-2.5" />
+            {translate('auto.components.sidebar.WorktreeCard.defaultWorktree', 'Default')}
+          </Badge>
+        ) : null}
 
         {cacheStartedAt != null && <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />}
       </div>

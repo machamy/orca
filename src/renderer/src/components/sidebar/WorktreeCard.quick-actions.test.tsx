@@ -382,7 +382,8 @@ describe('WorktreeCard quick actions', () => {
         worktree={makeWorktree({
           displayName: 'main',
           branch: 'main',
-          isMainWorktree: true
+          isMainWorktree: true,
+          path: '/repo'
         })}
         repo={makeRepo()}
         isActive={false}
@@ -404,7 +405,8 @@ describe('WorktreeCard quick actions', () => {
         worktree={makeWorktree({
           displayName: 'main',
           branch: 'main',
-          isMainWorktree: true
+          isMainWorktree: true,
+          path: '/repo'
         })}
         repo={makeRepo()}
         isActive={false}

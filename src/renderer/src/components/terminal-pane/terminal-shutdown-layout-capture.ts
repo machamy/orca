@@ -4,7 +4,10 @@ import type { PtyTransport } from './pty-transport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
-import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
+import {
+  collectTerminalLayoutLeafIds,
+  resolveTerminalLayoutActiveLeafId
+} from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
 import { getUtf8ByteLength, measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
@@ -131,13 +134,27 @@ export function captureTerminalShutdownLayout({
   }
 
   const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
-  const layout = serializeTerminalLayout(
+  const serialized = serializeTerminalLayout(
     container,
     activePaneId,
     expandedPaneId,
     new Map(panes.map((pane) => [pane.id, pane.leafId]))
   )
   const currentLeafIds = new Set(panes.map((p) => p.leafId))
+  // Why keep the existing tree when it holds leaves the manager does not: this
+  // rebuilds the layout from the MOUNTED panes, so a pane that is already
+  // unmounted when shutdown runs is dropped from the persisted split for good.
+  // A default-worktree switch sleeps while panes are being torn down, and a
+  // 3-pane all-claude split came back as 1 pane with no teardown breadcrumb of
+  // any kind — the split had simply been re-serialized from one surviving pane.
+  // Shutdown is never a user's intent to close a pane, so a shrink here is an
+  // artifact; the wake remounts whatever the tree still names.
+  const mountedLeafIds = new Set<string>(panes.map((pane) => String(pane.leafId)))
+  const dropped = [...collectTerminalLayoutLeafIds(existingLayout?.root)].some(
+    (leafId) => !mountedLeafIds.has(leafId)
+  )
+  const layout =
+    dropped && existingLayout?.root ? { ...serialized, root: existingLayout.root } : serialized
   const livePtyIdsByLeafId: Record<string, string> = {}
   const preservedPtyIdsByLeafId: Record<string, string> = {}
   for (const pane of panes) {

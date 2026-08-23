@@ -1,7 +1,14 @@
 /* oxlint-disable max-lines -- Why: this App-level IPC bridge intentionally keeps the renderer's main-process event contract in one place so shortcut, runtime, updater, and agent-status wiring do not drift across files. */
 import { useEffect } from 'react'
+import { createDefaultSwitchCompletionGate } from '@/lib/default-worktree-switch-completion-gate'
+import { filterReseedableSleepingRecords } from '@/lib/agent-provider-session-single-owner'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
+import {
+  armWorktreeIdentityGrace,
+  isWorktreeIdentityShielded,
+  sweepExpiredWorktreeIdentityGrace
+} from '@/store/worktree-identity-grace'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
@@ -10,8 +17,24 @@ import { activateAndRevealWorktree, activateAndRevealWorkspace } from '@/lib/wor
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
-import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
+import {
+  createBackgroundSleepingAgentWakeDispatcher,
+  wakeFollowedSleptAgentsForWorktree
+} from '@/lib/wake-sleeping-agents-in-background'
+import { consumeDefaultSwitchWake } from '@/lib/default-worktree-switch-post-wake'
+import { scheduleFollowSwitchPaneRespawn } from '@/lib/default-worktree-switch-pane-respawn'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import {
+  endDefaultSwitchSleepGuard,
+  beginDefaultSwitchTeardownWindow,
+  endDefaultSwitchTeardownWindow,
+  isInDefaultSwitchTeardownWindow
+} from '@/lib/default-worktree-switch-sleep-guard'
+import { registerForkUiIpcListeners } from './fork-ui-ipc-listeners'
+import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
+import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
@@ -42,7 +65,8 @@ import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contr
 import type {
   RuntimeBrowserDriverState,
   RuntimeTerminalPresentation,
-  RuntimeTerminalDriverState
+  RuntimeTerminalDriverState,
+  RuntimeWorktreeIdentityMigration
 } from '../../../shared/runtime-types'
 import { zoomLevelToPercent } from '@/components/settings/SettingsConstants'
 import { stepUIZoomLevel } from '../../../shared/ui-zoom-level'
@@ -309,9 +333,6 @@ const MAX_PENDING_AGENT_STATUS_EVENTS = 100
 const LIVE_AGENT_STATUS_BURST_WINDOW_MS = 33
 // Why: mobile driver hydration is async; cap replay so a stuck IPC snapshot can't retain an unbounded startup buffer.
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
-// Why: a rename's event burst lags the on-disk move; shield both ids from the deletion diff for a grace window.
-const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
-const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function isAgentStatusForRecentlyClosedTab(
   store: Pick<AppState, 'recentlyClosedAgentStatusTabIds' | 'recentlyRetiredAgentStatusPaneKeys'>,
@@ -807,19 +828,24 @@ export function useIpcEvents(): void {
     const handleWorktreesChanged = async (
       repoId: string,
       renamed?: { oldWorktreeId: string; newWorktreeId: string },
-      options?: { forceLocalOwner?: boolean; executionHostId?: ExecutionHostId }
+      options?: { forceLocalOwner?: boolean; executionHostId?: ExecutionHostId },
+      migrations?: readonly RuntimeWorktreeIdentityMigration[]
     ): Promise<void> => {
       const localRefreshStartedWithRuntime =
         options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
       // Why: capture active-ness before migration moves the pointer; re-key maps before the diff so a rename isn't a deletion.
-      const renamedWasActive =
-        renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
-      if (renamed) {
+      const identityMigrations = migrations?.length ? migrations : renamed ? [renamed] : []
+      const activeBeforeMigration = useAppStore.getState().activeWorktreeId
+      let activeAfterMigration = activeBeforeMigration
+      for (const migration of identityMigrations) {
+        if (activeAfterMigration === migration.oldWorktreeId) {
+          activeAfterMigration = migration.newWorktreeId
+        }
         // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
-        const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
-        recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)
-        recentlyRenamedWorktreeIdExpiry.set(renamed.newWorktreeId, expiry)
-        useAppStore.getState().migrateWorktreeIdentity(renamed.oldWorktreeId, renamed.newWorktreeId)
+        armWorktreeIdentityGrace([migration.oldWorktreeId, migration.newWorktreeId])
+        useAppStore
+          .getState()
+          .migrateWorktreeIdentity(migration.oldWorktreeId, migration.newWorktreeId)
       }
       // Why: diff before/after fetch to catch out-of-band deletions and purge worktree state, else zombie ptyId entries leak (design §2c, §4.4).
       const state = useAppStore.getState()
@@ -847,17 +873,211 @@ export function useIpcEvents(): void {
               : undefined
         )
       // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
-      if (renamedWasActive && renamed) {
-        useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
+      if (activeBeforeMigration && activeAfterMigration !== activeBeforeMigration) {
+        useAppStore.getState().setActiveWorktree(activeAfterMigration)
+      }
+      // Follow-mode "agents follow their branch": resume slept agents here — only
+      // after the migrations above swapped their session content between the two
+      // workspaces, so each wakes in the worktree that now holds its branch.
+      const followWake = consumeDefaultSwitchWake(identityMigrations)
+      // TEMP mode-B diagnostics: land in main.trace.ndjson so a single real
+      // follow switch reveals whether migrations arrived, the wake fired, and
+      // whether it found any slept records under the (post-migration) ids.
+      if (identityMigrations.length > 0) {
+        const sleeping = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey ?? {})
+        const recordWorktreeIds = new Set(sleeping.map((r) => r.worktreeId))
+        recordRendererCrashBreadcrumb('mode_b_follow', {
+          migrations: identityMigrations.length,
+          migrOld0: identityMigrations[0]?.oldWorktreeId ?? null,
+          migrNew0: identityMigrations[0]?.newWorktreeId ?? null,
+          wakeFired: followWake.worktreeIds.length,
+          activate: followWake.activateWorktreeId,
+          sleepingTotal: sleeping.length,
+          recordWorktreeIds: [...recordWorktreeIds].join(' | ') || null,
+          wakeTarget0: followWake.worktreeIds[0] ?? null,
+          wakeTarget0Records: followWake.worktreeIds[0]
+            ? sleeping.filter((r) => r.worktreeId === followWake.worktreeIds[0]).length
+            : 0,
+          wakeTarget1: followWake.worktreeIds[1] ?? null,
+          wakeTarget1Records: followWake.worktreeIds[1]
+            ? sleeping.filter((r) => r.worktreeId === followWake.worktreeIds[1]).length
+            : 0
+        })
+      }
+      if (followWake.worktreeIds.length > 0) {
+        // Swap-window state churn has been observed deleting the fresh sleeping
+        // records before this point (observed live: 2 captured -> 0 by wake).
+        // Re-seed the queued snapshots (already re-keyed through the migrations)
+        // so the wake always has its records.
+        const stateForReseed = useAppStore.getState()
+        // Why session-aware and not paneKey-absence alone: a record that was
+        // legitimately CONSUMED (forked to a new tab, resumed under another
+        // paneKey) also leaves its old paneKey empty, and reseeding it minted a
+        // second record for the same provider session — observed live as one
+        // Claude session open in two panes.
+        const missingRecords = filterReseedableSleepingRecords(
+          followWake.records,
+          stateForReseed.sleepingAgentSessionsByPaneKey,
+          Object.values(stateForReseed.agentStatusByPaneKey).map((entry) => ({
+            worktreeId: entry.worktreeId,
+            agent: entry.agentType,
+            providerSession: entry.providerSession,
+            state: entry.state
+          }))
+        )
+        if (missingRecords.length > 0) {
+          recordRendererCrashBreadcrumb('mode_b_reseed', {
+            missing: missingRecords.length,
+            snapshot: followWake.records.length
+          })
+          stateForReseed.reseedSleepingAgentSessions(missingRecords)
+        }
+        // Open editor tabs follow their branch too: their absolute filePath (and
+        // the id-keyed satellite state) still points into the old home, so files
+        // fail to load — or silently show the OTHER branch — after the swap.
+        // Mirror the 3-step id migration with the editor path-rekey machinery
+        // (selPath -> tempPath, defaultPath -> selPath, tempPath -> defaultPath).
+        if (identityMigrations.length === 3) {
+          const selPath = splitWorktreeIdForFilesystem(
+            identityMigrations[0].oldWorktreeId
+          )?.worktreePath
+          const tempPath = splitWorktreeIdForFilesystem(
+            identityMigrations[0].newWorktreeId
+          )?.worktreePath
+          const defaultPath = splitWorktreeIdForFilesystem(
+            identityMigrations[1].oldWorktreeId
+          )?.worktreePath
+          const defaultWorktreeId = identityMigrations[2].newWorktreeId
+          const selWorktreeId = identityMigrations[1].newWorktreeId
+          if (selPath && tempPath && defaultPath) {
+            const steps: { fromPath: string; toPath: string; worktreeId: string }[] = [
+              { fromPath: selPath, toPath: tempPath, worktreeId: defaultWorktreeId },
+              { fromPath: defaultPath, toPath: selPath, worktreeId: selWorktreeId },
+              { fromPath: tempPath, toPath: defaultPath, worktreeId: defaultWorktreeId }
+            ]
+            for (const step of steps) {
+              const rekeyed = remapOpenEditorTabsForPathChange({
+                fromPath: step.fromPath,
+                toPath: step.toPath,
+                worktreePath: step.toPath,
+                worktreeId: step.worktreeId,
+                includeRefScopedDiffTabs: true
+              })
+              if (!rekeyed.ok) {
+                recordRendererCrashBreadcrumb('mode_b_editor_rekey_failed', {
+                  reason: rekeyed.reason
+                })
+                break
+              }
+            }
+          }
+        }
+        // Panes with no sleeping record (plain shells) still hold PTY ids that
+        // embed the pre-swap worktree — the sleep killed those sessions, and a
+        // pane that attaches to one paints nothing and gets reconciled closed,
+        // losing its tab or its split sibling. Drop the ids so they respawn.
+        const releasedShellTabs = useAppStore
+          .getState()
+          .releaseFollowSwitchShellPtyBindings(followWake.worktreeIds)
+        if (releasedShellTabs > 0) {
+          recordRendererCrashBreadcrumb('mode_b_shell_release', { tabs: releasedShellTabs })
+        }
+        // The switch's own wake is about to run — lift the sleep guard so its
+        // mounts can cold-restore (pane-side spawns were blocked during the swap
+        // to keep the records for this exact moment).
+        // Scoped to this switch: the global wipe disarmed a DIFFERENT switch's
+        // guards, so its still-landing PTY kills took the unsuppressed branch.
+        endDefaultSwitchSleepGuard(followWake.worktreeIds)
+        // Activate the promoted worktree first: cold-restore only surfaces a
+        // working agent in its own pane when its worktree is active — otherwise
+        // the resume forks a hidden background tab and the move looks like loss.
+        if (followWake.activateWorktreeId) {
+          useAppStore.getState().setActiveWorktree(followWake.activateWorktreeId)
+        }
+        // Why the marker outlives the wake: releasing it here let a second switch
+        // in — the sweeps run for another 75s, and a request admitted inside that
+        // window re-ran the identity migration and left a tab keyed under BOTH
+        // worktrees. Observed with two requests two seconds apart, which is what
+        // a user retrying a failed switch produces. Readiness bounds the marker
+        // with its own staleness window, so a wedged sweep cannot pin it forever.
+        // Hands the lock back as soon as both sides report a clean sweep; the
+        // marker stays so the card keeps saying the checks are still running.
+        // The gates act on the marker with its OWNER token, captured now: a
+        // fallback timer surviving from a superseded switch used to clear the
+        // NEXT switch's claim mid-git. If the marker is not ours (a rival took
+        // over between the swap and this wake), every gate action no-ops.
+        const wakeMarker = useAppStore.getState().defaultSwitchInFlight
+        const wakeToken =
+          wakeMarker && followWake.worktreeIds.every((id) => wakeMarker.worktreeIds.includes(id))
+            ? wakeMarker.token
+            : null
+        const verifiedGate = createDefaultSwitchCompletionGate(followWake.worktreeIds, () =>
+          useAppStore.getState().downgradeDefaultSwitchBlocking(wakeToken, { phase: 'verifying' })
+        )
+        const settleGate = createDefaultSwitchCompletionGate(
+          followWake.worktreeIds,
+          () => useAppStore.getState().releaseDefaultSwitch(wakeToken),
+          // The last sweep lands 75s after the wake; give it a margin and then
+          // release regardless, so a sweep that never reports cannot pin the flow.
+          { fallbackAfterMs: 105_000 }
+        )
+        useAppStore.getState().setDefaultSwitchProgress({ phase: 'restoring' }, wakeToken)
+        for (const worktreeId of followWake.worktreeIds) {
+          wakeFollowedSleptAgentsForWorktree(worktreeId)
+        }
+        // The rebuild races the teardown: panes can land mounted with no PTY and
+        // nothing retries them. Sweep for tabs short of live PTYs and remount.
+        // Re-arm the teardown window for the whole recovery: it was armed
+        // before the sleep, and a git swap longer than its 90s TTL left the
+        // sweeps disowned — every one bailed on isOwned and the panes stayed
+        // empty until the next switch. onSweepsComplete still hands it back.
+        beginDefaultSwitchTeardownWindow(followWake.worktreeIds)
+        scheduleFollowSwitchPaneRespawn(followWake.worktreeIds, {
+          // Why: a sweep that outlives the teardown window would remount panes
+          // whose exits are no longer suppressed, and the resulting exit closes
+          // single-pane tabs outright.
+          isOwned: () =>
+            followWake.worktreeIds.some((worktreeId) =>
+              isInDefaultSwitchTeardownWindow(worktreeId)
+            ),
+          getState: () => useAppStore.getState(),
+          remountTab: (tabId) => {
+            // Why: a short tab's leaves still name the sessions the sleep killed.
+            // The ids pass the ownership check after a swap-back (they embed the
+            // current worktree), so the remount would REATTACH to a dead session
+            // and stay blank — observed as a 3-pane split stuck at one live pane
+            // across every later switch. Drop the dead bindings so it spawns.
+            useAppStore.getState().clearDeadLeafPtyBindings([tabId])
+            useAppStore.getState().remountTerminalTabForRecovery(tabId)
+          },
+          onSweep: (tabIds, attempt) => {
+            // The sweeps run for up to 75s after the wake; without a stage the
+            // card looked finished while panes were still coming back.
+            useAppStore.getState().setDefaultSwitchProgress({ phase: 'settling' }, wakeToken)
+            recordRendererCrashBreadcrumb('mode_b_respawn_sweep', {
+              attempt,
+              tabs: tabIds.map((id) => id.slice(0, 8)).join(',')
+            })
+          },
+          // Hand teardown back once recovery is done rather than letting the
+          // window run out: a real exit inside it is swallowed with no sweep
+          // left to repair the pane, so the tab stays present but dead.
+          // Why an early hand-back: the checks run for 75s, but the state a rival
+          // switch could corrupt is settled once every pane is whole again. Holding
+          // the lock for the whole window made a healthy swap spin for 75 seconds.
+          onSweepFoundNothing: (worktreeId) => {
+            verifiedGate.complete(worktreeId)
+          },
+          onSweepsComplete: (worktreeId) => {
+            endDefaultSwitchTeardownWindow([worktreeId])
+            settleGate.complete(worktreeId)
+          }
+        })
       }
       // Sweep expired rename-grace entries before any early return, else forced-local
       // (or non-authoritative) events let the map grow for the session.
       const now = Date.now()
-      for (const [id, expiry] of recentlyRenamedWorktreeIdExpiry) {
-        if (expiry <= now) {
-          recentlyRenamedWorktreeIdExpiry.delete(id)
-        }
-      }
+      sweepExpiredWorktreeIdentityGrace(now)
       // Why: the deletion diff below is repo-wide, but a forced-local scan overlapping
       // a runtime cannot prove remote absence (legacy runtime rows may lack hostId).
       // fetchWorktrees still purges removed local rows host-scoped; accepted gap: the
@@ -879,8 +1099,7 @@ export function useIpcEvents(): void {
           continue
         }
         // A recently renamed worktree's old/new id isn't a deletion — its state moved to the new id; the list just lags.
-        const graceExpiry = recentlyRenamedWorktreeIdExpiry.get(id)
-        if (graceExpiry != null && graceExpiry > now) {
+        if (isWorktreeIdentityShielded(id, now)) {
           continue
         }
         removed.push(id)
@@ -1130,7 +1349,28 @@ export function useIpcEvents(): void {
         async (data: {
           repoId: string
           renamed?: { oldWorktreeId: string; newWorktreeId: string }
+          migrations?: readonly RuntimeWorktreeIdentityMigration[]
+          shieldOnly?: boolean
         }) => {
+          // Why: arm the purge shield on arrival, not when the queue drains — a refresh
+          // already in flight must not read the identity change's window as deletions.
+          const identityMigrations = data.migrations?.length
+            ? data.migrations
+            : data.renamed
+              ? [data.renamed]
+              : []
+          if (identityMigrations.length > 0) {
+            armWorktreeIdentityGrace(
+              identityMigrations.flatMap((migration) => [
+                migration.oldWorktreeId,
+                migration.newWorktreeId
+              ])
+            )
+          }
+          // A shield-only event precedes the on-disk move; the post-move event carries the migrations to apply.
+          if (data.shieldOnly) {
+            return
+          }
           // Why: preserve this event's local origin across queue delays and runtime
           // focus changes; otherwise an unbound repo can refresh from the wrong host.
           // A folder rename changes the worktree id; handleWorktreesChanged re-keys
@@ -1506,6 +1746,14 @@ export function useIpcEvents(): void {
         })
       })
     )
+
+    // Fork listeners are optional-called: upstream-derived test fixtures and
+    // web preloads may not carry them, and their absence just means the feature
+    // is not offered in that surface.
+    // Fork: the Unity auto-seed offer + CLI default-switch listeners live in
+    // fork-ui-ipc-listeners.ts; called here so registration order and the
+    // cleanup boundary stay exactly where the blocks used to be.
+    unsubs.push(...registerForkUiIpcListeners())
 
     unsubs.push(
       window.api.ui.onCreateTerminal(

@@ -18,6 +18,7 @@ import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
+import { useWorktreeDefaultSwitchDropCommit } from '../drag/use-default-switch-drop-commit'
 import { useWorktreeListKeyboardNavigation } from '../navigation/use-keyboard'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
@@ -101,6 +102,11 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     worktreeMap,
     worktreeLineageById,
     worktreeDragGroups: session.worktreeDragGroups
+  })
+  const defaultSwitchDrop = useWorktreeDefaultSwitchDropCommit({
+    repoMap,
+    worktreeMap,
+    onDefaultSwitchRequest: props.onDefaultSwitchRequest
   })
   const runtime = useWorktreeDragRuntime({
     worktreeDragSessionRef: session.worktreeDragSessionRef,
@@ -199,6 +205,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     workspaceStatuses,
     session,
     lineageDrop,
+    defaultSwitchDrop,
     runtime,
     onMoveWorktreesToStatus: props.onMoveWorktreesToStatus,
     onMoveWorktreesToStatusAtIndex: props.onMoveWorktreesToStatusAtIndex,

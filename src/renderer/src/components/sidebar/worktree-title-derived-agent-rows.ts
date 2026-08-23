@@ -153,7 +153,15 @@ function buildTitleDerivedAgentRow(args: {
     ? 'idle'
     : (classifyTitleActivity(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
   const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
-  if (!status || !label) {
+  // Why the owner may stand in for a title that classifies as nothing: an idle
+  // agent names its pane after the cwd, which is neither activity nor identity,
+  // and requiring a classifiable title dropped the row — a resumed codex read as
+  // a plain terminal after every default-worktree switch. Only a single-leaf tab
+  // resolves an owner (`resolveTitleDerivedPaneOwner` refuses a split), so this
+  // cannot brand a split pane with the tab-scoped launch agent.
+  // A bare shell name is the exception: it says the user left the agent and is
+  // sitting at a prompt, so the owner must not resurrect a row for it.
+  if ((!status || !label) && (!args.ownerAgentType || isBareShellTitle(title))) {
     return null
   }
   if (!isTerminalLeafId(args.leafId)) {
@@ -163,18 +171,32 @@ function buildTitleDerivedAgentRow(args: {
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
   const titleAgentType = isClaudeAgentsTitle
     ? 'claude'
-    : resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
+    : label
+      ? resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
+      : null
   // Why: a status frame proves activity, not identity, so the resolver drops it.
   // Hook-less agents over SSH (Codex, #8711; OpenCode's '. '/'* ' frames, #8940)
   // surface only decorated task titles; fall back to the pane's known owner instead
   // of hiding the pane. Safe because the `!status || !label` gate above already
   // rejects plain shell titles — this path must never manufacture a row from one.
-  const agentType = titleAgentType ?? args.ownerAgentType
+  // Why the launch agent may corroborate a split pane: `resolveTitleDerivedPaneOwner`
+  // refuses an owner for a split, and the identity resolver refuses a Claude-labelled
+  // title that does not literally say "claude" — so a 3-pane all-claude split whose
+  // panes are titled `✳ Remember token PANE-3` produced no rows at all and read as
+  // plain terminals. Requiring the title's OWN label to name this tab's agent keeps
+  // upstream's guard intact: a Claude-labelled title on a codex tab is contradictory
+  // evidence and still gets nothing.
+  const labelAgentType = label ? (TITLE_AGENT_LABEL_TO_TYPE[label] ?? null) : null
+  const launchIdentity = args.tab.launchAgent ?? null
+  const agentType =
+    titleAgentType ??
+    args.ownerAgentType ??
+    (labelAgentType && labelAgentType === launchIdentity ? labelAgentType : null)
   if (!agentType) {
     return null
   }
-  const rowLabel = titleAgentType ? label : formatAgentTypeLabel(agentType)
-  const rowState = titleStatusToRowState(status)
+  const rowLabel = titleAgentType && label ? label : formatAgentTypeLabel(agentType)
+  const rowState = status ? titleStatusToRowState(status) : 'idle'
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
   const entryState: AgentStatusState = rowState === 'waiting' ? 'waiting' : 'working'
@@ -238,6 +260,26 @@ export function resolveTitleDerivedAgentType(
     return null
   }
   return agentType
+}
+
+/** Titles that name a shell rather than any work being done in it. */
+const BARE_SHELL_TITLES = new Set([
+  'sh',
+  'bash',
+  'zsh',
+  'dash',
+  'ksh',
+  'ash',
+  'fish',
+  'nu',
+  'pwsh',
+  'powershell',
+  'cmd',
+  'cmd.exe'
+])
+
+function isBareShellTitle(title: string): boolean {
+  return BARE_SHELL_TITLES.has(title.trim().toLowerCase())
 }
 
 function resolveTitleDerivedPaneOwner(

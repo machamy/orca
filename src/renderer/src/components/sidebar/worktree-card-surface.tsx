@@ -1,5 +1,6 @@
 import React from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { LoaderCircle, MonitorUp } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 
 import { cn } from '@/lib/utils'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
@@ -8,14 +9,24 @@ import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails } from './WorktreeCardPorts'
 import { WorktreeCardParentContent } from './worktree-card-parent-content'
 import { buildWorktreeCardPresentation } from './worktree-card-presentation'
+import { WorktreeCardUnityTint } from './worktree-card-unity-tint'
+import { useWorktreeSidebarUnityTint } from './use-worktree-sidebar-unity-tint'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const presentation = buildWorktreeCardPresentation(card)
+  // Passing no repo is exactly "this surface has no Unity colour": no probe, no
+  // store slicing, nothing drawn — the kanban tile and the folder-workspace
+  // panel opt out because neither has the row geometry or the menu to change it.
+  const { hex: unityTintHex, mode: unityTintMode } = useWorktreeSidebarUnityTint(
+    card.worktree,
+    card.showUnityTint ? card.repo : null
+  )
   const {
     worktree,
     selectedWorktrees,
     onAssignWorkspaceStatus,
+    onDefaultSwitchRequest,
     affiliateListMode,
     isActiveSurface,
     activeSurfaceVariant,
@@ -24,6 +35,8 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     revealHighlightTone,
     flushSurface,
     isLineageDropTarget,
+    showDefaultSwitchDropTarget,
+    isDefaultSwitchDropTarget,
     nativeDragEnabled,
     lineageChildren,
     lineageChildrenStyle,
@@ -125,14 +138,19 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         'rounded-lg',
         // Why: the live data attribute updates before React state during navigation,
         // so it must own the complete active style without stale utility classes.
-        isLineageDropTarget
-          ? 'border border-accent-foreground/20 bg-accent/80'
-          : isActiveSurface
-            ? 'border border-transparent'
-            : isMultiSelected
-              ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-              : 'border border-transparent worktree-sidebar-card-hover',
+        isDefaultSwitchDropTarget
+          ? 'border border-worktree-sidebar-ring/50 bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40'
+          : isLineageDropTarget
+            ? 'border border-accent-foreground/20 bg-accent/80'
+            : isActiveSurface
+              ? 'border border-transparent'
+              : isMultiSelected
+                ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
+                : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
+        // Why: the wash sits at -z-10 so the row's glyphs stay above it; without a
+        // stacking context here it would drop behind the sidebar and disappear.
+        unityTintMode === 'wash' && 'isolate',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
           revealHighlightTone === 'ai' && 'scroll-to-current-workspace-reveal-highlight--ai'
@@ -154,6 +172,30 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       aria-busy={isDeleting}
       style={cardStyle}
     >
+      <WorktreeCardUnityTint
+        hex={unityTintHex}
+        mode={unityTintMode}
+        // A title-only card is padded py-2, so its title row sits 3px lower.
+        className={unityTintMode === 'chip' && titleOnlyCard ? 'top-[15.5px]' : undefined}
+      />
+      {showDefaultSwitchDropTarget ? (
+        <div
+          data-default-worktree-switch-drop-target={worktree.id}
+          className={cn(
+            'absolute inset-x-1 top-0 z-20 flex h-[34%] min-h-6 items-center justify-center gap-1.5 rounded-t-md border-b text-[10px] font-medium',
+            isDefaultSwitchDropTarget
+              ? 'border-worktree-sidebar-ring/50 bg-worktree-sidebar-accent text-foreground'
+              : 'border-worktree-sidebar-border bg-worktree-sidebar/95 text-muted-foreground'
+          )}
+          aria-label={translate(
+            'auto.components.sidebar.WorktreeCard.defaultSwitchDropAriaLabel',
+            'Move the selected worktree to the default project path'
+          )}
+        >
+          <MonitorUp className="size-3" />
+          {translate('auto.components.sidebar.WorktreeCard.defaultSwitchDropLabel', 'Make default')}
+        </div>
+      ) : null}
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
@@ -188,6 +230,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
           onAssignWorkspaceStatus={onAssignWorkspaceStatus}
+          onDefaultSwitchRequest={onDefaultSwitchRequest}
         >
           {cardBody}
         </WorktreeContextMenu>

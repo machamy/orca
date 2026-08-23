@@ -50,6 +50,8 @@ import {
   type PtySideEffectGauge
 } from './pty-side-effect-pending-census'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isInDefaultSwitchTeardownWindow } from '@/lib/default-worktree-switch-sleep-guard'
+import { retiredFreshSpawnKillOptions } from './retire-fresh-spawn-kill-options'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -858,7 +860,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           : undefined
         const retireFreshSpawn = async (): Promise<void> => {
           if (!spawnResult.isReattach && !spawnResult.coldRestore) {
-            await window.api.pty.kill(spawnResult.id)
+            // Spread, not a plain second argument: outside the teardown window
+            // the options are OMITTED so the call keeps upstream's one-argument
+            // shape (their reattach-admission tests pin it).
+            await window.api.pty.kill(
+              spawnResult.id,
+              ...((): [] | [{ keepHistory: true; retainSurface: true }] => {
+                const options = retiredFreshSpawnKillOptions({
+                  inDefaultSwitchTeardownWindow: worktreeId
+                    ? isInDefaultSwitchTeardownWindow(worktreeId)
+                    : false
+                })
+                return options ? [options] : []
+              })()
+            )
           }
         }
 

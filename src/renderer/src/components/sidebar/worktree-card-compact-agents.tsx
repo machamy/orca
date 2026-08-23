@@ -12,6 +12,10 @@ import {
   summarizeAgents
 } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
+import {
+  selectSummaryFocusAgent,
+  summaryFocusAgentLabel
+} from './worktree-card-summary-focus-agent'
 
 export { CompactAgentRow } from './worktree-card-compact-agent-row'
 
@@ -87,6 +91,12 @@ export function CompactAgentSummaryButton({
     .slice(visibleGroups.length)
     .reduce((count, group) => count + group.agents.length, 0)
   const agentIdentitySummary = summarizeAgentIdentities(agents)
+  // Why name one: the pill showed state dots, provider icons and `+N`, so it
+  // could say three agents are busy without saying WHICH terminal — the user
+  // had to expand it to find out what was working.
+  const focusAgent = selectSummaryFocusAgent(agents)
+  const focusLabel = focusAgent ? summaryFocusAgentLabel(focusAgent) : ''
+  const otherAgentCount = focusLabel ? agents.length - 1 : 0
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
@@ -141,7 +151,7 @@ export function CompactAgentSummaryButton({
         </span>
       ) : (
         <>
-          <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" aria-hidden>
+          <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden" aria-hidden>
             {visibleGroups.map((group) => {
               const iconAgents = selectSummaryGroupIconAgents(group.agents, 3)
               const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
@@ -163,7 +173,11 @@ export function CompactAgentSummaryButton({
                       </span>
                     ))}
                   </span>
-                  {hiddenIconCount > 0 && (
+                  {/* Why suppressed once a name is shown: this counts hidden
+                      ICONS within one state group, while the trailing count
+                      after the name counts the other AGENTS. Rendering both put
+                      two different `+1`s in one pill. */}
+                  {hiddenIconCount > 0 && !focusLabel && (
                     <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
                       +{hiddenIconCount}
                     </span>
@@ -172,7 +186,20 @@ export function CompactAgentSummaryButton({
               )
             })}
           </span>
-          {hiddenGroupAgentCount > 0 && (
+          {focusLabel && (
+            <span
+              className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
+              title={focusLabel}
+            >
+              {focusLabel}
+            </span>
+          )}
+          {focusLabel && otherAgentCount > 0 && (
+            <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
+              +{otherAgentCount}
+            </span>
+          )}
+          {!focusLabel && hiddenGroupAgentCount > 0 && (
             <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
               +{hiddenGroupAgentCount}
             </span>

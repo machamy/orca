@@ -161,6 +161,29 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   return sliceCandidatePastRootSegments(comparisonRoot, normalizedCandidate)
 }
 
+/** Remap an absolute path from inside `oldRoot` to the same relative location
+ *  under `newRoot`; null when the path is not inside `oldRoot`. Used when a
+ *  worktree identity moves (rename, default-worktree switch) and stored cwds
+ *  must follow the workspace to its new home. */
+export function remapPathInsideWorktreeRoot(
+  oldRoot: string,
+  newRoot: string,
+  candidatePath: string
+): string | null {
+  const relative = relativePathInsideRoot(oldRoot, candidatePath)
+  if (relative === null) {
+    return null
+  }
+  if (!relative) {
+    return newRoot
+  }
+  const useBackslash = isWindowsAbsolutePathLike(newRoot) && newRoot.includes('\\')
+  const separator = useBackslash ? '\\' : '/'
+  const base = newRoot.replace(/[\\/]+$/g, '')
+  const suffix = useBackslash ? relative.replace(/\//g, '\\') : relative
+  return `${base}${separator}${suffix}`
+}
+
 /**
  * Why: skip whole root segments rather than a character count. Comparison
  * folding (NFC, case, UNC alias) changes length, so a folded-prefix length would

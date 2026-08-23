@@ -60,6 +60,10 @@ export type VirtualizedWorktreeViewportProps = {
   folderWorkspaces: readonly FolderWorkspace[]
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
+  // Fork: default-worktree switch entry points.
+  defaultSwitchDropTargetId?: string | null
+  onDefaultSwitchRequest?: (worktree: Worktree) => void
+  findDefaultWorktree?: (repoId: string) => Worktree | undefined
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onImmediateWorktreeActivate: (worktreeId: string, rowKey: string | undefined) => void
   onContextMenuSelect: (

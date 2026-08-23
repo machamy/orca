@@ -1,10 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  isWindowsAbsolutePathLike,
-  relativePathInsideRoot
-} from '../../../../shared/cross-platform-path'
+import { remapPathInsideWorktreeRoot } from '../../../../shared/cross-platform-path'
 import {
   restoreRecentlyClosedTabPosition,
   type RecentlyClosedTabPosition
@@ -84,19 +81,12 @@ export function remapClosedTerminalTabSnapshotCwds(
     if (!snapshot.startupCwd) {
       return snapshot
     }
-    const relative = relativePathInsideRoot(oldWorktreePath, snapshot.startupCwd)
-    if (relative === null) {
-      return snapshot
-    }
-    if (!relative) {
-      return { ...snapshot, startupCwd: newWorktreePath }
-    }
-    const useBackslash =
-      isWindowsAbsolutePathLike(newWorktreePath) && newWorktreePath.includes('\\')
-    const separator = useBackslash ? '\\' : '/'
-    const base = newWorktreePath.replace(/[\\/]+$/g, '')
-    const suffix = useBackslash ? relative.replace(/\//g, '\\') : relative
-    return { ...snapshot, startupCwd: `${base}${separator}${suffix}` }
+    const remapped = remapPathInsideWorktreeRoot(
+      oldWorktreePath,
+      newWorktreePath,
+      snapshot.startupCwd
+    )
+    return remapped === null ? snapshot : { ...snapshot, startupCwd: remapped }
   })
 }
 

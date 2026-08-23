@@ -382,3 +382,79 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 })
+
+// M5/N5 of the default-worktree-switch contract: a resumed agent must show up as
+// an AGENT row, not fall through to the muted terminal-tab list. Observed live:
+// an idle codex pane titles itself with the cwd basename, which classifies as
+// nothing, so the row vanished and the tab rendered as a plain terminal — the
+// exact "코덱스가 사이드바에서 터미널로 나온다" report.
+describe('agent rows for a resumed agent whose title carries no identity', () => {
+  const CODEX_TAB = 'codex-tab'
+
+  it('keeps a live codex pane an agent row when its title is just the cwd', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab(CODEX_TAB, { launchAgent: 'codex' as TuiAgent, title: 'skills' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { [CODEX_TAB]: { 1: 'skills' } },
+      ptyIdsByTabId: { [CODEX_TAB]: ['pty-1'] },
+      terminalLayoutsByTabId: { [CODEX_TAB]: makeSingleLayout(LEAF_ID_1) },
+      now: 1_000
+    })
+
+    expect(rows.map((row) => row.agentType)).toEqual(['codex'])
+    expect(rows[0]?.tab.id).toBe(CODEX_TAB)
+  })
+
+  it('keeps a claude pane an agent row when its title is a task, not the word "claude"', () => {
+    // Live regression: `✳ Preswap configuration verification` classifies as
+    // ('idle', 'Claude Code'), but the identity resolver refuses a Claude label
+    // unless the title literally says "claude" — so three running claude panes,
+    // one of them a 3-pane all-claude split, rendered as plain terminal rows.
+    // On a claude-launched tab that title corroborates the launch identity.
+    const rows = buildWorktreeAgentRows({
+      tabs: [
+        makeTab('claude-tab', {
+          launchAgent: 'claude' as TuiAgent,
+          title: '✳ Preswap configuration verification'
+        })
+      ],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'claude-tab': { 1: '✳ Preswap configuration verification' } },
+      ptyIdsByTabId: { 'claude-tab': ['pty-3'] },
+      terminalLayoutsByTabId: { 'claude-tab': makeSingleLayout(LEAF_ID_1) },
+      now: 1_000
+    })
+
+    expect(rows.map((row) => row.agentType)).toEqual(['claude'])
+  })
+
+  it('still refuses a tab that never launched an agent', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('plain-tab', { title: 'skills' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'plain-tab': { 1: 'skills' } },
+      ptyIdsByTabId: { 'plain-tab': ['pty-2'] },
+      terminalLayoutsByTabId: { 'plain-tab': makeSingleLayout(LEAF_ID_1) },
+      now: 1_000
+    })
+
+    expect(rows).toEqual([])
+  })
+
+  it('still refuses a launchAgent tab whose panes are all dead', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab(CODEX_TAB, { launchAgent: 'codex' as TuiAgent, title: 'skills' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { [CODEX_TAB]: { 1: 'skills' } },
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: { [CODEX_TAB]: makeSingleLayout(LEAF_ID_1) },
+      now: 1_000
+    })
+
+    expect(rows).toEqual([])
+  })
+})

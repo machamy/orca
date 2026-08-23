@@ -429,6 +429,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'ui.set',
   'worktree.activate',
   'worktree.create',
+  'worktree.defaultSet',
   'worktree.forceDeleteBranch',
   'worktree.listRetiredNames',
   'worktree.prefetchCreateBase',

@@ -15,6 +15,7 @@ const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cj
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const { signLocalMacApp } = require('./scripts/sign-local-mac-app.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -124,6 +125,19 @@ module.exports = {
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
+    // Why: fork-local churn at the repo root. electron-builder scans file metadata once
+    // and reuses it for both mac archs, so a file rewritten between the x64 and arm64
+    // packs shifts every asar offset after it and the arm64 app silently fails to boot.
+    '!FORK_CHANGELOG*.md',
+    // Why: Orca's own local workspace/worktree roots — runtime state, never build input.
+    '!projects{,/**/*}',
+    '!workspaces{,/**/*}',
+    // Why: Claude Code's local state. `.claude/worktrees/` holds whole repo checkouts
+    // agents work in (hundreds of MB) and `.claude/tmp/` holds tool output — both are
+    // written WHILE a build runs, which is the exact churn that displaces every arm64
+    // asar offset after them. Observed 2026-08-22: a subagent worktree added ~76MB to
+    // the packaged app.
+    '!.claude{,/**/*}',
     '!Casks{,/**/*}',
     '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
     '!out/**/*.test.js',
@@ -298,6 +312,11 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
+      if (!isMacRelease) {
+        signLocalMacApp(
+          join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
+        )
+      }
     }
   },
   win: {
@@ -369,7 +388,9 @@ module.exports = {
     // credentials. Hardened runtime + notarization stay enabled only on the
     // explicit release path so production artifacts remain strict while dev
     // artifacts do not fail with broken ad-hoc launch behavior.
-    hardenedRuntime: isMacRelease,
+    // ORCA_LOCAL_HARDENED lets a local build turn the runtime on without the
+    // notary round trip, to test whether TCC's attribution chain survives it.
+    hardenedRuntime: isMacRelease || process.env.ORCA_LOCAL_HARDENED === '1',
     // Why dev builds notarize too, despite the ~10min notary round trip: TCC
     // anchors a notarized Developer ID app's permission grants on identifier +
     // team, which is cdhash-independent and so survives an update. Without a

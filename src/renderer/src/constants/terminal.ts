@@ -80,6 +80,12 @@ export type BackgroundMountTerminalWorktreeDetail = {
    *  which tabs they need. Omitted → whole-worktree mount (legacy dispatch
    *  sites); a real activation always lifts the restriction. */
   tabIds?: readonly string[]
+  /** Narrow an ALREADY-mounted worktree to `tabIds` instead of leaving it fully
+   *  mounted. Only the default-worktree switch sets this: its panes were just
+   *  torn down and remounting all of them in one render pass is the freeze that
+   *  activation deferral exists to prevent. Everyone else must leave a visited
+   *  worktree alone — narrowing it retroactively unmounts live panes. */
+  narrowExisting?: boolean
 }
 
 export type WakeHibernatedAgentsWorktreeDetail = {

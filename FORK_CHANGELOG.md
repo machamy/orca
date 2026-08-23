@@ -1,0 +1,292 @@
+# machamy/orca — 포크 변경 이력 (한국어 원본)
+
+> English (secondary): [`FORK_CHANGELOG.en.md`](FORK_CHANGELOG.en.md)
+> 이 문서가 원본입니다. 영어판은 이 문서를 옮긴 것입니다.
+
+[stablyai/orca](https://github.com/stablyai/orca)를 적당히 따라가면서, 그 위에 내
+변경을 **단계(rev)** 로 얹는 포크입니다. 원본 위에 무엇을 더했는지 단계별로 기록하고,
+어느 빌드든 소스로 되짚을 수 있게 커밋 해시를 함께 남깁니다.
+
+## 버전 표기
+
+```
+1.4.169-rc.0   .   machamy.1   .   local . <타임스탬프> . <커밋12자리>
+└─ 원본 버전        └─ 내 단계     └─ 로컬 빌드 메타
+```
+
+- **원본 버전**: `package.json`의 값 (원본이 `release:` 커밋에서만 올림).
+- **내 단계(`machamy.N`)**: 루트의 `FORK_VERSION` 파일 값. 포크 기능 마일스톤마다 올린다.
+  원본을 새로 병합하면 원본 버전이 바뀌고, 내 단계는 이어서 센다.
+- 커밋 해시는 파일명과 앱 리소스 양쪽에 박혀서, 설치된 빌드도 소스 추적이 된다.
+
+---
+
+## machamy.7 — 원본 `1.4.178-rc.2` 기준 · 2026-08-22
+
+### 추가 — 워크트리 색 직접 지정 (유니티)
+- 워크트리 우클릭 → **"유니티 툴바 색"**: 자동(기존 해시 배정), 팔레트 10색, 직접 선택
+  (컬러 피커). 다른 워크트리가 쓰는 색은 비활성 + "(사용 중)" 표시이고 커스텀도 중복이면
+  적용이 잠긴다 — 같은 색 두 개가 나올 수 없다.
+- 선택 즉시 반영: 새 `unity:applyWorktreeTint` IPC가 유니티를 열지 않고 스크립트를 다시
+  쓴다(유니티 프로젝트가 아니면 아무것도 만들지 않는 가드). 그 선택으로 자동색이 바뀐
+  형제 워크트리도 함께 다시 쓰되, **바뀐 것만** 쓴다(불필요한 도메인 리로드 방지).
+  로컬 워크트리만 대상 — 쓰기는 이 머신 파일시스템에서 일어난다.
+- 저장은 리포별 `Repo.unityTintOverrides`(워크트리 폴더명 → hex).
+- 색 계산을 `src/shared/unity-worktree-tint-palette.ts`로 옮겼다. 메뉴가 형제의 실효
+  색을 예측해 중복을 막아야 하는데, 구현이 둘이면 메뉴 표시와 실제 스크립트가 갈라진다.
+  규칙: 살아 있는 형제의 수동 지정색은 예약되고, 삭제된 워크트리가 남긴 오버라이드는
+  아무것도 예약하지 않으며, 팔레트가 포화되면 자동끼리 겹치지 수동 지정을 침범하지 않는다.
+- codex 4라운드 검수 반영: `__proto__` 폴더명에서 오버라이드가 조용히 유실되던 것,
+  유령 오버라이드가 팔레트를 고갈시키던 것, 포화 시 수동색 침범, 원격 경로가 로컬
+  writer에 도달하던 것, basename 로직 중복, 스타일가이드를 어긴 Cancel 버튼.
+
+### 추가 — 포크 회귀 테스트 게이트
+- `pnpm test:fork` 하나로 포크 기능 전용/포크 케이스를 얹은 테스트만 돌린다
+  (`config/fork-contract-tests.mjs`가 목록). 원본 병합 후 포크가 살아 있는지 확인하는
+  빠른 관문이고, 병합이 목록의 파일을 지우면 메타 테스트가 즉시 실패한다.
+
+### 변경 — 원본 파일 위 포크 코드 덜어내기
+- 원본이 크게 고치는 파일에 얹혀 있던 포크 코드를 별도 모듈로 분리해 병합 충돌 면적을
+  줄였다: 유니티 메뉴(413→92줄), 포크 UI IPC 리스너(384→292줄), 콜드 복원 resume
+  북키핑(271→242줄). 동작은 그대로이며 각 단계마다 codex 평가 PASS.
+
+### 수정 — 패키징
+- `.claude/`를 app.asar에서 제외. `.claude/worktrees/`에는 에이전트가 작업 중인 저장소
+  사본이 통째로 들어 있어(관측: +76MB) 용량도 문제지만, **빌드 중에 쓰이는 경로**라
+  arm64 asar 오프셋이 밀리는 그 사고의 후보였다.
+
+## machamy.6 — 원본 `1.4.178-rc.2` 기준 · 2026-08-20
+
+### 추가 — 유니티 워크트리별 색 (macOS)
+- 리포 ⋯ 메뉴의 **"유니티 워크트리마다 다른 색 표시"** 토글(**기본 켜짐**, 끄려면 체크 해제).
+  워크트리마다
+  **플레이/일시정지가 있는 툴바 배경**이 고유 색으로 물들고, **창 제목 앞에 워크트리 이름**이
+  붙는다 — 에디터 두 개를 동시에 열어도 한눈에 구분된다.
+- **기본 워크트리는 무색**(Unity 기본 회색)이라 "색이 있으면 사이드 워크트리"로 읽힌다.
+  기본 판정은 리포 경로 기준이라 스왑 후에도 유지된다.
+- 색은 Catppuccin Mocha 10색. 폴더 이름 해시가 시작 슬롯이고, **형제 워크트리와 겹치면
+  빈 색으로 밀어** 배정한다(정렬 순 배정이라 새 워크트리가 생겨도 기존 색은 그대로).
+  실측: 워크트리 10개 전부 다른 색.
+- 구현 메모: Unity엔 프로젝트별 테마 훅이 없다(테마 설정은 Light/Dark뿐, 색 설정은 사용자
+  전역). 그래서 생성한 에디터 스크립트가 툴바의 UI Toolkit 트리에 **인라인 스타일**을
+  넣는다(인라인이 USS를 이긴다). 내부 멤버 리플렉션 없이 창 타입 이름만 매칭하고, 실패하면
+  조용히 기본 색으로 남는다. 파스텔을 그대로 칠하면 아이콘이 안 보여서 다크 크롬에 32%만 섞는다.
+- 스크립트는 `Assets/Private/`(대상 리포에서 이미 gitignore된 경로)에 들어간다. 기본 켜짐이라
+  "그 리포가 마침 무시하고 있다"에 기댈 수 없어, **쓰기 전에 git에게 무시되는 경로인지 묻고
+  (check-ignore) 아니면 그 리포는 통째로 건너뛴다** — 추적될 파일은 절대 만들지 않는다.
+  토글을 끄면 다음 시드/열기 때 제거된다.
+- 검증: 실제 에디터(6000.3.16f1) 배치 컴파일 에러 0(워크트리 2곳) + 툴바에 색이 입혀진
+  스크린샷 + 창 제목 접두어 확인. 문서가 틀렸던 부분(`MainToolbarLabel`이 VisualElement라던
+  것)과 등록만 되고 렌더되지 않던 툴바 칩은 실기 검증으로 걸러내 제거했다.
+
+## machamy.5 — 원본 `1.4.178-rc.2` 기준 · 2026-08-20
+
+### 수정 — 시드/신규 워크트리 첫 실행 유니티 크래시 ("두 번 열어야 됨")
+- Firebase 플러그인이 에디터 로드마다 `google-services-desktop.json`을 mtime 비교로
+  재생성하는데, 그 `AssetDatabase.CopyAsset`이 첫 실행 임포트 폭풍 속에서 Temp 이동
+  실패 → 재시도 창 → 유니티(6000.3.16f1) 자체 크래시로 이어졌다(실기 2회 관측,
+  두 번째 실행은 항상 성공). 생성 파일이 소스와 바이트 동일하면 mtime을 소스+2초로
+  박아 게이트가 "최신"으로 읽게 함 — 시드 직후 + orca발 실행 직전 자동 수행,
+  내용이 다르면 건드리지 않는다(정당한 재생성 보존).
+
+### 추가 — 드래그로 기본 워크트리 전환 복원
+- 머지 때 보류했던 드래그 경로를 새 포인터 드래그 시스템에 재배선. 자격이 맞는
+  드래그 중에만 기본 행에 "Make default" 존이 나타나고, 링과 드롭이 같은 자격
+  게이트를 공유한다. 존 위에서 놓을 때만 커밋(근접 폴백 제외), 링은 상태 기반이라
+  커밋과 항상 일치.
+
+## machamy.4 — 원본 `1.4.178-rc.2` 기준 · 2026-08-21
+
+### 추가 — "Rider에서 열기" (유니티 메뉴)
+- Rider가 설치돼 있으면(macOS, /Applications 또는 Toolbox 위치) 유니티 메뉴에 항목이
+  뜬다. gitignore된 `.sln`이 워크트리에 없으면 기본 체크아웃의 `.sln`/`.csproj`를
+  복사(워크트리 폴더명으로 개명)한 뒤 솔루션으로 연다 — 폴더 열기와 달리 Unity 연동
+  (플레이·로그·디버거)이 산다. Library 시드도 같은 파일들을 함께 실어 나른다.
+  둘 다 없으면 폴더로 열고 안내 토스트.
+- 안전장치(codex 교차검수 반영): 복사는 절대 덮어쓰지 않음(COPYFILE_EXCL — 워크트리
+  자체 csproj 보존), csproj 먼저·sln 마지막이라 부분 실패가 다음 시도에서 자가 복구,
+  워크트리당 복사 1개 직렬화, sln 선택 결정적(폴더명 우선 후 정렬).
+
+## machamy.3 — 원본 `1.4.178-rc.2` 병합 · 2026-08-19
+
+원본 564커밋(대규모 모듈 재구조화 포함)을 병합하고, 그 위에 유니티 워크트리 지원과
+마크다운 GitHub 스타일 보기를 얹은 라운드. 무엇을 이식하고 무엇을 버렸는지는 머지
+원장으로 관리했고, 이식 결과는 codex 병렬 검수를 거쳤다.
+
+### 추가 — 유니티 워크트리 지원 (macOS)
+- **워크트리 우클릭 → "유니티용 Library 복사" / "Unity에서 열기".** 복사는 APFS
+  Copy-on-Write(`cp -c`)라 수 초에 끝나고 추가 용량이 거의 없다. 스테이징 폴더에
+  받아 원자적 rename으로 완성하므로 중간에 죽어도 반쪽 Library가 남지 않는다.
+- **켜진 에디터의 Library는 절대 복사하지 않는다.** lockfile + 프로세스 테이블의
+  `-projectpath`(경계 고정 정규식) + 최근 실행 TTL 3중 게이트. 세션 결합 항목
+  (Temp 등)은 복사본에서 제거한다.
+- **처음 열 때 복사 여부를 묻고**, 리포 ⋯ 메뉴의 "새 워크트리에 자동 복사" 토글로
+  워크트리 생성 시 자동 복사도 가능하다.
+- 실기 검증 중 유니티가 스왑 도중 Temp 경로 참조로 fatal을 낸 사례를 계기로,
+  라이브 프로세스 판정과 원자적 스테이징을 하드닝했다.
+
+### 추가 — 마크다운 GitHub 스타일 보기
+- 원시 HTML이 섞여 프리뷰가 막는 .md에서 안내 배너의 버튼으로 GitHub-flavored
+  렌더링을 볼 수 있다(포크 전용 기능임을 배너에 표기).
+
+### 병합 — 원본 `1.4.178-rc.2` (564커밋, 충돌 36파일)
+- 원본이 `shared/types.ts`·`persistence.ts`·worktrees 슬라이스·WorktreeList를 전부
+  모듈로 쪼갠 재구조화를 수용하고, 포크 기능을 새 구조에 재이식했다:
+  - 스왑 재키 머신 → `persistence/tracking-repos/worktree-identity-migration.ts`
+    (재키 충돌 병합 `mergeReKeyedValue`, 경로 remap, priorWorktreeIds 캡 포함)
+  - 마커 CAS → `store/slices/worktrees/session/default-switch-claim.ts`
+  - 스위치 다이얼로그 UI → `use-default-worktree-switch-dialog.ts` 훅 +
+    새 worktree-list 모듈(뷰포트/행/그룹핑)에 프롭 배선
+  - 기본 행 판정(리포 경로 기준)을 새 가시성/정렬 모듈에 재적용
+- **절전 신호를 `retainSurface`로 분리.** 원본이 일반 kill에도 `keepHistory`를 쓰게
+  되어 의미가 충돌 — 포크의 "팬 유지" 신호를 별도 플래그로 갈라 원본 동작을 보존.
+- 드래그로 Default 카드에 드롭하는 경로는 원본의 새 드래그 시스템과 미결합(후속) —
+  컨텍스트 메뉴와 CLI 경로는 동작.
+- 검증: typecheck 0 · lint 0 · 대상 스위트(훅 107 / main-ipc 314 / 사이드바+스토어
+  279 / 마이그레이션 15) green, 전체 스위트로 최종 확인.
+
+## machamy.2 — 원본 `1.4.176-rc.1` 기준 · 2026-08-09
+
+기본 워크트리 전환의 **상태 보존**을 실기 계측으로 파고들어 고친 라운드. 수용 기준은
+[`docs/reference/default-worktree-switch-acceptance.md`](docs/reference/default-worktree-switch-acceptance.md)에
+"반드시 일어나야 하는 일 / 절대 일어나선 안 되는 일"로 정리했다.
+
+### 수정 — 전환 시 상태 유실 (전부 실기에서 관측 후 수정)
+- **탭이 통째로 사라지던 것.** sleep이 죽인 PTY의 exit이 억제되지 않아, 마지막 팬이
+  닫히면 탭까지 닫혔다(`tab_close {reason:"pty-exit"}`). 스왑 전용 teardown 창(90초)을
+  두어 억제한다. 이 창은 spawn 가드보다 오래 산다 — kill이 wake 이후에 도착하기 때문.
+- **탭이 복제되던 것.** wake의 generic 재개가 새 탭을 만드는데, 스왑 직후엔 탭 목록이
+  정착 전이라 살아있는 탭도 "없음"으로 읽혀 레코드마다 포크가 생겼다(4탭 → 7탭,
+  클로드·코덱스가 각 3개). follow 전환에서 **새 탭 생성을 제거**했다.
+- **분할 팬이 죽은 세션에 reattach**하던 것. 스왑을 왕복하면 죽은 id가 소유권 검사를
+  통과해 빈 팬으로 남았다. 리마운트 전에 죽은 바인딩을 지운다.
+- **팬이 PTY 없이 방치**되던 것. wake 후 4·12·25·45·75초에 재기동 스윕을 돌린다.
+- **사이드바에서 에이전트가 터미널 행으로 강등**되던 것. 두 원인이 겹쳤다 — 전환이
+  `launchAgent`를 벗겨냈고(팬이 잠깐 셸로 보이면 "에이전트 종료"로 오판), 재개된
+  에이전트에 상태 행이 없었다. 전자는 teardown 창으로 막고, 후자는 콜드 복원 **스폰
+  성공 후** 상태 행을 심는다(스폰 전에 심으면 콜드 복원이 resume을 건너뛴다).
+- **재시작 후 전환이 영구 거부**되던 것. 콜드 복원 에이전트는 다음 턴까지 훅을 안 뿜어
+  "캡처 불가"로 남았다. resume identity를 재기록하고, readiness gate는 거부 대신
+  경고 후 진행한다.
+- **한글 워크트리 2개의 Claude 기록 유실.** Claude는 폴더명을 `[^a-zA-Z0-9]` → `-`로
+  접으므로 같은 부모 아래 글자 수가 같은 한글 이름 둘은 충돌한다. 충돌 시 교환을
+  건너뛰고, 3단계 rename이 실패하면 원위치로 되돌린다.
+
+### 추가
+- **미추적 파일 이동 여부 선택.** 기본은 브랜치를 따라 이동(기존 동작), 팝업 체크박스
+  "추적되지 않은 파일은 제자리에 두기"로 끌 수 있다. CLI `--keep-untracked-in-place`.
+  RPC `includeUntracked`는 선택적 필드라 구버전 클라이언트는 영향 없다.
+- 전환 팝업 문구가 미추적 파일의 실제 거동을 체크박스 상태에 맞춰 표시한다.
+
+### 검증 상태
+- 실기 3왕복 + 2왕복: **탭 집합 교환 · 탭 증가 없음 · 세션 동일 · 사이드바 에이전트 행**
+  전부 통과. 초기 검증이 "세션 id 일치"만 봐서 탭 포크를 놓쳤던 것을 계기로,
+  **탭 개수와 사이드바 행**을 판정에 포함시켰다.
+- 한글 경로·브랜치·미추적 파일 스왑은 실제 git 저장소로 검증(회귀 테스트 포함).
+- **임시 계측 유지 중**: `mode_b_*`, `pane_exit_teardown`, `tab_close`,
+  `orphan_sweep_*`, `mode_b_pane_connect` breadcrumb이 `main.trace.ndjson`에 남는다.
+  이번 결함들을 전부 이 계측으로 특정했으므로 기능이 안정될 때까지 유지한다.
+- **미구현(이 시점 기준)**: "에이전트에게 알리기"는 토스트만 띄웠다 — 이후 해소됐다.
+  아래 "알려진 한계" 참고.
+
+### 알려진 한계
+- ~~**"에이전트에게 알리기" 토글은 에이전트에게 알리지 않는다.** 전환 결과를 토스트로
+  보여줄 뿐이며, 살아있는 TUI 입력창에 자동 주입하는 기능은 없다.~~
+  **정정**: 이 한계는 machamy.2 시점에는 사실이었으나 `6b13b7d0`(2026-08-14)에서
+  해소됐고, 그 뒤로도 여기 그대로 남아 잘못된 채로 인용돼 왔다. 지금은 전환 후
+  6·15·30·60·90초에 걸쳐, 깨어난 에이전트 팬마다 한 번씩 바뀐 경로와 브랜치를 PTY에
+  직접 써 넣는다(턴이 진행 중인 팬은 건드리지 않는다). 다만 **팬에 도착하는 것은
+  보장되지만 전송까지는 보장되지 않는다** — 문구 끝에 Enter(`\r`)를 붙이지만 에이전트
+  TUI가 그걸 받지 않고 입력창에 문구만 남는 경우가 관측됐고, 그때는 사용자가 직접
+  Enter를 눌러야 한다.
+- 플레인 셸은 스크롤백이 유실된다(프로세스 이동 불가). 탭·위치·분할은 유지된다.
+- 한 번도 대화하지 않은 에이전트는 보존할 세션이 없어 새 세션으로 시작한다.
+
+---
+
+## machamy.1 — 원본 `1.4.169-rc.0` (`5f187e083`) 기준 · 2026-08-06
+
+로컬 빌드 예: `1.4.169-rc.0.machamy.1.local.<ts>.cd3aacff7`
+
+### 추가
+- **기본 워크트리 전환(Make Default Worktree).** 서브 워크트리를 리포의 기본
+  체크아웃으로 승격한다. **두 워크트리의 브랜치를 제자리에서 맞바꾼다** — 선택한
+  브랜치가 리포 경로에, 옛 기본 브랜치가 선택 워크트리에 체크아웃된다. 폴더는 이동하지
+  않으므로 git의 main worktree(`.git` 보유자)가 **리포 경로에 고정**되고, GitHub
+  Desktop을 리포 폴더에서 열면 승격된 브랜치가 보인다. 커밋 안 된·스테이징된·untracked
+  변경은 브랜치를 따라가고, ignored 파일은 제자리에 남는다. 워크트리를 **Default**
+  카드에 드롭하거나 `orca worktree default set --worktree <선택자>`.
+- **"에이전트가 브랜치를 따라가기" 토글** (기본 꺼짐). 켜면 양쪽 워크트리를 절전하고,
+  절전 세션 콘텐츠 + Claude 트랜스크립트를 맞교환한 뒤, 각 에이전트를 자기 브랜치가 이제
+  있는 워크트리에서 재개한다. git main은 여전히 리포 경로 고정, 재개 가능한
+  에이전트(Claude·Codex)만 따라간다.
+- **"에이전트에게 바뀐 내용 알리기" 토글** (기본 꺼짐). 전환 후 어느 워크트리가 어느
+  브랜치가 됐는지 정확히 표시한다.
+
+### 변경
+- 사이드바의 **기본/primary** 신호 — 별 배지, 리포 그룹 정렬 앵커, Cmd+J 칩,
+  "기본 브랜치 숨김" 필터, "슬립 숨김" 예외, 삭제/프로젝트 제거 가드 — 를 git의
+  `isMainWorktree`가 아니라 **리포 경로** 기준으로 판정한다. 전환 후 "기본"이 두 개로
+  뜨거나 별이 엉뚱한 행에 붙던 문제를 고쳤다.
+
+### 수정
+- **브랜치 스왑 데이터 안전성** (실제 git으로 적대적 테스트하며 발견):
+  - 두 번째 stash 캡처가 실패해도(예: 한쪽이 병합 진행 중) 첫 워크트리의 커밋 안 된
+    작업이 dangling stash로 사라지지 않도록 복원한다.
+  - post-checkout 훅이 non-zero로 끝나도 워크트리가 detached로 방치되거나 가짜
+    `recovery_required`가 뜨지 않게, 실제 HEAD 상태로 판정한다.
+  - merge/cherry-pick/revert 진행 중 워크트리는 사전에 명확한 메시지로 거부한다.
+- **패키징 daemon-entry 부팅**이 패키징 직후의 일시적 `dlopen` 경합(`ETIMEDOUT`)에
+  전체 실패 대신 재시도한다.
+- **"에이전트 따라가기" 실사용 3연타 수정** (실기 리포트로 발견):
+  - 전환 후 활성 워크스페이스가 없어서 에이전트가 숨은 백그라운드 탭으로 포크되던 문제 —
+    승격된 기본을 활성화한 뒤 wake한다.
+  - `git switch --detach`가 만들던 detached HEAD 순간에 JetBrains(Rider)가 캐시를
+    버리던 문제 — 임시 park 브랜치로 HEAD를 항상 symbolic으로 유지한다.
+  - **근본 원인: 터미널이 이동 대신 닫히던 문제.** 데몬 세션 id에 생성 시점 워크트리
+    id가 박혀 있는데, 콘텐츠 스왑 후 소유권 검사가 이 id를 거부하고는 죽은 세션에
+    bare-attach → 빈 팬 → 탭 자동 닫힘. 이제 소유권 불일치 + 절전 레코드 보유 팬은
+    낡은 바인딩을 지우고 **새 경로에서 cold-restore `--resume`** 로 재개한다. 살아있는
+    탭의 `startupCwd`도 새 집으로 리맵. follow 전환 시 양쪽 워크트리의 절전 에이전트
+    탭(대기 중 포함)을 전부 마운트해 눈에 보이게 복원한다. (21-에이전트 적대 검증 +
+    스토어 시뮬레이션 테스트로 원인 4중 확인)
+
+### 커밋
+| 해시 | 요약 |
+|------|------|
+| `ab5d84b9` | feat(worktree): default-worktree switch with agent-safe hardening |
+| `1d71ea92` | fix(build): retry packaged daemon-entry boot on post-pack dlopen contention |
+| `8fe77beb` | fix(sidebar): key default-workspace UI on the repo path, not git isMainWorktree |
+| `407d0cde` | refactor(worktree): make default switch a branch swap, keeping git main in place |
+| `9a0dc12e` | fix(worktree): harden branch swap against data loss and stuck-state edge cases |
+| `cd3aacff` | feat(worktree): add "agents follow" and "notify" toggles to default switch |
+| `bf323864` | fix(worktree): surface followed agents and avoid detached HEAD on switch |
+| `8a40335a` | fix(worktree): resume followed agents after a default switch instead of closing their tabs |
+| `a53ff475` | fix(worktree): re-seed follow-switch sleeping records lost to swap-window churn |
+| `8e983e36` | fix(worktree): stop mounted panes from consuming follow-switch records at sleep |
+| `895efcd7` | fix(worktree): re-home open editor tabs when agents follow a default switch |
+| `2e0c1a2b` | fix(worktree): carry every workspace window through the follow switch |
+| `f075e16a` | fix(worktree): codex follow support + remaining per-workspace state remaps |
+| `7ef7e771` | feat(worktree): drive the full default-switch flow from the CLI (--follow-agents --ui-flow) |
+| `baed000b` | fix(cli): register the default-switch booleans so --follow-agents actually transmits |
+| `80fc140c` | test(worktree): mode-B follow-switch E2E harness driving the live app via CLI |
+| `264d9d00` | fix(worktree): show followed agents in the sidebar immediately after a switch |
+| `97e36ef1` | feat(worktree): show a moving-agents indicator during the default switch |
+
+### 검증 상태
+- **E2E 실기 검증 완료** (`config/scripts/mode-b-follow-e2e.mjs` — 실행 중인 앱을
+  CLI로 구동): 클로드+코덱스 동시, **같은 provider 세션으로 왕복 복원**을 연속
+  5회전(스왑 10회) 전부 통과. 사이드바 칩은 훅 도착 전에도 즉시 표시(절전 레코드
+  시딩), 전환 중엔 "Moving agents…" 스피너 행 표시.
+- **실기 확인됨**: 에디터 파일 로드, Rider 캐시 유지, 사이드바 표시(육안).
+- **검증됨** (테스트/시뮬레이션): 창 전수 보존 — 터미널 탭·스플릿, 에디터 열린 파일·
+  더티 버퍼, 브라우저 탭, 파일 트리 펼침, 닫은 탭 재열기, 검색 패널, 뒤로가기 히스토리,
+  diff 탭 — 재시작 후에도 유지(main 영속 리맵). 절전 중 팬의 즉발 재기동 차단(가드),
+  레코드 소실 시 스냅샷 재시드.
+- **알려진 잔여**: 플레인 셸 터미널 탭은 스왑 후 새로 열림(셸 프로세스는 이동 불가),
+  combined-diff/충돌 리뷰 탭은 리키 제외(재열기 필요), 스왑 중 지연저장 극소 경쟁 창.
+- **미구현(이 시점 기준)**: "알림" 노트를 실행 중 TUI 에이전트 입력창에 자동 주입
+  (당시엔 안전·검증 가능한 방법이 없었음). `6b13b7d0`(2026-08-14)에서 구현됐다 —
+  범위와 남은 한계는 machamy.2의 "알려진 한계" 참고.
+- **임시 계측**: `mode_b_*`/`sleeping_record_delete`/`worktree_purge` breadcrumb이
+  `main.trace.ndjson`에 남는다 — 실기 확인 완료 후 제거 예정.

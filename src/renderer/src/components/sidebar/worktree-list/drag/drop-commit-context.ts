@@ -34,6 +34,8 @@ export type WorktreeDropCommitContext = {
     draggedIds: readonly string[]
   ) => WorktreeSidebarLineageDropTarget
   commitWorktreeLineageParentDrop: (draggedIds: readonly string[], parentId: string) => boolean
+  // Fork: dropping on the default row's "Make default" zone opens the switch dialog.
+  commitWorktreeDefaultSwitchDrop: (draggedIds: readonly string[], targetId: string) => boolean
   clearReorderedWorktreeParents: (args: {
     draggedIds: readonly string[]
     sourceGroupKey: string
