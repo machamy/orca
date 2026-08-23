@@ -24,7 +24,7 @@ source.
 
 ---
 
-## machamy.7 — upstream `1.4.178-rc.2` · 2026-08-22
+## machamy.7 — upstream `1.4.178-rc.2` · 2026-08-23
 
 Turns the Unity worktree colour from something assigned for you into something
 you pick, and choose where to see.
@@ -39,8 +39,9 @@ repo, keyed by folder name, and apply immediately via `unity:applyWorktreeTint`
 without opening Unity (nothing is created in a non-Unity project); siblings whose
 automatic colour moved are rewritten too, changed ones only, local only. Colour
 picking lives in one shared module so the menu and the script writer cannot
-drift apart. With more worktrees than colours some pair must share one — always
-two automatic ones, never a deliberate pick.
+drift apart. With more worktrees than colours some pair must share one — two
+automatic ones, not a deliberate pick; unless all twenty are hand-picked, in
+which case no automatic colour is left to give up and one lands on a pick.
 
 **Twenty colours, in two tiers.** The original ten plus ten whose **hues sit at
 the midpoints between them**: the toolbar strip keeps only the hue of the pick
