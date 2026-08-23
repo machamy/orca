@@ -192,7 +192,7 @@
 ### 알려진 한계
 - ~~**"에이전트에게 알리기" 토글은 에이전트에게 알리지 않는다.** 전환 결과를 토스트로
   보여줄 뿐이며, 살아있는 TUI 입력창에 자동 주입하는 기능은 없다.~~
-  **정정**: 이 한계는 machamy.2 시점에는 사실이었으나 `6b13b7d0`(2026-08-14)에서
+  **정정**: 이 한계는 machamy.2 시점에는 사실이었으나 `b4270893`(2026-08-14)에서
   해소됐고, 그 뒤로도 여기 그대로 남아 잘못된 채로 인용돼 왔다. 지금은 전환 후
   6·15·30·60·90초에 걸쳐, 깨어난 에이전트 팬마다 한 번씩 바뀐 경로와 브랜치를 PTY에
   직접 써 넣는다(턴이 진행 중인 팬은 건드리지 않는다). 다만 **팬에 도착하는 것은
@@ -252,26 +252,32 @@
     스토어 시뮬레이션 테스트로 원인 4중 확인)
 
 ### 커밋
+
+> 이력을 한 커밋으로 압축하면서 아래 해시는 모두 그 단일 커밋(`b4270893`)을 가리킨다.
+> 원래는 커밋별 해시였지만, 비공개 저장소의 실제 프로젝트·브랜치 이름이 커밋 메시지와
+> 테스트 픽스처에 섞여 들어가 있어 포크 커밋 88개를 다시 썼다. 요약 열은 당시 커밋
+> 제목 그대로이므로 무엇이 언제 들어갔는지는 여전히 읽을 수 있다.
+
 | 해시 | 요약 |
 |------|------|
-| `ab5d84b9` | feat(worktree): default-worktree switch with agent-safe hardening |
-| `1d71ea92` | fix(build): retry packaged daemon-entry boot on post-pack dlopen contention |
-| `8fe77beb` | fix(sidebar): key default-workspace UI on the repo path, not git isMainWorktree |
-| `407d0cde` | refactor(worktree): make default switch a branch swap, keeping git main in place |
-| `9a0dc12e` | fix(worktree): harden branch swap against data loss and stuck-state edge cases |
-| `cd3aacff` | feat(worktree): add "agents follow" and "notify" toggles to default switch |
-| `bf323864` | fix(worktree): surface followed agents and avoid detached HEAD on switch |
-| `8a40335a` | fix(worktree): resume followed agents after a default switch instead of closing their tabs |
-| `a53ff475` | fix(worktree): re-seed follow-switch sleeping records lost to swap-window churn |
-| `8e983e36` | fix(worktree): stop mounted panes from consuming follow-switch records at sleep |
-| `895efcd7` | fix(worktree): re-home open editor tabs when agents follow a default switch |
-| `2e0c1a2b` | fix(worktree): carry every workspace window through the follow switch |
-| `f075e16a` | fix(worktree): codex follow support + remaining per-workspace state remaps |
-| `7ef7e771` | feat(worktree): drive the full default-switch flow from the CLI (--follow-agents --ui-flow) |
-| `baed000b` | fix(cli): register the default-switch booleans so --follow-agents actually transmits |
-| `80fc140c` | test(worktree): mode-B follow-switch E2E harness driving the live app via CLI |
-| `264d9d00` | fix(worktree): show followed agents in the sidebar immediately after a switch |
-| `97e36ef1` | feat(worktree): show a moving-agents indicator during the default switch |
+| `b4270893` | feat(worktree): default-worktree switch with agent-safe hardening |
+| `b4270893` | fix(build): retry packaged daemon-entry boot on post-pack dlopen contention |
+| `b4270893` | fix(sidebar): key default-workspace UI on the repo path, not git isMainWorktree |
+| `b4270893` | refactor(worktree): make default switch a branch swap, keeping git main in place |
+| `b4270893` | fix(worktree): harden branch swap against data loss and stuck-state edge cases |
+| `b4270893` | feat(worktree): add "agents follow" and "notify" toggles to default switch |
+| `b4270893` | fix(worktree): surface followed agents and avoid detached HEAD on switch |
+| `b4270893` | fix(worktree): resume followed agents after a default switch instead of closing their tabs |
+| `b4270893` | fix(worktree): re-seed follow-switch sleeping records lost to swap-window churn |
+| `b4270893` | fix(worktree): stop mounted panes from consuming follow-switch records at sleep |
+| `b4270893` | fix(worktree): re-home open editor tabs when agents follow a default switch |
+| `b4270893` | fix(worktree): carry every workspace window through the follow switch |
+| `b4270893` | fix(worktree): codex follow support + remaining per-workspace state remaps |
+| `b4270893` | feat(worktree): drive the full default-switch flow from the CLI (--follow-agents --ui-flow) |
+| `b4270893` | fix(cli): register the default-switch booleans so --follow-agents actually transmits |
+| `b4270893` | test(worktree): mode-B follow-switch E2E harness driving the live app via CLI |
+| `b4270893` | fix(worktree): show followed agents in the sidebar immediately after a switch |
+| `b4270893` | feat(worktree): show a moving-agents indicator during the default switch |
 
 ### 검증 상태
 - **E2E 실기 검증 완료** (`config/scripts/mode-b-follow-e2e.mjs` — 실행 중인 앱을
@@ -286,7 +292,7 @@
 - **알려진 잔여**: 플레인 셸 터미널 탭은 스왑 후 새로 열림(셸 프로세스는 이동 불가),
   combined-diff/충돌 리뷰 탭은 리키 제외(재열기 필요), 스왑 중 지연저장 극소 경쟁 창.
 - **미구현(이 시점 기준)**: "알림" 노트를 실행 중 TUI 에이전트 입력창에 자동 주입
-  (당시엔 안전·검증 가능한 방법이 없었음). `6b13b7d0`(2026-08-14)에서 구현됐다 —
+  (당시엔 안전·검증 가능한 방법이 없었음). `b4270893`(2026-08-14)에서 구현됐다 —
   범위와 남은 한계는 machamy.2의 "알려진 한계" 참고.
 - **임시 계측**: `mode_b_*`/`sleeping_record_delete`/`worktree_purge` breadcrumb이
   `main.trace.ndjson`에 남는다 — 실기 확인 완료 후 제거 예정.

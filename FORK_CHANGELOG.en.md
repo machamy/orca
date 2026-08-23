@@ -106,26 +106,33 @@ Example local build: `1.4.169-rc.0.machamy.1.local.<ts>.cd3aacff7`
     review + a store-level simulation test.)
 
 ### Commits
+
+> The history was squashed into one commit, so every hash below points at that
+> single commit (`b4270893`). They used to be per-commit: the fork's 88 commits
+> were rewritten because real project and branch names from a private repository
+> had leaked into commit messages and test fixtures. The summary column is still
+> the original commit subjects, so what landed when is still readable.
+
 | hash | summary |
 |------|---------|
-| `ab5d84b9` | feat(worktree): default-worktree switch with agent-safe hardening |
-| `1d71ea92` | fix(build): retry packaged daemon-entry boot on post-pack dlopen contention |
-| `8fe77beb` | fix(sidebar): key default-workspace UI on the repo path, not git isMainWorktree |
-| `407d0cde` | refactor(worktree): make default switch a branch swap, keeping git main in place |
-| `9a0dc12e` | fix(worktree): harden branch swap against data loss and stuck-state edge cases |
-| `cd3aacff` | feat(worktree): add "agents follow" and "notify" toggles to default switch |
-| `bf323864` | fix(worktree): surface followed agents and avoid detached HEAD on switch |
-| `8a40335a` | fix(worktree): resume followed agents after a default switch instead of closing their tabs |
-| `a53ff475` | fix(worktree): re-seed follow-switch sleeping records lost to swap-window churn |
-| `8e983e36` | fix(worktree): stop mounted panes from consuming follow-switch records at sleep |
-| `895efcd7` | fix(worktree): re-home open editor tabs when agents follow a default switch |
-| `2e0c1a2b` | fix(worktree): carry every workspace window through the follow switch |
-| `f075e16a` | fix(worktree): codex follow support + remaining per-workspace state remaps |
-| `7ef7e771` | feat(worktree): drive the full default-switch flow from the CLI (--follow-agents --ui-flow) |
-| `baed000b` | fix(cli): register the default-switch booleans so --follow-agents actually transmits |
-| `80fc140c` | test(worktree): mode-B follow-switch E2E harness driving the live app via CLI |
-| `264d9d00` | fix(worktree): show followed agents in the sidebar immediately after a switch |
-| `97e36ef1` | feat(worktree): show a moving-agents indicator during the default switch |
+| `b4270893` | feat(worktree): default-worktree switch with agent-safe hardening |
+| `b4270893` | fix(build): retry packaged daemon-entry boot on post-pack dlopen contention |
+| `b4270893` | fix(sidebar): key default-workspace UI on the repo path, not git isMainWorktree |
+| `b4270893` | refactor(worktree): make default switch a branch swap, keeping git main in place |
+| `b4270893` | fix(worktree): harden branch swap against data loss and stuck-state edge cases |
+| `b4270893` | feat(worktree): add "agents follow" and "notify" toggles to default switch |
+| `b4270893` | fix(worktree): surface followed agents and avoid detached HEAD on switch |
+| `b4270893` | fix(worktree): resume followed agents after a default switch instead of closing their tabs |
+| `b4270893` | fix(worktree): re-seed follow-switch sleeping records lost to swap-window churn |
+| `b4270893` | fix(worktree): stop mounted panes from consuming follow-switch records at sleep |
+| `b4270893` | fix(worktree): re-home open editor tabs when agents follow a default switch |
+| `b4270893` | fix(worktree): carry every workspace window through the follow switch |
+| `b4270893` | fix(worktree): codex follow support + remaining per-workspace state remaps |
+| `b4270893` | feat(worktree): drive the full default-switch flow from the CLI (--follow-agents --ui-flow) |
+| `b4270893` | fix(cli): register the default-switch booleans so --follow-agents actually transmits |
+| `b4270893` | test(worktree): mode-B follow-switch E2E harness driving the live app via CLI |
+| `b4270893` | fix(worktree): show followed agents in the sidebar immediately after a switch |
+| `b4270893` | feat(worktree): show a moving-agents indicator during the default switch |
 
 ### Verification status
 - **E2E-verified against the live app** (`config/scripts/mode-b-follow-e2e.mjs`,
@@ -145,7 +152,7 @@ Example local build: `1.4.169-rc.0.machamy.1.local.<ts>.cd3aacff7`
   from the rekey (reopen them); a tiny mid-swap debounced-write race window.
 - **Not implemented (as of this rev)**: auto-injecting the notify note into a live
   TUI agent's input (no safe, verifiable mechanism at the time). Implemented later
-  in `6b13b7d0` (2026-08-14) — see the correction under machamy.2 in the Korean
+  in `b4270893` (2026-08-14) — see the correction under machamy.2 in the Korean
   canonical changelog for its scope and remaining limit.
 - **Temporary diagnostics**: `mode_b_*`/`sleeping_record_delete`/`worktree_purge`
   breadcrumbs land in `main.trace.ndjson`; to be removed once confirmed.
