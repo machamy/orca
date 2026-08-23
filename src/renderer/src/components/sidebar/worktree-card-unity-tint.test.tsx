@@ -35,6 +35,7 @@ vi.mock('@/store/selectors', () => ({
 // Menu-side mocks: the cross-check renders the real context-menu hook.
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuSeparator: () => <hr />,
   DropdownMenuSub: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuSubTrigger: ({ children }: { children: ReactNode }) => (

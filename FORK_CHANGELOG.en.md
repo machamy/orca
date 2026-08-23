@@ -26,19 +26,65 @@ source.
 
 ## machamy.7 — upstream `1.4.178-rc.2` · 2026-08-22
 
-**Pick a worktree's Unity toolbar colour by hand.** Right-click → Unity Toolbar
-Color offers Automatic, the ten palette presets, and a custom picker; a colour
-another worktree already wears is disabled and marked "(in use)", so two editors
-can never share one. Choices persist per repo and apply immediately via a new
-`unity:applyWorktreeTint` IPC — siblings whose automatic colour moved are
-rewritten too, local ones only. Colour picking moved to a shared module so the
-menu and the script writer cannot drift apart.
+Turns the Unity worktree colour from something assigned for you into something
+you pick, and choose where to see.
 
-Also: **`pnpm test:fork`**, a one-command regression gate over every fork
-feature, and a round of moving fork code off upstream files into separate
-modules to shrink merge-conflict surface. Packaging now excludes `.claude/`,
-which was shipping agent worktrees inside app.asar. Full details in the Korean
-canonical changelog.
+**Pick a worktree's Unity toolbar colour by hand.** Right-click → Unity Toolbar
+Color offers Automatic, twenty palette colours, and a custom picker (which
+previews the strip the choice actually paints). **Only a colour another worktree
+deliberately picked is blocked** — an automatically assigned one can simply be
+taken, and that worktree is reassigned; blocking those too would lock the whole
+menu on a repo with as many worktrees as there are colours. Choices persist per
+repo, keyed by folder name, and apply immediately via `unity:applyWorktreeTint`
+without opening Unity (nothing is created in a non-Unity project); siblings whose
+automatic colour moved are rewritten too, changed ones only, local only. Colour
+picking lives in one shared module so the menu and the script writer cannot
+drift apart. With more worktrees than colours some pair must share one — always
+two automatic ones, never a deliberate pick.
+
+**Twenty colours, in two tiers.** The original ten plus ten whose **hues sit at
+the midpoints between them**: the toolbar strip keeps only the hue of the pick
+at a fixed dark value, so an arbitrary second ten would have looked identical to
+the first. **Automatic assignment is unchanged** — it still hashes over the first
+tier's length, so existing worktrees keep their colour, and tier two is handed
+out only once tier one is fully claimed. The tiers order the automatic
+assignment, not the menu: all twenty are listed and pickable, tier two under
+"More Colors".
+
+**The same colour on Orca's sidebar row.** Per project: Off / Left colour bar /
+Row background tint / Right colour chip — three shapes because they read very
+differently at sidebar width. **The default is the left bar**, and because it is
+on by default it applies **only to repos confirmed to be Unity projects**; a
+plain git repo's rows stay untinted (one filesystem probe per repo per session,
+showing nothing until it answers). Hovering an option previews it on the live
+rows and saves nothing. All three sit outside layout flow, so a row measures the
+same tinted or not, and the default checkout stays uncoloured.
+
+**Surviving upstream merges.** `pnpm test:fork` runs exactly the fork's tests in
+one command (listed in `config/fork-contract-tests.mjs`); a merge that deletes or
+renames one fails a manifest meta-test loudly instead of silently shrinking the
+contract. Fork code that sat on files upstream rewrites moved into fork-owned
+modules — the Unity menu, the fork UI IPC listeners, the cold-restore resume
+bookkeeping — so the upstream files now touch the fork through a single import
+and call each.
+
+**Packaging: `.claude/` excluded from app.asar.** It held whole agent worktree
+checkouts (+76MB observed), but the real hazard is that it is written *during* a
+build: the mac build packs x64 and arm64 from one file scan, so a file that
+changes size in between shifts every later asar offset and the arm64 app dies
+with no log output.
+
+**The mode-B follow E2E now keys its verdict on the tab it spawned**, not on the
+agent name, so a bystander pane running the same agent can no longer make a good
+switch look like a failure.
+
+**Correction.** The long-standing note under machamy.2 that "Tell agents what
+changed" only shows a toast was wrong, and is corrected in this rev: it writes
+the new path and branch straight into each woken agent's pane, once per pane,
+retried at 6/15/30/60/90s. Only the write is guaranteed, not the send — some
+TUIs leave the text in the prompt for the user to press Enter.
+
+Full details in the Korean canonical changelog.
 
 ## machamy.3 — merged upstream `1.4.178-rc.2` · 2026-08-19
 

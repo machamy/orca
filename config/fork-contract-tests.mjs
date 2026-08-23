@@ -35,6 +35,7 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/sidebar/use-worktree-sidebar-unity-tint.test.tsx',
   'src/renderer/src/components/sidebar/worktree-card-unity-tint.test.tsx',
   'src/renderer/src/components/sidebar/worktree-unity-menu.test.tsx',
+  'src/renderer/src/components/sidebar/worktree-unity-tint-menu.test.tsx',
   'src/renderer/src/hooks/fork-ui-ipc-listeners.test.ts',
   'src/renderer/src/hooks/useIpcEvents-fork-listener-cleanup.test.ts',
   'src/renderer/src/components/sidebar/visible-worktrees-default-checkout.test.ts',

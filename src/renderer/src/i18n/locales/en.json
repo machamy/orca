@@ -12507,6 +12507,7 @@
           "unityTintMenu": "Unity Toolbar Color",
           "unityTintAutomatic": "Automatic",
           "unityTintTaken": "(in use)",
+          "unityTintMoreColors": "More Colors",
           "unityTintCustom": "Custom Color…",
           "unityTintCustomTitle": "Custom Unity Toolbar Color",
           "unityTintCustomBody": "The toolbar keeps a fixed dark shade and takes only the hue of your pick, so light icons stay readable.",

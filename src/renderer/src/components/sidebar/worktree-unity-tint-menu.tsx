@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { Check, Palette } from 'lucide-react'
 import {
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -19,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
+  UNITY_TINT_ALL_COLORS,
   UNITY_TINT_PALETTE,
   isValidUnityTintHex,
   pickUnityWorktreeTint,
@@ -36,6 +38,11 @@ import type { Worktree } from '../../../../shared/worktree/types'
  * lifecycle contract is the same: `tintPickerOpen` must keep the menu wrapper
  * mounted.
  */
+
+// Sliced out of the combined list rather than read from the two source arrays,
+// so the rows can never disagree with the order the slot indices assume.
+const PRIMARY_TIER = UNITY_TINT_ALL_COLORS.slice(0, UNITY_TINT_PALETTE.length)
+const SECOND_TIER = UNITY_TINT_ALL_COLORS.slice(UNITY_TINT_PALETTE.length)
 export function useUnityWorktreeTintMenu(args: {
   worktree: Worktree
   repo: Repo | null
@@ -226,6 +233,33 @@ export function useUnityWorktreeTintMenu(args: {
       </DialogContent>
     </Dialog>
   )
+  const tintRow = (entry: { name: string; hex: string }): React.JSX.Element => {
+    const takenBySibling = siblingTintHexes.has(entry.hex)
+    const isCurrent = ownOverrideHex === entry.hex
+    return (
+      <DropdownMenuItem
+        key={entry.hex}
+        disabled={takenBySibling}
+        onSelect={() => {
+          void applyTintChoice(entry.hex)
+        }}
+      >
+        <span
+          aria-hidden
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: entry.hex }}
+        />
+        {entry.name}
+        {/* Marked (and blocked) even when it IS the current pick: past the
+            palette size the automatic assignment runs out of free slots and
+            can land on a colour an override already holds. */}
+        {takenBySibling
+          ? ` ${translate('auto.components.sidebar.WorktreeContextMenu.unityTintTaken', '(in use)')}`
+          : null}
+        {isCurrent ? <Check className="ml-auto size-3.5" /> : null}
+      </DropdownMenuItem>
+    )
+  }
   const tintMenuItems =
     tintFeatureOn && !isDefaultWorktreePath ? (
       <DropdownMenuSub>
@@ -241,7 +275,10 @@ export function useUnityWorktreeTintMenu(args: {
             style={{ backgroundColor: effectiveTint.hex }}
           />
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="min-w-44">
+        {/* Twenty swatches plus Automatic and Custom outgrow a short window, and
+            the shared SubContent has no height cap of its own — scroll inside the
+            popper's own available height so no row is ever unreachable. */}
+        <DropdownMenuSubContent className="max-h-(--radix-dropdown-menu-content-available-height) min-w-44 overflow-y-auto scrollbar-sleek">
           <DropdownMenuItem
             onSelect={() => {
               void applyTintChoice(null)
@@ -258,36 +295,18 @@ export function useUnityWorktreeTintMenu(args: {
             )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          {UNITY_TINT_PALETTE.map((entry) => {
-            const takenBySibling = siblingTintHexes.has(entry.hex)
-            const isCurrent = ownOverrideHex === entry.hex
-            return (
-              <DropdownMenuItem
-                key={entry.hex}
-                disabled={takenBySibling}
-                onSelect={() => {
-                  void applyTintChoice(entry.hex)
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="size-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: entry.hex }}
-                />
-                {entry.name}
-                {/* Marked (and blocked) even when it IS the current pick: past the
-                    palette size the automatic assignment runs out of free slots and
-                    can land on a colour an override already holds. */}
-                {takenBySibling
-                  ? ` ${translate(
-                      'auto.components.sidebar.WorktreeContextMenu.unityTintTaken',
-                      '(in use)'
-                    )}`
-                  : null}
-                {isCurrent ? <Check className="ml-auto size-3.5" /> : null}
-              </DropdownMenuItem>
-            )
-          })}
+          {PRIMARY_TIER.map(tintRow)}
+          <DropdownMenuSeparator />
+          {/* Labelled, not silently appended: the second tier exists because ten
+              colours run out, and a heading is what tells the user the block
+              below is more of the same rather than a different kind of setting. */}
+          <DropdownMenuLabel>
+            {translate(
+              'auto.components.sidebar.WorktreeContextMenu.unityTintMoreColors',
+              'More Colors'
+            )}
+          </DropdownMenuLabel>
+          {SECOND_TIER.map(tintRow)}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {

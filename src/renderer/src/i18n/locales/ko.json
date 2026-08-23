@@ -11666,6 +11666,7 @@
           "unityTintMenu": "유니티 툴바 색",
           "unityTintAutomatic": "자동",
           "unityTintTaken": "(사용 중)",
+          "unityTintMoreColors": "추가 색상",
           "unityTintCustom": "직접 선택…",
           "unityTintCustomTitle": "유니티 툴바 색 직접 선택",
           "unityTintCustomBody": "툴바는 고정된 어두운 명도를 유지하고 선택한 색의 색상(Hue)만 사용합니다 — 밝은 아이콘이 계속 잘 보이도록요.",
