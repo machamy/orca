@@ -7,6 +7,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   UNITY_TINT_ALL_COLORS,
   UNITY_TINT_FALLBACK_PALETTE,
+  UNITY_TINT_OPT_OUT,
   UNITY_TINT_PALETTE,
   pickUnityWorktreeTint
 } from '../../../../shared/unity-worktree-tint-palette'
@@ -47,14 +48,14 @@ describe('useUnityWorktreeMenu tint colour submenu', () => {
   const sibling = makeWorktree({ id: 'r1::/wt/other', path: '/wt/other' })
   const subcontent = (): HTMLElement => screen.getByTestId('tint-subcontent')
 
-  it('offers automatic, every palette colour, and a custom entry — side rows only', async () => {
+  it('offers automatic, no-colour, every palette colour, and a custom entry — side rows only', async () => {
     const { rerender } = render(<Harness />)
     await flush()
     const rows = within(subcontent()).getAllByText(/./, { selector: '[role="menuitem"]' })
-    // Automatic + BOTH tiers (10 + 10) + Custom. The second tier is what a
-    // worktree gets handed automatically once the first is claimed, so a user
-    // who wants to pick by hand has to be able to see it too.
-    expect(rows).toHaveLength(UNITY_TINT_ALL_COLORS.length + 2)
+    // Automatic + No Colour + BOTH tiers (10 + 10) + Custom. The second tier is
+    // what a worktree gets handed automatically once the first is claimed, so a
+    // user who wants to pick by hand has to be able to see it too.
+    expect(rows).toHaveLength(UNITY_TINT_ALL_COLORS.length + 3)
 
     rerender(<Harness worktree={makeWorktree({ path: '/repo', id: 'r1::/repo' })} />)
     await flush()
@@ -67,6 +68,8 @@ describe('useUnityWorktreeMenu tint colour submenu', () => {
     const rows = within(subcontent()).getAllByText(/./, { selector: '[role="menuitem"]' })
     expect(rows.map((row) => row.textContent)).toEqual([
       'Automatic',
+      // Beside Automatic: the two rows that are not one of the twenty colours.
+      'No Colour',
       ...UNITY_TINT_ALL_COLORS.map((entry) => entry.name),
       'Custom Color…'
     ])
@@ -199,6 +202,115 @@ describe('useUnityWorktreeMenu tint colour submenu', () => {
     expect(updateRepo).toHaveBeenCalledWith('r1', {
       unityTintOverrides: { other: '#f38ba8' }
     })
+  })
+
+  it("stores the reserved 'none' and sends the same payload to the writer", async () => {
+    render(<Harness allWorktrees={[makeWorktree(), sibling]} />)
+    await flush()
+    fireEvent.click(within(subcontent()).getByText('No Colour'))
+    await flush()
+    expect(updateRepo).toHaveBeenCalledWith('r1', {
+      unityTintOverrides: { feature: UNITY_TINT_OPT_OUT }
+    })
+    // `enabled` stays true: the opt-out travels in the overrides map, and the
+    // main side turns it into the script removal.
+    expect(applyWorktreeTint).toHaveBeenCalledWith({
+      worktreePath: '/wt/feature',
+      enabled: true,
+      tintSiblingLabels: ['feature', 'other'],
+      tintOverridesByLabel: { feature: UNITY_TINT_OPT_OUT }
+    })
+  })
+
+  it('checks No Colour — and not Automatic — for an opted-out worktree', async () => {
+    render(
+      <Harness
+        repo={makeRepo({ unityTintOverrides: { feature: UNITY_TINT_OPT_OUT } } as Partial<Repo>)}
+        allWorktrees={[makeWorktree(), sibling]}
+      />
+    )
+    await flush()
+    const rowFor = (label: string): Element | null =>
+      within(subcontent()).getByText(label).closest('[role="menuitem"]')
+    expect(rowFor('No Colour')?.querySelector('svg')).toBeTruthy()
+    // 'none' is not a valid hex, so a naive check would light up Automatic too.
+    expect(rowFor('Automatic')?.querySelector('svg')).toBeNull()
+  })
+
+  it('claims no colour for a sibling that opted out, leaving its hex free', async () => {
+    // An opted-out sibling paints nothing, so nothing of its is "in use".
+    render(
+      <Harness
+        repo={makeRepo({ unityTintOverrides: { other: UNITY_TINT_OPT_OUT } } as Partial<Repo>)}
+        allWorktrees={[makeWorktree(), sibling]}
+      />
+    )
+    await flush()
+    const rows = within(subcontent()).getAllByText(/./, { selector: '[role="menuitem"]' })
+    expect(rows.filter((row) => row.getAttribute('aria-disabled') === 'true')).toHaveLength(0)
+  })
+
+  it('rewrites a sibling whose automatic colour moved because of the opt-out', async () => {
+    // Opting out frees this worktree's palette slot, so a sibling on automatic
+    // can slide into it; its script still holds the old colour until rewritten.
+    const siblings = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'].map((name) =>
+      makeWorktree({ id: `r1::/wt/${name}`, path: `/wt/${name}` })
+    )
+    const all = [makeWorktree(), ...siblings]
+    const labels = all.map((entry) => entry.path.split('/').at(-1) as string)
+    const moved = labels.filter(
+      (label) =>
+        label !== 'feature' &&
+        pickUnityWorktreeTint(label, labels, { feature: UNITY_TINT_OPT_OUT }).hex !==
+          pickUnityWorktreeTint(label, labels).hex
+    )
+    expect(moved.length).toBeGreaterThan(0)
+
+    render(<Harness allWorktrees={all} />)
+    await flush()
+    fireEvent.click(within(subcontent()).getByText('No Colour'))
+    await flush()
+
+    const rewritten = applyWorktreeTint.mock.calls.map(
+      (call) => call[0].worktreePath.split('/').at(-1) as string
+    )
+    expect(rewritten).toContain('feature')
+    for (const label of moved) {
+      expect(rewritten).toContain(label)
+    }
+    for (const label of labels.filter((label) => label !== 'feature' && !moved.includes(label))) {
+      expect(rewritten).not.toContain(label)
+    }
+  })
+
+  it('restores a colour when switching back from No Colour to Automatic', async () => {
+    render(
+      <Harness
+        repo={makeRepo({ unityTintOverrides: { feature: UNITY_TINT_OPT_OUT } } as Partial<Repo>)}
+        allWorktrees={[makeWorktree(), sibling]}
+      />
+    )
+    await flush()
+    fireEvent.click(within(subcontent()).getByText('Automatic'))
+    await flush()
+    expect(updateRepo).toHaveBeenCalledWith('r1', { unityTintOverrides: {} })
+    const payload = applyWorktreeTint.mock.calls.find(
+      (call) => call[0].worktreePath === '/wt/feature'
+    )?.[0]
+    expect(payload.tintOverridesByLabel).toEqual({})
+    // With the opt-out gone the writer has a real colour to put back.
+    expect(pickUnityWorktreeTint('feature', ['feature', 'other'], {}).hex).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('stores the opt-out for a worktree folder literally named __proto__', async () => {
+    const odd = makeWorktree({ id: 'r1::/wt/__proto__', path: '/wt/__proto__' })
+    render(<Harness worktree={odd} allWorktrees={[odd]} />)
+    await flush()
+    fireEvent.click(within(subcontent()).getByText('No Colour'))
+    await flush()
+    const stored = updateRepo.mock.calls.at(-1)?.[1].unityTintOverrides
+    expect(Object.hasOwn(stored, '__proto__')).toBe(true)
+    expect(stored['__proto__']).toBe(UNITY_TINT_OPT_OUT)
   })
 
   it('applies a custom colour from the picker dialog', async () => {
@@ -406,8 +518,8 @@ describe('useUnityWorktreeMenu tint colour submenu', () => {
     await flush()
     const rows = within(subcontent()).getAllByText(/./, { selector: '[role="menuitem"]' })
     const selectable = rows.filter((row) => row.getAttribute('aria-disabled') !== 'true')
-    // Automatic + all ten fallback colours + Custom.
-    expect(selectable).toHaveLength(UNITY_TINT_FALLBACK_PALETTE.length + 2)
+    // Automatic + No Colour + all ten fallback colours + Custom.
+    expect(selectable).toHaveLength(UNITY_TINT_FALLBACK_PALETTE.length + 3)
 
     fireEvent.click(within(subcontent()).getByText('Amber'))
     await flush()

@@ -21,7 +21,9 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
   UNITY_TINT_ALL_COLORS,
+  UNITY_TINT_OPT_OUT,
   UNITY_TINT_PALETTE,
+  isUnityTintOptOut,
   isValidUnityTintHex,
   pickUnityWorktreeTint,
   unityToolbarPreviewHex
@@ -90,22 +92,24 @@ export function useUnityWorktreeTintMenu(args: {
   }, [unityTintSiblingLabels, worktreeLabel, tintOverrides])
   const storedOverride = tintOverrides?.[worktreeLabel]
   const ownOverrideHex = isValidUnityTintHex(storedOverride) ? storedOverride.toLowerCase() : null
+  const optedOut = isUnityTintOptOut(storedOverride)
   const effectiveTint = useMemo(
     () => pickUnityWorktreeTint(worktreeLabel, unityTintSiblingLabels, tintOverrides),
     [worktreeLabel, unityTintSiblingLabels, tintOverrides]
   )
+  // `choice` is a hex, the reserved opt-out `'none'`, or null for automatic.
   const applyTintChoice = useCallback(
-    async (hex: string | null) => {
+    async (choice: string | null) => {
       if (!repo) {
         return
       }
       const next = { ...repo.unityTintOverrides }
-      if (hex) {
+      if (choice) {
         // defineProperty, not assignment: a worktree folder literally named
         // `__proto__` is legal, and plain assignment there hits Object.prototype's
         // setter and stores nothing.
         Object.defineProperty(next, worktreeLabel, {
-          value: hex.toLowerCase(),
+          value: choice.toLowerCase(),
           enumerable: true,
           writable: true,
           configurable: true
@@ -260,6 +264,22 @@ export function useUnityWorktreeTintMenu(args: {
       </DropdownMenuItem>
     )
   }
+  // Automatic and "No Colour" are the two rows that are not a colour: no
+  // swatch, and the check sits where the swatch would to keep the column even.
+  const nonColourRow = (args: {
+    checked: boolean
+    choice: string | null
+    label: string
+  }): React.JSX.Element => (
+    <DropdownMenuItem
+      onSelect={() => {
+        void applyTintChoice(args.choice)
+      }}
+    >
+      {args.checked ? <Check className="size-3.5" /> : <span aria-hidden className="size-3.5" />}
+      {args.label}
+    </DropdownMenuItem>
+  )
   const tintMenuItems =
     tintFeatureOn && !isDefaultWorktreePath ? (
       <DropdownMenuSub>
@@ -269,31 +289,41 @@ export function useUnityWorktreeTintMenu(args: {
             'auto.components.sidebar.WorktreeContextMenu.unityTintMenu',
             'Unity Toolbar Color'
           )}
+          {/* An opted-out worktree has no colour to preview — an outline, not a
+              filled dot, or the trigger would advertise a tint that no longer
+              exists in the editor. */}
           <span
             aria-hidden
-            className="ml-auto size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: effectiveTint.hex }}
+            className={
+              optedOut
+                ? 'ml-auto size-2.5 shrink-0 rounded-full border border-border'
+                : 'ml-auto size-2.5 shrink-0 rounded-full'
+            }
+            style={optedOut ? undefined : { backgroundColor: effectiveTint.hex }}
           />
         </DropdownMenuSubTrigger>
         {/* Twenty swatches plus Automatic and Custom outgrow a short window, and
             the shared SubContent has no height cap of its own — scroll inside the
             popper's own available height so no row is ever unreachable. */}
         <DropdownMenuSubContent className="max-h-(--radix-dropdown-menu-content-available-height) min-w-44 overflow-y-auto scrollbar-sleek">
-          <DropdownMenuItem
-            onSelect={() => {
-              void applyTintChoice(null)
-            }}
-          >
-            {ownOverrideHex === null ? (
-              <Check className="size-3.5" />
-            ) : (
-              <span aria-hidden className="size-3.5" />
-            )}
-            {translate(
+          {nonColourRow({
+            checked: ownOverrideHex === null && !optedOut,
+            choice: null,
+            label: translate(
               'auto.components.sidebar.WorktreeContextMenu.unityTintAutomatic',
               'Automatic'
-            )}
-          </DropdownMenuItem>
+            )
+          })}
+          {/* Beside Automatic, not at the bottom: both are "not one of the
+              twenty", and opting out frees the slot for a sibling. */}
+          {nonColourRow({
+            checked: optedOut,
+            choice: UNITY_TINT_OPT_OUT,
+            label: translate(
+              'auto.components.sidebar.WorktreeContextMenu.unityTintNone',
+              'No Colour'
+            )
+          })}
           <DropdownMenuSeparator />
           {PRIMARY_TIER.map(tintRow)}
           <DropdownMenuSeparator />

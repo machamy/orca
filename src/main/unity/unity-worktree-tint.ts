@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
-import { pickUnityWorktreeTint } from '../../shared/unity-worktree-tint-palette'
+import { isUnityTintOptOut, pickUnityWorktreeTint } from '../../shared/unity-worktree-tint-palette'
 import type { UnityWorktreeTint } from '../../shared/unity-worktree-tint-palette'
 
 /**
@@ -207,7 +207,12 @@ export async function syncUnityWorktreeTint(args: {
   overridesByLabel?: Readonly<Record<string, string>>
 }): Promise<'written' | 'removed' | 'unchanged' | 'skipped'> {
   const scriptPath = join(args.worktreePath, SCRIPT_RELPATH)
-  if (!args.enabled) {
+  const label = args.label ?? basename(args.worktreePath)
+  // "No colour" is stored as the reserved override `'none'`, and it must reach
+  // exactly the same end state as the feature being off: no script, no .meta.
+  // Routing it here rather than at each caller means seed, Orca-launched open
+  // and the context-menu apply all honour it without repeating the check.
+  if (!args.enabled || isUnityTintOptOut(args.overridesByLabel?.[label])) {
     let existed = false
     try {
       await readFile(scriptPath)
@@ -225,7 +230,6 @@ export async function syncUnityWorktreeTint(args: {
   if (!(await scriptPathIsGitIgnored(args.worktreePath))) {
     return 'skipped'
   }
-  const label = args.label ?? basename(args.worktreePath)
   const contents = renderTintScript(
     label,
     pickUnityWorktreeTint(label, args.siblingLabels, args.overridesByLabel)

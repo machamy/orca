@@ -73,6 +73,22 @@ export function isValidUnityTintHex(value: unknown): value is string {
   return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 }
 
+/**
+ * Reserved `unityTintOverrides` value meaning "this worktree gets NO colour" —
+ * the fourth choice beside Automatic, a preset and a custom pick.
+ *
+ * It rides in the same map as the hex overrides rather than a second field, and
+ * is deliberately not a valid hex, so every pre-existing `isValidUnityTintHex`
+ * gate already treats it as "not a colour" instead of painting `#none`.
+ */
+export const UNITY_TINT_OPT_OUT = 'none'
+
+/** True only for the reserved opt-out marker — callers must ask this BEFORE
+ *  asking for a colour, since a tint is all `pickUnityWorktreeTint` can return. */
+export function isUnityTintOptOut(value: unknown): boolean {
+  return value === UNITY_TINT_OPT_OUT
+}
+
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   return {
     r: Number.parseInt(hex.slice(1, 3), 16) / 255,
@@ -165,7 +181,9 @@ function buildPaletteSlots(
       reserved.add(index)
     }
   }
-  const ordered = [...live].filter((sibling) => !hasValidOverride(sibling, overridesByLabel)).sort()
+  const ordered = [...live]
+    .filter((sibling) => !hasManualTintChoice(sibling, overridesByLabel))
+    .sort()
   const slots = new Map<string, number>()
   const taken = new Set<number>()
   for (const sibling of ordered) {
@@ -187,11 +205,22 @@ function assignPaletteIndex(
   )
 }
 
-function hasValidOverride(
+/**
+ * Labels the automatic walk skips — the two halves of "chosen by hand".
+ *
+ * A hex pick is skipped but RESERVES its colour (above), so no automatic
+ * assignment lands on it. An opt-out is the other half: skipped and reserving
+ * nothing, because a colourless worktree is not competing for the palette. That
+ * makes the remaining siblings' colours exactly what they would be if the label
+ * had never been in `siblingLabels` — removing a colour frees capacity for the
+ * siblings, precisely as deleting the worktree would.
+ */
+function hasManualTintChoice(
   label: string,
   overridesByLabel?: Readonly<Record<string, string>>
 ): boolean {
-  return isValidUnityTintHex(overridesByLabel?.[label])
+  const chosen = overridesByLabel?.[label]
+  return isValidUnityTintHex(chosen) || isUnityTintOptOut(chosen)
 }
 
 /** Deep enough to sit inside Unity's dark chrome, saturated enough to name the
@@ -282,6 +311,11 @@ export function unityToolbarPreviewHex(accentHex: string): string {
  * Order matters for stability: siblings are walked sorted by name, so a
  * worktree keeps its colour as long as the names before it are unchanged, and
  * a NEW worktree takes a free slot instead of shifting everyone.
+ *
+ * This always returns a colour, opt-out included — "no colour" has no
+ * representation in `UnityWorktreeTint`, and widening the return type would push
+ * a null check into every call site that can never see one. Gate on
+ * `isUnityTintOptOut(overridesByLabel?.[label])` before calling.
  */
 export function pickUnityWorktreeTint(
   label: string,
@@ -330,7 +364,7 @@ function assignUnityWorktreeTints(
     return byLabel
   }
   for (const label of new Set(siblingLabels)) {
-    if (!byLabel.has(label)) {
+    if (!byLabel.has(label) && !isUnityTintOptOut(overridesByLabel?.[label])) {
       byLabel.set(label, tintFromPaletteSlot(hashLabel(label) % UNITY_TINT_PALETTE.length))
     }
   }
@@ -349,6 +383,11 @@ const ASSIGNMENT_CACHE_LIMIT = 8
  * rows ask on every worktree store tick. Rows must call this instead: the key is
  * the sibling names themselves, so a tick that leaves the set alone — an agent
  * writing output, say — is a cache hit and no table is rebuilt.
+ *
+ * An opted-out label is ABSENT from the table — there is no colour to hold, and
+ * absence is the same answer the table already gives for a label that is not a
+ * sibling at all, which is exactly what an opt-out makes the worktree. Ask
+ * `isUnityTintOptOut` first; a missing entry alone cannot tell the two apart.
  */
 export function getUnityWorktreeTintAssignment(
   siblingLabels: readonly string[],

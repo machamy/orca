@@ -35,7 +35,10 @@ vi.mock('@/store/selectors', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import { pickUnityWorktreeTint } from '../../../../shared/unity-worktree-tint-palette'
+import {
+  UNITY_TINT_OPT_OUT,
+  pickUnityWorktreeTint
+} from '../../../../shared/unity-worktree-tint-palette'
 import { useWorktreeSidebarUnityTint } from './use-worktree-sidebar-unity-tint'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -286,6 +289,69 @@ describe('useWorktreeSidebarUnityTint Unity gate', () => {
     await tintOf(DEFAULT_ROW, makeRepo())
     await tintOf(makeWorktree(), makeRepo({ unityWorktreeTint: false }))
     expect(worktreeStatus).not.toHaveBeenCalled()
+  })
+})
+
+describe('useWorktreeSidebarUnityTint opt-out', () => {
+  const OPTED_OUT = makeRepo({ unityTintOverrides: { feature: UNITY_TINT_OPT_OUT } })
+
+  it('shows no colour in every sidebar mode', async () => {
+    for (const mode of ['bar', 'wash', 'chip'] as const) {
+      const repo = makeRepo({
+        unityTintInSidebar: mode,
+        unityTintOverrides: { feature: UNITY_TINT_OPT_OUT }
+      })
+      expect(await tintOf(makeWorktree(), repo)).toEqual({ hex: null, mode: 'off' })
+    }
+  })
+
+  it('leaves the row alone while a sibling is the one opted out', async () => {
+    const repo = makeRepo({ unityTintOverrides: { other: UNITY_TINT_OPT_OUT } })
+    expect((await tintOf(makeWorktree(), repo)).hex).not.toBeNull()
+  })
+
+  it('is not defeated by a hovered mode preview', async () => {
+    cleanup()
+    const latest = mount(makeWorktree(), OPTED_OUT)
+    for (const mode of ['bar', 'wash', 'chip'] as const) {
+      setPreview('r1', mode)
+      await settleProbe()
+      expect(latest.current).toEqual({ hex: null, mode: 'off' })
+    }
+  })
+
+  it('colours the row again once the opt-out is cleared', async () => {
+    expect((await tintOf(makeWorktree(), OPTED_OUT)).hex).toBeNull()
+    expect(await tintOf(makeWorktree(), makeRepo())).toEqual({ hex: FEATURE_HEX, mode: 'bar' })
+  })
+
+  it('neither probes nor slices the worktree store', async () => {
+    await tintOf(makeWorktree(), OPTED_OUT)
+    expect(worktreeStatus).not.toHaveBeenCalled()
+    expect(worktreesForRepo).toHaveBeenCalledWith(null)
+    expect(worktreesForRepo).not.toHaveBeenCalledWith('r1')
+  })
+
+  // The palette's guarantee, asserted through the hook so the two cannot drift:
+  // an opted-out label consumes no slot, so its siblings land exactly where they
+  // would if that worktree had never been created. These three names are picked
+  // because the slot really moves between the two cases — for most name sets the
+  // assignment coincides anyway and the assertion would prove nothing.
+  it('gives a sibling the colour it would have had without the opted-out worktree', async () => {
+    const folder = makeWorktree({ id: 'r1::/wt/wt-0', path: '/wt/wt-0' })
+    const sibling = makeWorktree({ id: 'r1::/wt/wt-3', path: '/wt/wt-3' })
+    const third = makeWorktree({ id: 'r1::/wt/wt-16', path: '/wt/wt-16' })
+    worktreesForRepo.mockImplementation((repoId) =>
+      repoId === 'r1' ? [DEFAULT_ROW, folder, sibling, third] : []
+    )
+    const withFolder = pickUnityWorktreeTint('wt-3', ['wt-0', 'wt-3', 'wt-16'], undefined).hex
+    const withoutFolder = pickUnityWorktreeTint('wt-3', ['wt-3', 'wt-16'], undefined).hex
+    expect(withFolder).not.toBe(withoutFolder)
+
+    expect((await tintOf(sibling, makeRepo())).hex).toBe(withFolder)
+    expect(
+      (await tintOf(sibling, makeRepo({ unityTintOverrides: { 'wt-0': UNITY_TINT_OPT_OUT } }))).hex
+    ).toBe(withoutFolder)
   })
 })
 

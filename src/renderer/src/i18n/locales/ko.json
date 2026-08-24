@@ -11665,6 +11665,7 @@
           "unityRiderFailed": "Rider 실행 실패: {{detail}}",
           "unityTintMenu": "유니티 툴바 색",
           "unityTintAutomatic": "자동",
+          "unityTintNone": "색 지정 안함",
           "unityTintTaken": "(사용 중)",
           "unityTintMoreColors": "추가 색상",
           "unityTintCustom": "직접 선택…",

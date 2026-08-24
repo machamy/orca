@@ -6,6 +6,7 @@ import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import { isLocallyRunnableUnityRepo } from '../../../../shared/unity-repo-eligibility'
 import {
   getUnityWorktreeTintAssignment,
+  isUnityTintOptOut,
   pickUnityWorktreeTint
 } from '../../../../shared/unity-worktree-tint-palette'
 import { resolveUnitySidebarTintMode } from '../../../../shared/repo-types'
@@ -33,8 +34,9 @@ const NO_TINT: WorktreeSidebarUnityTint = { hex: null, mode: 'off' }
  *
  * A hovered menu option previews its mode through the store slice, which wins
  * over the saved setting in both directions — including turning a row on for a
- * repo saved as 'off'. It does not win over the Unity gate: a preview may only
- * choose the shape of a colour the repo is entitled to.
+ * repo saved as 'off'. It does not win over the Unity gate, nor over a
+ * worktree's own opt-out: a preview only chooses the shape of a colour the row
+ * is entitled to, and an opted-out row is entitled to none.
  *
  * The sibling list must be built exactly like worktree-unity-menu.tsx does it
  * (same repo, local only, minus the repo-path checkout) — a different list
@@ -54,12 +56,20 @@ export function useWorktreeSidebarUnityTint(
     repoId == null ? null : (state.unityTintSidebarPreviewByRepoId?.[repoId] ?? null)
   )
   const mode = previewMode ?? resolveUnitySidebarTintMode(repo?.unityTintInSidebar)
+  const overrides = repo?.unityTintOverrides
+  // No `|| path` fallback here: the menu keys the override map on the bare
+  // basename, and the two must agree.
+  const label = getRuntimePathBasename(worktree.path)
   // Every gate that costs nothing, settled before the filesystem is consulted:
   // a repo failing one of these must never trigger a probe.
   const wanted =
     repo != null &&
     mode !== 'off' &&
     repo.unityWorktreeTint !== false &&
+    // Set to no colour on purpose — typically a worktree used as a folder for
+    // nested ones. Sits with the gates, not with the lookup, so a hovered mode
+    // preview cannot paint a colour back onto it.
+    !isUnityTintOptOut(overrides?.[label]) &&
     isLocallyRunnableUnityRepo(repo) &&
     // The default checkout keeps Unity's own grey toolbar, so it has no colour.
     !isDefaultCheckoutWorkspace(worktree, repo) &&
@@ -92,10 +102,6 @@ export function useWorktreeSidebarUnityTint(
         .map((candidate) => getRuntimePathBasename(candidate.path) || candidate.path),
     [repoWorktrees, repoPath, worktree.repoId]
   )
-  const overrides = repo?.unityTintOverrides
-  // No `|| path` fallback here: the menu keys the override map on the bare
-  // basename, and the two must agree.
-  const label = getRuntimePathBasename(worktree.path)
   return useMemo(() => {
     if (!enabled) {
       return NO_TINT
@@ -103,6 +109,8 @@ export function useWorktreeSidebarUnityTint(
     // The whole repo's assignment, not this row's cell: `pickUnityWorktreeTint`
     // rebuilds the entire table per call, and the sibling list gets a fresh
     // identity on every worktree store tick — N rows would each redo it.
+    // A miss here can only mean "not in the sibling list" — the table's other
+    // reason for absence, an opt-out, was already gated above.
     const hex = getUnityWorktreeTintAssignment(siblingLabels, overrides).get(label)?.hex
     return { hex: hex ?? pickUnityWorktreeTint(label, siblingLabels, overrides).hex, mode }
   }, [enabled, mode, label, siblingLabels, overrides])

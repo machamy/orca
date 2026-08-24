@@ -122,7 +122,10 @@ export type Repo = {
   unityTintInSidebar?: UnitySidebarTintMode
   /** Fork: manual tint choices from the worktree context menu, keyed by the
    *  worktree FOLDER name (the colour follows the folder, like the automatic
-   *  assignment). Absent labels fall back to the automatic palette. */
+   *  assignment). Absent labels fall back to the automatic palette. Values are
+   *  `#rrggbb`, or the reserved `UNITY_TINT_OPT_OUT` (`'none'`) for a worktree
+   *  that gets no colour at all — test it with `isUnityTintOptOut`, never by
+   *  comparing to a literal. */
   unityTintOverrides?: Record<string, string>
   /** External worktree paths explicitly imported while global visibility stays hide. */
   importedExternalWorktreePaths?: string[]

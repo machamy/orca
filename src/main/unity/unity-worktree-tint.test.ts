@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { UNITY_TINT_OPT_OUT } from '../../shared/unity-worktree-tint-palette'
 import { pickUnityWorktreeTint, syncUnityWorktreeTint } from './unity-worktree-tint'
 
 let project: string
@@ -117,6 +118,72 @@ describe('syncUnityWorktreeTint', () => {
     expect(contents).toContain('(Custom)')
     // #123456 → r=0x12/255
     expect(contents).toContain(`${(0x12 / 255).toFixed(4)}f`)
+  })
+
+  it('removes the script when the label opted out, instead of recolouring it', async () => {
+    await syncUnityWorktreeTint({
+      worktreePath: project,
+      enabled: true,
+      label: 'feature-a',
+      siblingLabels: ['feature-a', 'feature-b']
+    })
+    await writeFile(`${scriptPath()}.meta`, 'guid: 0')
+
+    // `enabled` stays true — the reserved 'none' override is what opts out, and
+    // it has to reach the same end state as the feature being switched off.
+    expect(
+      await syncUnityWorktreeTint({
+        worktreePath: project,
+        enabled: true,
+        label: 'feature-a',
+        siblingLabels: ['feature-a', 'feature-b'],
+        overridesByLabel: { 'feature-a': UNITY_TINT_OPT_OUT }
+      })
+    ).toBe('removed')
+    await expect(readFile(scriptPath(), 'utf-8')).rejects.toThrow()
+    await expect(readFile(`${scriptPath()}.meta`, 'utf-8')).rejects.toThrow()
+  })
+
+  it("ignores a sibling's opt-out and still writes this worktree's colour", async () => {
+    // Only the label being synced may be opted out; a sibling's 'none' just
+    // frees a slot, it must not silence everyone's script.
+    expect(
+      await syncUnityWorktreeTint({
+        worktreePath: project,
+        enabled: true,
+        label: 'feature-a',
+        siblingLabels: ['feature-a', 'feature-b'],
+        overridesByLabel: { 'feature-b': UNITY_TINT_OPT_OUT }
+      })
+    ).toBe('written')
+    expect(await readFile(scriptPath(), 'utf-8')).toContain('unity-editor-main-toolbar')
+  })
+
+  it('opts out on the folder name when the caller passes no label', async () => {
+    await syncUnityWorktreeTint({ worktreePath: project, enabled: true })
+
+    expect(
+      await syncUnityWorktreeTint({
+        worktreePath: project,
+        enabled: true,
+        overridesByLabel: { [basename(project)]: UNITY_TINT_OPT_OUT }
+      })
+    ).toBe('removed')
+    await expect(readFile(scriptPath(), 'utf-8')).rejects.toThrow()
+  })
+
+  it('restores a colour when the opt-out is lifted again', async () => {
+    await syncUnityWorktreeTint({
+      worktreePath: project,
+      enabled: true,
+      label: 'feature-a',
+      overridesByLabel: { 'feature-a': UNITY_TINT_OPT_OUT }
+    })
+
+    expect(
+      await syncUnityWorktreeTint({ worktreePath: project, enabled: true, label: 'feature-a' })
+    ).toBe('written')
+    expect(await readFile(scriptPath(), 'utf-8')).toContain('"feature-a"')
   })
 
   it('escapes a label that would break the C# string literal', async () => {

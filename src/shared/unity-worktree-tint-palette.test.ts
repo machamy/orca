@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   UNITY_TINT_ALL_COLORS,
   UNITY_TINT_FALLBACK_PALETTE,
+  UNITY_TINT_OPT_OUT,
   UNITY_TINT_PALETTE,
   getUnityWorktreeTintAssignment,
+  isUnityTintOptOut,
   isValidUnityTintHex,
   pickUnityWorktreeTint,
   unityToolbarPreviewHex
@@ -176,6 +178,87 @@ describe('pickUnityWorktreeTint (overrides)', () => {
   })
 })
 
+describe('pickUnityWorktreeTint (opt-out)', () => {
+  /** The whole semantic in one assertion: for everyone else, opting a label out
+   *  is indistinguishable from that worktree not existing. */
+  const expectSameAsDeleting = (
+    labels: readonly string[],
+    optedOut: string,
+    overrides: Record<string, string> = {}
+  ): void => {
+    const remaining = labels.filter((label) => label !== optedOut)
+    for (const label of remaining) {
+      expect(
+        pickUnityWorktreeTint(label, labels, { ...overrides, [optedOut]: UNITY_TINT_OPT_OUT })
+      ).toEqual(pickUnityWorktreeTint(label, remaining, overrides))
+    }
+  }
+
+  const many = (count: number): string[] => Array.from({ length: count }, (_, i) => `wt-${i}`)
+
+  it.each([
+    { name: 'a pair, dropping to the single-sibling shortcut', labels: ['solo-a', 'solo-b'] },
+    { name: 'a handful', labels: SIBLINGS },
+    { name: 'a probing set', labels: ['alpha', 'beta', 'epsilon'] },
+    { name: 'exactly one tier', labels: many(UNITY_TINT_PALETTE.length) },
+    { name: 'both tiers plus doubling up', labels: many(UNITY_TINT_ALL_COLORS.length + 3) }
+  ])('leaves every sibling exactly where deleting the worktree would: $name', ({ labels }) => {
+    for (const optedOut of labels) {
+      expectSameAsDeleting(labels, optedOut)
+    }
+  })
+
+  it('holds that equivalence with hand-picked colours in the mix', () => {
+    const labels = [...SIBLINGS, 'manual', 'custom']
+    const overrides = { manual: '#f38ba8', custom: '#123456' }
+    for (const optedOut of labels) {
+      expectSameAsDeleting(labels, optedOut, overrides)
+    }
+  })
+
+  it('reserves nothing, so a sibling takes the colour it would have had', () => {
+    // Mirrors the custom-colour case above: 'beta' automatically holds Pink, and
+    // 'epsilon' only reaches Pink once beta stops competing for it.
+    const set = ['alpha', 'beta', 'epsilon']
+    expect(pickUnityWorktreeTint('beta', set).hex).toBe('#f5c2e7')
+    expect(pickUnityWorktreeTint('epsilon', set).hex).not.toBe('#f5c2e7')
+
+    const optedOut = { beta: UNITY_TINT_OPT_OUT }
+    expect(pickUnityWorktreeTint('epsilon', set, optedOut).hex).toBe('#f5c2e7')
+    // Contrast: pinning beta to that same Pink by hand DOES reserve it.
+    expect(pickUnityWorktreeTint('epsilon', set, { beta: '#f5c2e7' }).hex).not.toBe('#f5c2e7')
+  })
+
+  it('frees capacity, so a set past both tiers stops doubling up', () => {
+    // One worktree too many for the palette forces exactly one shared colour.
+    // Removing one worktree's colour must buy back that last slot.
+    const set = many(UNITY_TINT_ALL_COLORS.length + 1)
+    const hexes = (overrides?: Record<string, string>): string[] =>
+      set
+        .filter((l) => !isUnityTintOptOut(overrides?.[l]))
+        .map((l) => pickUnityWorktreeTint(l, set, overrides).hex)
+    expect(new Set(hexes()).size).toBe(UNITY_TINT_ALL_COLORS.length)
+    const freed = hexes({ 'wt-0': UNITY_TINT_OPT_OUT })
+    expect(new Set(freed).size).toBe(freed.length)
+  })
+
+  it('ignores an opt-out left behind by a deleted or renamed worktree', () => {
+    const stale = Object.fromEntries(
+      UNITY_TINT_PALETTE.map((_, index) => [`gone-${index}`, UNITY_TINT_OPT_OUT])
+    )
+    expect(SIBLINGS.map((label) => pickUnityWorktreeTint(label, SIBLINGS, stale))).toEqual(
+      SIBLINGS.map((label) => pickUnityWorktreeTint(label, SIBLINGS))
+    )
+  })
+
+  it('still returns a colour when asked about the opted-out label itself', () => {
+    // The return type is unchanged on purpose — callers gate on
+    // `isUnityTintOptOut` rather than unwrapping a nullable tint.
+    const tint = pickUnityWorktreeTint('beta', ['alpha', 'beta'], { beta: UNITY_TINT_OPT_OUT })
+    expect(tint.hex).toMatch(/^#[0-9a-f]{6}$/)
+  })
+})
+
 describe('isValidUnityTintHex', () => {
   it('accepts exactly #rrggbb and nothing else', () => {
     expect(isValidUnityTintHex('#a6e3a1')).toBe(true)
@@ -184,6 +267,24 @@ describe('isValidUnityTintHex', () => {
     expect(isValidUnityTintHex('a6e3a1')).toBe(false)
     expect(isValidUnityTintHex('#a6e3a1ff')).toBe(false)
     expect(isValidUnityTintHex(undefined)).toBe(false)
+  })
+
+  it('rejects the opt-out marker', () => {
+    // Load-bearing: the opt-out shares the override map with real colours, and
+    // every "is this a manual colour?" gate in the codebase is this function.
+    // The day this returns true, opted-out worktrees get painted '#none'.
+    expect(isValidUnityTintHex(UNITY_TINT_OPT_OUT)).toBe(false)
+    expect(isValidUnityTintHex('none')).toBe(false)
+  })
+})
+
+describe('isUnityTintOptOut', () => {
+  it("is true for exactly 'none' and nothing else", () => {
+    expect(isUnityTintOptOut('none')).toBe(true)
+    expect(isUnityTintOptOut(UNITY_TINT_OPT_OUT)).toBe(true)
+    for (const value of ['None', 'NONE', ' none', 'none ', '', '#a6e3a1', undefined, null, 0]) {
+      expect(isUnityTintOptOut(value)).toBe(false)
+    }
   })
 })
 
@@ -231,6 +332,45 @@ describe('getUnityWorktreeTintAssignment', () => {
     const assignment = getUnityWorktreeTintAssignment(labels, overrides)
     expect([...assignment.keys()].sort()).toEqual([...new Set(labels)].sort())
     for (const label of new Set(labels)) {
+      expect(assignment.get(label)).toEqual(pickUnityWorktreeTint(label, labels, overrides))
+    }
+  })
+
+  const OPT_OUT_CASES: { name: string; labels: string[]; overrides: Record<string, string> }[] = [
+    {
+      name: 'one opted-out sibling among automatics',
+      labels: SIBLINGS,
+      overrides: { 'feature-b': UNITY_TINT_OPT_OUT }
+    },
+    {
+      name: 'opted out beside a hand-picked colour',
+      labels: [...SIBLINGS, 'manual'],
+      overrides: { manual: '#f38ba8', 'feature-a': UNITY_TINT_OPT_OUT }
+    },
+    {
+      name: 'the only sibling opted out',
+      labels: ['solo'],
+      overrides: { solo: UNITY_TINT_OPT_OUT }
+    },
+    {
+      name: 'every sibling opted out',
+      labels: SIBLINGS,
+      overrides: Object.fromEntries(SIBLINGS.map((label) => [label, UNITY_TINT_OPT_OUT]))
+    },
+    {
+      name: 'a dead opt-out that names nobody',
+      labels: SIBLINGS,
+      overrides: { 'deleted-worktree': UNITY_TINT_OPT_OUT }
+    }
+  ]
+
+  // A peer reads this table: an opted-out label must be ABSENT, and everyone
+  // else must match the one-shot answer exactly.
+  it.each(OPT_OUT_CASES)('omits opted-out labels for $name', ({ labels, overrides }) => {
+    const assignment = getUnityWorktreeTintAssignment(labels, overrides)
+    const coloured = [...new Set(labels)].filter((label) => !isUnityTintOptOut(overrides[label]))
+    expect([...assignment.keys()].sort()).toEqual([...coloured].sort())
+    for (const label of coloured) {
       expect(assignment.get(label)).toEqual(pickUnityWorktreeTint(label, labels, overrides))
     }
   })

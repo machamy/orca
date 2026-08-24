@@ -12506,6 +12506,7 @@
           "unityRiderFailed": "Rider failed to launch: {{detail}}",
           "unityTintMenu": "Unity Toolbar Color",
           "unityTintAutomatic": "Automatic",
+          "unityTintNone": "No Colour",
           "unityTintTaken": "(in use)",
           "unityTintMoreColors": "More Colors",
           "unityTintCustom": "Custom Color…",
