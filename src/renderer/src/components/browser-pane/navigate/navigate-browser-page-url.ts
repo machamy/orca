@@ -1,12 +1,3 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionId } from '@/lib/connection-context'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
-import { useAppStore } from '@/store'
-import {
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -14,11 +5,8 @@ import {
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
-import {
-  getBrowserDisplayTitle,
-  getNotebookPathFromBrowserUrl,
-  toDisplayUrl
-} from '../describe-page/browser-page-url-display'
+import { getBrowserDisplayTitle, toDisplayUrl } from '../describe-page/browser-page-url-display'
+import { loadBrowserGuestUrl } from './load-browser-guest-url'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserPageUrlSetter,
@@ -89,56 +77,10 @@ export function navigateBrowserPageToUrl({
     }
   }
 
-  const notebookPath = getNotebookPathFromBrowserUrl(url)
-  if (notebookPath) {
-    void (async () => {
-      const store = useAppStore.getState()
-      const connectionId = getConnectionId(worktreeId)
-      if (connectionId !== null) {
-        navigateBrowserUrl(url)
-        return
-      }
-
-      try {
-        const activeWorktree = store.allWorktrees().find((w) => w.id === worktreeId)
-        const fileContext: RuntimeFileOperationArgs = {
-          settings: store.settings,
-          worktreeId,
-          worktreePath: activeWorktree?.path,
-          connectionId: undefined
-        }
-        if (!isRemoteRuntimeFileOperation(fileContext, notebookPath)) {
-          await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
-        }
-        const stat = await statRuntimePath(fileContext, notebookPath)
-        if (stat.isDirectory) {
-          navigateBrowserUrl(url)
-          return
-        }
-
-        let relativePath = notebookPath
-        if (activeWorktree?.path && isPathInsideWorktree(notebookPath, activeWorktree.path)) {
-          relativePath = toWorktreeRelativePath(notebookPath, activeWorktree.path) ?? notebookPath
-        }
-
-        // Why: file:// notebooks in the browser are otherwise rendered as raw JSON by Chromium.
-        store.setActiveTabType('editor')
-        store.openFile(
-          {
-            filePath: notebookPath,
-            relativePath,
-            worktreeId,
-            language: detectLanguage(notebookPath),
-            mode: 'edit'
-          },
-          { preview: false, targetGroupId: store.ensureWorktreeRootGroup(worktreeId) }
-        )
-      } catch {
-        navigateBrowserUrl(url)
-      }
-    })()
-    return
-  }
-
-  navigateBrowserUrl(url)
+  loadBrowserGuestUrl({
+    url,
+    worktreeId,
+    browserPageId: browserTabId,
+    loadInGuest: navigateBrowserUrl
+  })
 }

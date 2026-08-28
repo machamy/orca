@@ -16,6 +16,7 @@ function browserActionState(connectionId: string | null = null): never {
 }
 
 const mocks = vi.hoisted(() => ({
+  activeWorktreeId: 'wt-1' as string | null,
   browserAvailability: {
     state: 'enabled' as const,
     provider: 'local-client' as 'local-client' | 'paired-runtime'
@@ -29,7 +30,11 @@ const mocks = vi.hoisted(() => ({
   environmentId: null as string | null,
   connectionId: null as string | null,
   layoutByWorktree: {} as Record<string, unknown>,
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  authorizeExternalPath: vi.fn(async () => undefined),
+  openFile: vi.fn(),
+  setActiveTabType: vi.fn(),
+  statRuntimePath: vi.fn(async () => ({ isDirectory: false }))
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
@@ -46,9 +51,15 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createWebRuntimeSessionBrowserTab
 }))
 
+vi.mock('@/runtime/runtime-file-client', () => ({
+  statRuntimePath: mocks.statRuntimePath,
+  isRemoteRuntimeFileOperation: () => false
+}))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
+      activeWorktreeId: mocks.activeWorktreeId,
       closeEmptyGroup: mocks.closeEmptyGroup,
       createBrowserTab: mocks.createBrowserTab,
       createEmptySplitGroup: mocks.createEmptySplitGroup,
@@ -57,18 +68,29 @@ vi.mock('@/store', () => ({
       repos: [{ id: 'repo-1', connectionId: mocks.connectionId }],
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
-      }
+      },
+      settings: {},
+      allWorktrees: () => [{ id: 'wt-1', path: '/workspace/sample-project' }],
+      ensureWorktreeRootGroup: () => 'group-1',
+      openFile: mocks.openFile,
+      setActiveTabType: mocks.setActiveTabType
     })
   }
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.activeWorktreeId = 'wt-1'
   mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(true)
   mocks.browserAvailability = { state: 'enabled', provider: 'local-client' }
   mocks.environmentId = null
   mocks.connectionId = null
   mocks.layoutByWorktree = {}
+  mocks.statRuntimePath.mockResolvedValue({ isDirectory: false })
+  mocks.authorizeExternalPath.mockResolvedValue(undefined)
+  Object.assign(globalThis, {
+    window: { api: { fs: { authorizeExternalPath: mocks.authorizeExternalPath } } }
+  })
 })
 
 describe('openFileInBrowserTab', () => {
@@ -82,6 +104,126 @@ describe('openFileInBrowserTab', () => {
       title: 'example file.html',
       activate: true
     })
+  })
+
+  it('opens a markdown file in the editor without creating a browser tab', async () => {
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/docs/guide.md',
+      worktreeId: 'wt-1'
+    })
+
+    await vi.waitFor(() => expect(mocks.openFile).toHaveBeenCalled())
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('editor')
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/workspace/sample-project/docs/guide.md',
+        language: 'markdown',
+        mode: 'edit'
+      }),
+      expect.anything()
+    )
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('opens a notebook in the editor without creating a browser tab', async () => {
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/analysis.ipynb',
+      worktreeId: 'wt-1'
+    })
+
+    await vi.waitFor(() => expect(mocks.openFile).toHaveBeenCalled())
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/workspace/sample-project/analysis.ipynb',
+        language: 'notebook'
+      }),
+      expect.anything()
+    )
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('opens a plain text file in a browser tab', () => {
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/notes.txt',
+      worktreeId: 'wt-1'
+    })
+
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      'wt-1',
+      'file:///workspace/sample-project/notes.txt',
+      { title: 'notes.txt', activate: true }
+    )
+    expect(mocks.openFile).not.toHaveBeenCalled()
+  })
+
+  it('does not steal the active surface when a workspace switch lands mid-probe', async () => {
+    // Same race the choke point fences: A's authorize/stat completing after a
+    // switch to B must not flip B's active surface to A's file. The click falls
+    // back to a browser tab in A (activation there is workspace-local), and
+    // returning to A re-runs the handoff through the URL sync.
+    let releaseStat!: (value: { isDirectory: boolean }) => void
+    mocks.statRuntimePath.mockImplementationOnce(
+      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    )
+
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/docs/guide.md',
+      worktreeId: 'wt-1'
+    })
+    await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
+    mocks.activeWorktreeId = 'wt-2'
+    releaseStat({ isDirectory: false })
+
+    await vi.waitFor(() => expect(mocks.createBrowserTab).toHaveBeenCalled())
+    expect(mocks.openFile).not.toHaveBeenCalled()
+    expect(mocks.setActiveTabType).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      'wt-1',
+      'file:///workspace/sample-project/docs/guide.md',
+      expect.anything()
+    )
+  })
+
+  it('falls back to a browser tab when the markdown handoff is refused', async () => {
+    mocks.authorizeExternalPath.mockRejectedValueOnce(new Error('denied'))
+
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/docs/guide.md',
+      worktreeId: 'wt-1'
+    })
+
+    await vi.waitFor(() => expect(mocks.createBrowserTab).toHaveBeenCalled())
+    expect(mocks.openFile).not.toHaveBeenCalled()
+  })
+
+  it('leaves paired-runtime markdown to the owning host browser', () => {
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+
+    openFileInBrowserTab({ filePath: '/srv/repo/docs/guide.md', worktreeId: 'wt-1' })
+
+    expect(mocks.createWebRuntimeSessionBrowserTab).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'file:///srv/repo/docs/guide.md' })
+    )
+    expect(mocks.openFile).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('reports a connection-backed markdown file as unsupported and opens nothing', () => {
+    mocks.connectionId = 'ssh-1'
+
+    const result = openFileInBrowserTab({
+      filePath: '/home/alice/notes/guide.md',
+      worktreeId: 'wt-1'
+    })
+
+    expect(result).toEqual({
+      status: 'unsupported',
+      reason: 'remote-worktree',
+      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
+    })
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.openFile).not.toHaveBeenCalled()
   })
 
   it('creates paired-runtime file browsers at the owning host', () => {

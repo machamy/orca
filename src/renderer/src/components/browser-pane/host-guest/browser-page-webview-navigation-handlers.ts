@@ -6,6 +6,7 @@ import {
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
+import { invalidateBrowserGuestUrlProbe } from '../navigate/load-browser-guest-url'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import {
@@ -66,6 +67,8 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (!event.isMainFrame || event.isInPlace || !event.url) {
       return
     }
+    // Why: the guest is already leaving the page; a pending editor handoff is stale.
+    invalidateBrowserGuestUrlProbe(browserTabId)
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
@@ -106,6 +109,10 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleFullDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
+    if (event.isMainFrame !== false) {
+      // Why: also fence here — a navigation can commit without a matching start event.
+      invalidateBrowserGuestUrlProbe(browserTabId)
+    }
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     if (event.isMainFrame !== false && pendingRecoveryNavigation?.started) {
       pendingRecoveryNavigation.committed = true
@@ -116,6 +123,11 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleDidNavigateInPage = (event: { url?: string; isMainFrame?: boolean }): void => {
+    if (event.isMainFrame !== false) {
+      // Why: a pushState is still the guest leaving the probed context — the
+      // start/commit fences above never fire for it, so fence here too.
+      invalidateBrowserGuestUrlProbe(browserTabId)
+    }
     const preserveRecoveryError =
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
     handleDidNavigate(event, !preserveRecoveryError)

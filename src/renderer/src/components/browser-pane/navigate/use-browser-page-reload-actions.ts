@@ -8,7 +8,7 @@ import {
   resolveBrowserReloadButtonLabelKind,
   resolveBrowserReloadIntent
 } from './browser-reload-action'
-import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
+import { retryBrowserTabLoad } from './retry-browser-page-load'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
 export function useBrowserPageReloadActions({

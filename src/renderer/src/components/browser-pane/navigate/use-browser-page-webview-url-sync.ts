@@ -11,12 +11,14 @@ import {
 } from '../host-guest/browser-page-viewport'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { isChromiumErrorPage } from '../describe-page/browser-page-url-display'
+import { loadBrowserGuestUrl } from './load-browser-guest-url'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
 export function useBrowserPageWebviewUrlSync({
   browserTabId,
   browserTabUrl,
   browserTabLoading,
+  worktreeId,
   isActive,
   isPaintable,
   slotViewport,
@@ -34,6 +36,7 @@ export function useBrowserPageWebviewUrlSync({
   browserTabId: string
   browserTabUrl: string
   browserTabLoading: boolean
+  worktreeId: string
   isActive: boolean
   isPaintable: boolean
   slotViewport: HTMLDivElement | null
@@ -97,25 +100,34 @@ export function useBrowserPageWebviewUrlSync({
       webview.src !== normalizedUrl &&
       declaredSrc !== normalizedUrl
     ) {
-      // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
-      trackNextLoadingEventRef.current = normalizedUrl !== ORCA_BROWSER_BLANK_URL
-      lastKnownWebviewUrlRef.current = normalizedUrl
-      webview.src = normalizedUrl
-      if (normalizedUrl !== ORCA_BROWSER_BLANK_URL) {
-        keepAddressBarFocusRef.current = false
-        if (document.activeElement === addressBarInputRef.current) {
-          focusWebviewNow()
+      loadBrowserGuestUrl({
+        url: normalizedUrl,
+        worktreeId,
+        browserPageId: browserTabId,
+        loadInGuest: (targetUrl) => {
+          // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
+          trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
+          lastKnownWebviewUrlRef.current = targetUrl
+          webview.src = targetUrl
+          if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
+            keepAddressBarFocusRef.current = false
+            if (document.activeElement === addressBarInputRef.current) {
+              focusWebviewNow()
+            }
+          }
         }
-      }
+      })
     }
   }, [
     addressBarInputRef,
+    browserTabId,
     browserTabUrl,
     focusWebviewNow,
     keepAddressBarFocusRef,
     lastKnownWebviewUrlRef,
     trackNextLoadingEventRef,
-    webviewRef
+    webviewRef,
+    worktreeId
   ])
 
   useEffect(() => {

@@ -1,4 +1,6 @@
 import { toast } from 'sonner'
+import { getEditorRenderedPathFromBrowserUrl } from '@/components/browser-pane/describe-page/browser-page-url-display'
+import { openBrowserPathInEditor } from '@/components/browser-pane/navigate/load-browser-guest-url'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { useCallback } from 'react'
@@ -143,10 +145,27 @@ export function openFileInBrowserTab(params: {
     return target
   }
 
-  state.createBrowserTab(params.worktreeId, target.url, {
-    title: target.title,
-    activate: true
-  })
+  const openBrowserTab = (): void => {
+    // Why: re-read the store — as a handoff fallback this can run long after the click.
+    useAppStore.getState().createBrowserTab(params.worktreeId, target.url, {
+      title: target.title,
+      activate: true
+    })
+  }
+
+  // Why: the guest would only hand this document straight back to the editor, so a tab here would be
+  // left parked on the blank page as a stray "New Tab".
+  const editorRenderedPath = getEditorRenderedPathFromBrowserUrl(target.url)
+  if (editorRenderedPath) {
+    void openBrowserPathInEditor(editorRenderedPath, params.worktreeId).then((handedOff) => {
+      if (!handedOff) {
+        openBrowserTab()
+      }
+    }, openBrowserTab)
+    return target
+  }
+
+  openBrowserTab()
   return target
 }
 

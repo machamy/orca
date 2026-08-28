@@ -1,12 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import {
   getBrowserDisplayTitle,
   getBrowserPageRuntimeEnvironmentId,
-  getNotebookPathFromBrowserUrl,
+  getEditorRenderedPathFromBrowserUrl,
   getOpenableExternalUrl,
   isChromiumErrorPage,
-  retryBrowserTabLoad,
   toDisplayUrl
 } from './browser-page-url-display'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
@@ -29,8 +28,20 @@ describe('browser page URL display', () => {
     expect(isChromiumErrorPage('https://example.com')).toBe(false)
   })
 
-  it('extracts notebook paths only from file URLs ending in .ipynb', () => {
-    expect(getNotebookPathFromBrowserUrl('https://example.com/notebook.ipynb')).toBeNull()
+  it('extracts editor-rendered paths only from notebook and markdown file URLs', () => {
+    expect(getEditorRenderedPathFromBrowserUrl('file:///repo/notebook.ipynb')).toBe(
+      '/repo/notebook.ipynb'
+    )
+    expect(getEditorRenderedPathFromBrowserUrl('file:///repo/README.md')).toBe('/repo/README.md')
+    expect(getEditorRenderedPathFromBrowserUrl('file:///repo/docs/Guide.MDX')).toBe(
+      '/repo/docs/Guide.MDX'
+    )
+    expect(getEditorRenderedPathFromBrowserUrl('file:///repo/notes.markdown')).toBe(
+      '/repo/notes.markdown'
+    )
+    expect(getEditorRenderedPathFromBrowserUrl('file:///repo/notes.txt')).toBeNull()
+    expect(getEditorRenderedPathFromBrowserUrl('https://example.com/notebook.ipynb')).toBeNull()
+    expect(getEditorRenderedPathFromBrowserUrl('https://example.com/README.md')).toBeNull()
   })
 
   it('prefers the page-owned runtime environment id when present', () => {
@@ -57,34 +68,5 @@ describe('browser page URL display', () => {
   it('opens only normalizable external URLs', () => {
     expect(getOpenableExternalUrl('https://example.com')).toBe('https://example.com/')
     expect(getOpenableExternalUrl(ORCA_BROWSER_BLANK_URL)).toBeNull()
-  })
-
-  it('retries a failed load by assigning the attempted URL instead of reload()', () => {
-    const webview = { src: 'chrome-error://chromewebdata/' }
-    const onUpdatePageState = vi.fn()
-    retryBrowserTabLoad(
-      webview as Electron.WebviewTag,
-      {
-        id: 'page-1',
-        url: 'https://example.com/app',
-        loadError: { code: -102, description: 'refused', validatedUrl: 'https://example.com/app' }
-      } as BrowserPageState,
-      onUpdatePageState
-    )
-    expect(onUpdatePageState).toHaveBeenCalledWith('page-1', {
-      loading: true,
-      title: 'https://example.com/app'
-    })
-    expect(webview.src).toBe('https://example.com/app')
-  })
-
-  it('does nothing when there is no webview', () => {
-    const onUpdatePageState = vi.fn()
-    retryBrowserTabLoad(
-      null,
-      { id: 'page-1', url: 'https://example.com' } as BrowserPageState,
-      onUpdatePageState
-    )
-    expect(onUpdatePageState).not.toHaveBeenCalled()
   })
 })

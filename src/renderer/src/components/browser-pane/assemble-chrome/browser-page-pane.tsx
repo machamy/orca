@@ -205,6 +205,7 @@ export function BrowserPagePane({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
     browserTabLoading: browserTab.loading,
+    worktreeId,
     isActive,
     isPaintable,
     slotViewport,
