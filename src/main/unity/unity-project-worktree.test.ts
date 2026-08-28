@@ -12,7 +12,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyUnityWorktreeTint } from './unity-worktree-tint-apply'
 import {
   autoSeedUnityCacheAfterWorktreeCreate,
@@ -296,6 +296,100 @@ describe('live-editor gates', () => {
   })
 })
 
+describe('double-launch window', () => {
+  it('does not launch again while a just-launched editor is absent from the process table', async () => {
+    // Unity appears in the process table (and creates its lockfile) seconds
+    // after launch; a second open inside that window used to double the editor.
+    const worktree = makeUnityProject()
+    const launches: string[] = []
+    const args = {
+      worktreePath: worktree,
+      platform: 'darwin' as const,
+      listProcesses: async () => [],
+      editorBinaryExists: () => true,
+      launch: async (binary: string) => {
+        launches.push(binary)
+        return { ok: true as const }
+      }
+    }
+
+    expect(await openUnityProject(args)).toEqual({ opened: true })
+    const second = await openUnityProject(args)
+
+    expect(launches).toHaveLength(1)
+    expect(second).toEqual({
+      opened: false,
+      reason: 'focus_failed',
+      editorVersion: '6000.3.16f1',
+      focusFailureReason: 'no_window',
+      detail: expect.stringContaining('launched')
+    })
+  })
+
+  it('allows a relaunch when the stamped editor died leaving no lockfile', async () => {
+    // Quit-or-crashed right after launch: no process, no Temp/UnityLockfile.
+    // The bare stamp used to block for its full 120s TTL anyway.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const worktree = makeUnityProject()
+      const launches: string[] = []
+      const args = {
+        worktreePath: worktree,
+        platform: 'darwin' as const,
+        listProcesses: async () => [],
+        editorBinaryExists: () => true,
+        launch: async (binary: string) => {
+          launches.push(binary)
+          return { ok: true as const }
+        }
+      }
+
+      expect(await openUnityProject(args)).toEqual({ opened: true })
+      vi.setSystemTime(Date.now() + 20_000)
+
+      expect(await openUnityProject(args)).toEqual({ opened: true })
+      expect(launches).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps blocking past the startup grace while the lockfile is present', async () => {
+    // A lockfile means the launched editor is (or was very recently) alive;
+    // only its absence past the grace proves the launch is dead.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const worktree = makeUnityProject()
+      const launches: string[] = []
+      const args = {
+        worktreePath: worktree,
+        platform: 'darwin' as const,
+        listProcesses: async () => [],
+        editorBinaryExists: () => true,
+        launch: async (binary: string) => {
+          launches.push(binary)
+          return { ok: true as const }
+        }
+      }
+
+      expect(await openUnityProject(args)).toEqual({ opened: true })
+      mkdirSync(join(worktree, 'Temp'), { recursive: true })
+      writeFileSync(join(worktree, 'Temp', 'UnityLockfile'), '')
+      vi.setSystemTime(Date.now() + 20_000)
+
+      const second = await openUnityProject(args)
+      expect(launches).toHaveLength(1)
+      expect(second).toMatchObject({
+        opened: false,
+        reason: 'focus_failed',
+        focusFailureReason: 'no_window'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('launch failure honesty', () => {
   it('reports launch_failed instead of opened when the spawn errors', async () => {
     const result = await openUnityProject({
@@ -432,6 +526,49 @@ describe('incident-class hardening', () => {
     if (!openResult.opened) {
       expect(['seed_in_progress', 'editor_missing']).toContain(openResult.reason)
     }
+  })
+
+  it('re-checks the seed gate right before spawn — a seed that began mid-open blocks the launch', async () => {
+    // The entry gate passes, THEN a seed starts during the open's awaits; the
+    // spawn would race the clone inside the target's own Library.
+    const source = makeUnityProject()
+    mkdirSync(join(source, 'Library'))
+    writeFileSync(join(source, 'Library', 'ArtifactDB'), 'db')
+    const worktree = makeUnityProject()
+    let releaseSeedGate!: () => void
+    const seedGate = new Promise<void>((resolve) => {
+      releaseSeedGate = resolve
+    })
+    let seedPromise: ReturnType<typeof seedUnityWorktreeCache> | null = null
+    const launches: string[] = []
+
+    const result = await openUnityProject({
+      worktreePath: worktree,
+      platform: 'darwin',
+      // The existing-window probe is the open's first await — past the entry
+      // gate. A seed started here is exactly the mid-open race.
+      listProcesses: async () => {
+        seedPromise ??= seedUnityWorktreeCache({
+          worktreePath: worktree,
+          sourcePath: source,
+          listProcessCommands: async () => {
+            await seedGate
+            return '/bin/ps\n'
+          }
+        })
+        return []
+      },
+      editorBinaryExists: () => true,
+      launch: async (binary: string) => {
+        launches.push(binary)
+        return { ok: true as const }
+      }
+    })
+
+    releaseSeedGate()
+    await expect(seedPromise).resolves.toEqual({ seeded: true })
+    expect(launches).toEqual([])
+    expect(result).toMatchObject({ opened: false, reason: 'seed_in_progress' })
   })
 })
 

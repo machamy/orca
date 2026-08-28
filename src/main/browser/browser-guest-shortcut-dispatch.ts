@@ -156,6 +156,9 @@ export function forwardGuestShortcutInput(
   } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
     // Why: same as browser.back; the focused guest cannot call the renderer-owned webview's goForward() directly.
     renderer.send('ui:browserHistoryNavigate', 'forward')
+    // Why: fork — the Unity/Rider chords are deliberately NOT forwarded from a
+    // focused guest: field editability there is unknowable (Ctrl+Alt is AltGr),
+    // so forwarding both typed and launched. Not firing is the quieter failure.
   } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
     if (isFloatingGuest) {
       renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })

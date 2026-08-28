@@ -1,10 +1,17 @@
-import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readdir, readFile, rename, rm } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { cloneWorktreePathWithApfs } from '../ipc/worktree-apfs-clone'
+import { launchDetachedEditor, type EditorLauncher } from './detached-editor-launch'
+import { unityEditorBinaryPath } from './unity-editor-install-path'
+import type { UnityProcessRow } from './unity-editor-process-lookup'
+import { openExistingUnityEditorWindow, type FocusCommandRunner } from './unity-editor-window-focus'
 import { copyUnitySolutionFiles, findRiderAppPath } from './unity-rider-open'
+import { editorIsRunningOn, editorLockfilePath } from './unity-editor-liveness'
+import {
+  stampUnityEditorLaunch,
+  unityLaunchStampStillBlocksRelaunch
+} from './unity-recent-launch-stamp'
 import { markFirebaseDesktopJsonUpToDate } from './unity-firebase-config-timestamps'
 import { syncUnityWorktreeTint } from './unity-worktree-tint'
 import type {
@@ -24,6 +31,9 @@ import type {
  * two editors would corrupt through a shared file, and Unity's own project lock
  * lives under each worktree's `Temp/`, so nothing else prevents that.
  */
+// Re-exported so existing callers keep one import site for project/editor paths.
+export { unityEditorBinaryPath } from './unity-editor-install-path'
+
 const PROJECT_VERSION_RELPATH = join('ProjectSettings', 'ProjectVersion.txt')
 
 export async function readUnityEditorVersion(projectPath: string): Promise<string | null> {
@@ -40,78 +50,6 @@ async function directoryHasEntries(path: string): Promise<boolean> {
     return (await readdir(path)).length > 0
   } catch {
     return false
-  }
-}
-
-/** Hub's default install layout on each platform; nothing else is probed —
- *  a custom install location falls back to opening Unity Hub. */
-export function unityEditorBinaryPath(
-  version: string,
-  platform: NodeJS.Platform = process.platform
-): string {
-  if (platform === 'darwin') {
-    return `/Applications/Unity/Hub/Editor/${version}/Unity.app/Contents/MacOS/Unity`
-  }
-  if (platform === 'win32') {
-    return join(
-      process.env.ProgramFiles ?? 'C:\\Program Files',
-      'Unity',
-      'Hub',
-      'Editor',
-      version,
-      'Editor',
-      'Unity.exe'
-    )
-  }
-  return join(homedir(), 'Unity', 'Hub', 'Editor', version, 'Editor', 'Unity')
-}
-
-function editorLockfilePath(projectPath: string): string {
-  return join(projectPath, 'Temp', 'UnityLockfile')
-}
-
-/** Projects this Orca just launched Unity on. Unity creates its lockfile only
- *  seconds after the process starts, so for that window the process table may
- *  miss it too — our own launches must not slip through their own gate. */
-const recentlyLaunchedProjects = new Map<string, number>()
-const RECENT_LAUNCH_TTL_MS = 120_000
-
-async function defaultListProcessCommands(): Promise<string> {
-  const { execFile } = await import('node:child_process')
-  const { promisify } = await import('node:util')
-  const result = await promisify(execFile)('/bin/ps', ['-axo', 'command'], {
-    maxBuffer: 8 * 1024 * 1024
-  })
-  return result.stdout
-}
-
-/**
- * Whether an editor session is LIVE on the project.
- *
- * Neither signal alone is enough. The lockfile outlives a crash (refusing on it
- * forever blocked seeding the worktree that crash had just orphaned), and it is
- * also created seconds AFTER the editor starts — so the process table is always
- * consulted, not only when a lockfile exists. The match is boundary-anchored:
- * plain substring matching made `feat` read as running whenever
- * `feature-anything` was, and any process quoting the flag in its arguments
- * (this session's own CLI prompt did exactly that) counted as an editor.
- */
-async function editorIsRunningOn(
-  projectPath: string,
-  listProcessCommands?: () => Promise<string>
-): Promise<boolean> {
-  const launchedAt = recentlyLaunchedProjects.get(projectPath)
-  if (launchedAt !== undefined && Date.now() - launchedAt < RECENT_LAUNCH_TTL_MS) {
-    return true
-  }
-  try {
-    const commands = (await (listProcessCommands ?? defaultListProcessCommands)()).toLowerCase()
-    const escaped = projectPath.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`unity[^\\n]*-projectpath ${escaped}(?=\\s|$)`).test(commands)
-  } catch {
-    // No process table, no verdict — fall back to the lockfile and refuse
-    // toward safety when it is present.
-    return existsSync(editorLockfilePath(projectPath))
   }
 }
 
@@ -267,28 +205,29 @@ export async function getUnityWorktreeStatus(args: {
   }
 }
 
-/** Waits for the spawn to actually take (or fail): a detached fire-and-forget
- *  returned {opened:true} and then threw an unhandled 'error' in main when the
- *  binary lost its exec bit between the existsSync and the spawn. */
-function launchDetached(
-  binary: string,
-  argv: string[]
-): Promise<{ ok: true } | { ok: false; detail: string }> {
-  return new Promise((resolve) => {
-    const child = spawn(binary, argv, { detached: true, stdio: 'ignore' })
-    child.once('spawn', () => {
-      child.unref()
-      resolve({ ok: true })
-    })
-    child.once('error', (error) => {
-      resolve({ ok: false, detail: error instanceof Error ? error.message : String(error) })
-    })
-  })
-}
+/** Two simultaneous opens both passed the editor lookup and double-launched;
+ *  the second caller now rides the first's promise (same idiom as seedsInFlight). */
+const opensInFlight = new Map<string, Promise<UnityOpenResult>>()
 
 /** Launch the project's exact editor version, detached so the app's lifetime
  *  never owns Unity's. Missing version → open Unity Hub instead and say why. */
-export async function openUnityProject(args: {
+export async function openUnityProject(
+  args: Parameters<typeof openUnityProjectExclusive>[0]
+): Promise<UnityOpenResult> {
+  const inFlight = opensInFlight.get(args.worktreePath)
+  if (inFlight) {
+    return inFlight
+  }
+  const run = openUnityProjectExclusive(args)
+  opensInFlight.set(args.worktreePath, run)
+  try {
+    return await run
+  } finally {
+    opensInFlight.delete(args.worktreePath)
+  }
+}
+
+async function openUnityProjectExclusive(args: {
   worktreePath: string
   /** Fork: per-worktree editor colour (repo setting); undefined leaves it alone. */
   tint?: boolean
@@ -296,9 +235,15 @@ export async function openUnityProject(args: {
   tintSiblingLabels?: readonly string[]
   /** Manual colour choices (label → hex) from the worktree context menu. */
   tintOverridesByLabel?: Readonly<Record<string, string>>
-  launch?: (binary: string, argv: string[]) => Promise<{ ok: true } | { ok: false; detail: string }>
+  launch?: EditorLauncher
+  platform?: NodeJS.Platform
+  /** Test seams for the already-open-editor path; nothing may spawn in tests. */
+  listProcesses?: () => Promise<readonly UnityProcessRow[]>
+  runFocusCommand?: FocusCommandRunner
+  editorBinaryExists?: (binaryPath: string) => boolean
 }): Promise<UnityOpenResult> {
-  const launch = args.launch ?? launchDetached
+  const launch = args.launch ?? launchDetachedEditor
+  const platform = args.platform ?? process.platform
   const editorVersion = await readUnityEditorVersion(args.worktreePath)
   if (editorVersion === null) {
     return { opened: false, reason: 'not_a_unity_project' }
@@ -312,12 +257,44 @@ export async function openUnityProject(args: {
   ) {
     return { opened: false, reason: 'seed_in_progress', editorVersion }
   }
-  const binary = unityEditorBinaryPath(editorVersion)
-  if (!existsSync(binary)) {
+  // Before anything else about installs: an editor already holding this project
+  // must be raised, never doubled. It also outranks `editor_missing` — a live
+  // window is worth fronting even if that Hub version has since been removed.
+  const existingWindow = await openExistingUnityEditorWindow({
+    worktreePath: args.worktreePath,
+    editorVersion,
+    platform,
+    ...(args.listProcesses ? { listProcesses: args.listProcesses } : {}),
+    ...(args.runFocusCommand ? { runFocusCommand: args.runFocusCommand } : {})
+  })
+  if (existingWindow) {
+    return existingWindow
+  }
+  // A launch this Orca performed seconds ago may not be in the process table
+  // yet (the same window the seeding gate stamps for); launching again there
+  // doubles the editor. No pid to focus, so report it like a windowless editor.
+  // No process was found above, so a dead launch (no lockfile past the startup
+  // grace) is allowed through instead of blocking for the stamp's full TTL.
+  if (
+    unityLaunchStampStillBlocksRelaunch(
+      args.worktreePath,
+      existsSync(editorLockfilePath(args.worktreePath))
+    )
+  ) {
+    return {
+      opened: false,
+      reason: 'focus_failed',
+      editorVersion,
+      focusFailureReason: 'no_window',
+      detail: 'this Orca launched the editor moments ago; it is still starting up'
+    }
+  }
+  const binary = unityEditorBinaryPath(editorVersion, platform)
+  if (!(args.editorBinaryExists ?? existsSync)(binary)) {
     // hubOpened is reported honestly: the UI used to claim "opened Unity Hub
     // instead" on every platform while only macOS ever tried.
     let hubOpened = false
-    if (process.platform === 'darwin' && existsSync('/Applications/Unity Hub.app')) {
+    if (platform === 'darwin' && existsSync('/Applications/Unity Hub.app')) {
       hubOpened = (await launch('/usr/bin/open', ['-a', 'Unity Hub'])).ok
     }
     return { opened: false, reason: 'editor_missing', editorVersion, hubOpened }
@@ -333,11 +310,19 @@ export async function openUnityProject(args: {
       ...(args.tintOverridesByLabel ? { overridesByLabel: args.tintOverridesByLabel } : {})
     }).catch(() => 'unchanged')
   }
+  // The entry gate ran several awaits ago; a seed that began meanwhile would
+  // have this launch and the seeder fighting over the live Library.
+  if (
+    seedsInFlight.has(join(args.worktreePath, 'Library')) ||
+    seedSourcesInFlight.has(args.worktreePath)
+  ) {
+    return { opened: false, reason: 'seed_in_progress', editorVersion }
+  }
   const launched = await launch(binary, ['-projectPath', args.worktreePath])
   if (!launched.ok) {
     return { opened: false, reason: 'launch_failed', editorVersion, detail: launched.detail }
   }
-  recentlyLaunchedProjects.set(args.worktreePath, Date.now())
+  stampUnityEditorLaunch(args.worktreePath)
   return { opened: true }
 }
 

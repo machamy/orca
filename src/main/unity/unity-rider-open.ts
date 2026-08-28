@@ -2,6 +2,7 @@ import { constants as fsConstants, existsSync } from 'node:fs'
 import { copyFile, readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
+import { launchDetachedEditor, type EditorLauncher } from './detached-editor-launch'
 import type { UnityRiderOpenResult } from '../../shared/unity-worktree'
 
 /**
@@ -128,7 +129,7 @@ export async function openUnityProjectInRider(args: {
   /** The repo default checkout — the sln donor when the worktree has none. */
   sourcePath?: string
   /** Test seams. */
-  launch?: (binary: string, argv: string[]) => Promise<{ ok: true } | { ok: false; detail: string }>
+  launch?: EditorLauncher
   riderAppPath?: string | null
 }): Promise<UnityRiderOpenResult> {
   if (!existsSync(join(args.worktreePath, 'ProjectSettings', 'ProjectVersion.txt'))) {
@@ -144,27 +145,10 @@ export async function openUnityProjectInRider(args: {
     sln = await findSolutionFile(args.worktreePath)
   }
   const target = sln ?? args.worktreePath
-  const launch = args.launch ?? defaultLaunchViaOpen
+  const launch = args.launch ?? launchDetachedEditor
   const launched = await launch('/usr/bin/open', ['-a', riderApp, target])
   if (!launched.ok) {
     return { opened: false, reason: 'launch_failed', detail: launched.detail }
   }
   return { opened: true, target: sln ? 'solution' : 'folder' }
-}
-
-async function defaultLaunchViaOpen(
-  binary: string,
-  argv: string[]
-): Promise<{ ok: true } | { ok: false; detail: string }> {
-  const { spawn } = await import('node:child_process')
-  return new Promise((resolve) => {
-    const child = spawn(binary, argv, { detached: true, stdio: 'ignore' })
-    child.once('spawn', () => {
-      child.unref()
-      resolve({ ok: true })
-    })
-    child.once('error', (error) => {
-      resolve({ ok: false, detail: error instanceof Error ? error.message : String(error) })
-    })
-  })
 }

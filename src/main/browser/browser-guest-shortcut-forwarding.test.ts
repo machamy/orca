@@ -570,6 +570,36 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
   })
 
+  it('leaves the Unity and Rider chords entirely to the focused guest', () => {
+    // Fork: forwarding-without-consume made Ctrl+Alt+U in a guest text field
+    // BOTH type (AltGr) and launch Unity, and neither side can see the guest's
+    // field editability — so the chords simply do not fire from a guest.
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const unityPreventDefault = triggerBeforeInput({
+      code: 'KeyU',
+      key: 'u',
+      control: true,
+      alt: true,
+      meta: false
+    })
+    const riderPreventDefault = triggerBeforeInput({
+      code: 'KeyR',
+      key: 'r',
+      control: true,
+      alt: true,
+      meta: false
+    })
+
+    expect(unityPreventDefault).not.toHaveBeenCalled()
+    expect(riderPreventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
   it('forwards browser Find with its registered page and workspace owner', () => {
     setupGuestShortcutForwarding({
       browserTabId,

@@ -1,25 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
 import { FileCode2, Gamepad2, HardDriveDownload } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { useUnityWorktreeTintMenu } from './worktree-unity-tint-menu'
-import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
-import { isLocallyRunnableUnityRepo } from '../../../../shared/unity-repo-eligibility'
 import {
-  areRuntimePathsEqual,
-  isDefaultCheckoutWorkspace
-} from '../../../../shared/worktree/ownership'
+  selectUnityTintSiblingWorktrees,
+  unityTintSiblingLabelsOf
+} from './unity-tint-sibling-worktrees'
+import { useUnityWorktreeOpenActions } from './unity-worktree-open-actions'
+import { useUnityWorktreeTintMenu } from './worktree-unity-tint-menu'
+import { isLocallyRunnableUnityWorkspace } from '../../../../shared/unity-repo-eligibility'
+import { isDefaultCheckoutWorkspace } from '../../../../shared/worktree/ownership'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { UnityWorktreeStatus } from '../../../../shared/unity-worktree'
@@ -60,10 +51,8 @@ export function useUnityWorktreeMenu(args: {
     target: string
     status: UnityWorktreeStatus
   } | null>(null)
-  const [unitySeeding, setUnitySeeding] = useState(false)
-  const [unityConfirmOpen, setUnityConfirmOpen] = useState(false)
   const markUnityProjectRepoDetected = useAppStore((store) => store.markUnityProjectRepoDetected)
-  const unityEligible = (worktree.hostId ?? 'local') === 'local' && isLocallyRunnableUnityRepo(repo)
+  const unityEligible = isLocallyRunnableUnityWorkspace(worktree, repo)
   const repoPath = repo?.path
   const isDefaultWorktreePath = isDefaultCheckoutWorkspace(worktree, repo)
   const unityProbeTarget = repo ? `${worktree.path}\u0000${repo.path}` : null
@@ -105,25 +94,12 @@ export function useUnityWorktreeMenu(args: {
         : entry
     )
   }, [unityProbeTarget])
-  // Fork: sibling folder names let the tint avoid handing two worktrees the same
-  // colour — the whole point is telling two open editors apart. The repo-path
-  // checkout is excluded: it stays Unity's default grey, so "no colour" reads as
-  // "this is the default worktree" and it does not consume a palette slot.
   const unityTintSiblingWorktrees = useMemo(
-    () =>
-      allWorktrees
-        .filter((candidate) => candidate.repoId === worktree.repoId)
-        // Unity runs locally, so only local rows can collide over an editor tint;
-        // SSH and runtime rows would otherwise eat palette slots for nothing.
-        .filter((candidate) => (candidate.hostId ?? 'local') === 'local')
-        .filter((candidate) => repoPath == null || !areRuntimePathsEqual(candidate.path, repoPath)),
+    () => selectUnityTintSiblingWorktrees(allWorktrees, worktree.repoId, repoPath),
     [allWorktrees, repoPath, worktree.repoId]
   )
   const unityTintSiblingLabels = useMemo(
-    () =>
-      unityTintSiblingWorktrees.map(
-        (candidate) => getRuntimePathBasename(candidate.path) || candidate.path
-      ),
+    () => unityTintSiblingLabelsOf(unityTintSiblingWorktrees),
     [unityTintSiblingWorktrees]
   )
   const tintMenu = useUnityWorktreeTintMenu({
@@ -134,167 +110,18 @@ export function useUnityWorktreeMenu(args: {
     unityTintSiblingLabels,
     unityTintSiblingWorktrees
   })
-  const openUnityNow = useCallback(async () => {
-    const result = await window.api.unity.openProject({
-      worktreePath: worktree.path,
-      ...(repo
-        ? {
-            // false on the default row removes a tint left from an earlier run.
-            tint: repo.unityWorktreeTint !== false && !isDefaultWorktreePath,
-            tintSiblingLabels: unityTintSiblingLabels,
-            ...(repo.unityTintOverrides ? { tintOverridesByLabel: repo.unityTintOverrides } : {})
-          }
-        : {})
-    })
-    if (result.opened) {
-      return
-    }
-    if (result.reason === 'editor_missing') {
-      toast.error(
-        result.hubOpened
-          ? translate(
-              'auto.components.sidebar.WorktreeContextMenu.unityEditorMissing',
-              'Unity {{version}} is not installed — opened Unity Hub instead',
-              { version: result.editorVersion ?? '' }
-            )
-          : translate(
-              'auto.components.sidebar.WorktreeContextMenu.unityEditorMissingNoHub',
-              'Unity {{version}} is not installed. Install it via Unity Hub, then retry.',
-              { version: result.editorVersion ?? '' }
-            )
-      )
-      return
-    }
-    if (result.reason === 'launch_failed') {
-      toast.error(
-        translate(
-          'auto.components.sidebar.WorktreeContextMenu.unityLaunchFailed',
-          'Unity failed to launch: {{detail}}',
-          { detail: result.detail ?? '' }
-        )
-      )
-      return
-    }
-    if (result.reason === 'seed_in_progress') {
-      toast.error(
-        translate(
-          'auto.components.sidebar.WorktreeContextMenu.unityOpenDuringSeed',
-          'A Unity cache copy involving this project is still running — try again when it finishes'
-        )
-      )
-      return
-    }
-    // The worktree vanished between the menu and the click (deleted elsewhere).
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeContextMenu.unityNotAProject',
-        'This folder no longer holds a Unity project'
-      )
-    )
-  }, [repo, worktree.path, isDefaultWorktreePath, unityTintSiblingLabels])
-  const handleRiderOpen = useCallback(async () => {
-    const result = await window.api.unity.openInRider({
-      worktreePath: worktree.path,
-      ...(repo ? { sourcePath: repo.path } : {})
-    })
-    if (result.opened) {
-      if (result.target === 'folder') {
-        // No .sln anywhere yet — Rider got the folder; Unity's first open makes the real one.
-        toast.info(
-          translate(
-            'auto.components.sidebar.WorktreeContextMenu.unityRiderFolderFallback',
-            'No .sln yet — opened the folder in Rider. Open the project in Unity once to generate it.'
-          )
-        )
-      }
-      return
-    }
-    if (result.reason === 'rider_missing') {
-      toast.error(
-        translate(
-          'auto.components.sidebar.WorktreeContextMenu.unityRiderMissing',
-          'JetBrains Rider was not found in /Applications'
-        )
-      )
-      return
-    }
-    if (result.reason === 'not_a_unity_project') {
-      // The worktree vanished between the menu probe and the click.
-      toast.error(
-        translate(
-          'auto.components.sidebar.WorktreeContextMenu.unityNotAProject',
-          'This folder no longer holds a Unity project'
-        )
-      )
-      return
-    }
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeContextMenu.unityRiderFailed',
-        'Rider failed to launch: {{detail}}',
-        { detail: ('detail' in result ? result.detail : undefined) ?? result.reason }
-      )
-    )
-  }, [repo, worktree.path])
-  const handleUnitySeed = useCallback(async (): Promise<boolean> => {
-    if (!repo) {
-      return false
-    }
-    setUnitySeeding(true)
-    try {
-      const result = await window.api.unity.seedWorktreeCache({
-        worktreePath: worktree.path,
-        sourcePath: repo.path,
-        tint: repo.unityWorktreeTint !== false,
-        tintSiblingLabels: unityTintSiblingLabels,
-        ...(repo.unityTintOverrides ? { tintOverridesByLabel: repo.unityTintOverrides } : {})
-      })
-      if (result.seeded) {
-        toast.success(
-          translate(
-            'auto.components.sidebar.WorktreeContextMenu.unitySeeded',
-            'Unity cache copied — first open will skip the full reimport'
-          )
-        )
-        markWorktreeLibrarySeeded()
-        return true
-      }
-      if (result.reason === 'already_seeded') {
-        // Someone else seeded between our menu probe and the click; the goal
-        // state holds, and "Copy and Open" should still open.
-        markWorktreeLibrarySeeded()
-        return true
-      }
-      toast.error(
-        translate(
-          'auto.components.sidebar.WorktreeContextMenu.unitySeedFailed',
-          'Could not copy the Unity cache ({{reason}})',
-          {
-            reason:
-              result.reason + ('detail' in result && result.detail ? `: ${result.detail}` : '')
-          }
-        )
-      )
-      return false
-    } finally {
-      setUnitySeeding(false)
-    }
-  }, [repo, worktree.path, unityTintSiblingLabels, markWorktreeLibrarySeeded])
+  const unityActions = useUnityWorktreeOpenActions({
+    worktree,
+    repo,
+    isDefaultWorktreePath,
+    unityTintSiblingLabels,
+    onSeeded: markWorktreeLibrarySeeded
+  })
+  const { handleRiderOpen, handleUnitySeed, requestUnityOpen } = unityActions
+  const unitySeeding = unityActions.seeding
   const handleUnityOpen = useCallback(() => {
-    // No cache yet but the default checkout has one: offer to copy it first,
-    // so the first open is seconds instead of a full reimport. Declining opens
-    // the project as-is.
-    if (
-      unityStatus &&
-      !unityStatus.worktreeHasLibrary &&
-      unityStatus.sourceHasLibrary &&
-      !isDefaultWorktreePath
-    ) {
-      setUnityConfirmOpen(true)
-      return
-    }
-    void openUnityNow()
-  }, [unityStatus, isDefaultWorktreePath, openUnityNow])
+    requestUnityOpen(unityStatus)
+  }, [requestUnityOpen, unityStatus])
 
   const menuItems =
     unityStatus?.isUnityProject && unityEligible ? (
@@ -345,76 +172,16 @@ export function useUnityWorktreeMenu(args: {
       </>
     ) : null
 
-  const confirmDialog = (
-    <Dialog open={unityConfirmOpen} onOpenChange={setUnityConfirmOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {translate(
-              'auto.components.sidebar.WorktreeContextMenu.unityConfirmTitle',
-              'Copy the Unity cache first?'
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            {translate(
-              'auto.components.sidebar.WorktreeContextMenu.unityConfirmBody',
-              'This worktree has no Library yet, so Unity would reimport everything on first open. Copying the default worktree’s cache takes seconds and skips that.'
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setUnityConfirmOpen(false)
-            }}
-          >
-            {translate('auto.components.sidebar.WorktreeContextMenu.unityConfirmCancel', 'Cancel')}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setUnityConfirmOpen(false)
-              void openUnityNow()
-            }}
-          >
-            {translate(
-              'auto.components.sidebar.WorktreeContextMenu.unityConfirmOpenOnly',
-              'Open Without Copying'
-            )}
-          </Button>
-          <Button
-            disabled={unitySeeding}
-            onClick={() => {
-              void (async () => {
-                const seeded = await handleUnitySeed()
-                setUnityConfirmOpen(false)
-                if (seeded) {
-                  void openUnityNow()
-                }
-              })()
-            }}
-          >
-            {translate(
-              'auto.components.sidebar.WorktreeContextMenu.unityConfirmSeedOpen',
-              'Copy and Open'
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-
   return {
     menuItems,
     confirmDialog: (
       <>
-        {confirmDialog}
+        {unityActions.confirmDialog}
         {tintMenu.tintPickerDialog}
       </>
     ),
     // The dialogs (and an in-flight seed) outlive the menu; the parent's
     // lifecycle gate must not unmount the wrapper while any is live.
-    lifecyclePending: unityConfirmOpen || unitySeeding || tintMenu.tintPickerOpen
+    lifecyclePending: unityActions.confirmOpen || unitySeeding || tintMenu.tintPickerOpen
   }
 }

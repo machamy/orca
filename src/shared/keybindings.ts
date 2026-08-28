@@ -94,6 +94,8 @@ export type KeybindingActionId =
   | 'editor.nextChange'
   | 'editor.addReviewNote'
   | 'sourceControl.sendReviewNotes'
+  | 'unity.openEditor'
+  | 'unity.openRider'
   | 'fileExplorer.undo'
   | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
@@ -150,6 +152,8 @@ export type KeybindingDefinition = {
   searchKeywords: readonly string[]
   defaultBindings: PlatformBindings
   allowInTerminal?: boolean
+  /** Never fires with terminal focus, even under orca-first (e.g. AltGr chords that must stay text). */
+  neverInTerminal?: boolean
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string
@@ -882,6 +886,34 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     ],
     // Why: unbound by default so it never collides with existing chords; users opt in via Settings.
     defaultBindings: platformBindings([])
+  },
+  {
+    id: 'unity.openEditor',
+    title: 'Open in Unity',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'unity', 'editor', 'open', 'game', 'worktree'],
+    // Why: literal Ctrl (not Mod) on every platform — on macOS this is deliberately
+    // Control+Option, leaving Cmd+Opt+U free; the whole Ctrl+Alt family is unclaimed.
+    defaultBindings: platformBindings(['Ctrl+Alt+U']),
+    neverInTerminal: true
+  },
+  {
+    id: 'unity.openRider',
+    title: 'Open in Rider',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'unity', 'rider', 'jetbrains', 'ide', 'open', 'worktree'],
+    // Why: Mod+Alt+R is workspace.rename on macOS, so the R mnemonic only survives
+    // on the Ctrl+Alt family, which pairs it with Open in Unity. darwin-only:
+    // findRiderAppPath knows no Rider elsewhere, so a default chord would be
+    // consumed just to no-op; users can still bind it manually.
+    defaultBindings: {
+      darwin: ['Ctrl+Alt+R'],
+      linux: [],
+      win32: []
+    },
+    neverInTerminal: true
   },
   {
     id: 'fileExplorer.undo',
@@ -1905,6 +1937,10 @@ export function keybindingIsActiveInContext(
 ): boolean {
   if (options.context !== 'terminal') {
     return true
+  }
+  // Why: AltGr is Ctrl+Alt on Windows/Linux — these chords typed into a shell must stay text under any policy.
+  if (definition.neverInTerminal === true) {
+    return false
   }
   // Why: Orca-first keeps app shortcuts inside terminals; terminal-first is the escape hatch for shells and TUIs.
   if (normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first') {

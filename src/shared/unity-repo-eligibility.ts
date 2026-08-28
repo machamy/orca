@@ -1,5 +1,6 @@
 import { isGitRepoKind } from './repo-kind'
 import type { Repo } from './repo-types'
+import type { Worktree } from './worktree/types'
 
 /**
  * Fork: whether Unity could run against this repo's checkouts at all.
@@ -18,5 +19,19 @@ export function isLocallyRunnableUnityRepo(
     isGitRepoKind(repo) &&
     !repo.connectionId &&
     (repo.executionHostId == null || repo.executionHostId === 'local')
+  )
+}
+
+/**
+ * The same test one workspace row at a time: an SSH-hosted worktree of an
+ * otherwise-local repo has no local Unity either. Shared so the context menu
+ * and the "Open in Unity"/"Open in Rider" shortcuts hide and no-op together.
+ */
+export function isLocallyRunnableUnityWorkspace(
+  worktree: Pick<Worktree, 'hostId'> | null | undefined,
+  repo: Pick<Repo, 'kind' | 'connectionId' | 'executionHostId'> | null | undefined
+): boolean {
+  return (
+    worktree != null && (worktree.hostId ?? 'local') === 'local' && isLocallyRunnableUnityRepo(repo)
   )
 }

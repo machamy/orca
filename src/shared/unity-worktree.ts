@@ -42,14 +42,37 @@ export type UnitySeedResult =
     }
 
 export type UnityOpenResult =
-  | { opened: true }
+  | {
+      opened: true
+      /** True when nothing was launched — an existing editor window was raised. */
+      focusedExistingEditor?: boolean
+    }
   | {
       opened: false
-      reason: 'not_a_unity_project' | 'editor_missing' | 'launch_failed' | 'seed_in_progress'
+      reason:
+        | 'not_a_unity_project'
+        | 'editor_missing'
+        | 'launch_failed'
+        | 'seed_in_progress'
+        /** An editor already holds the project but its window could not be
+         *  raised; the UI must name `editorPid` so the user can find it. */
+        | 'focus_failed'
       editorVersion?: string
       /** Whether Unity Hub was actually opened as the fallback — the UI must
        *  not claim it was when it was not. */
       hubOpened?: boolean
+      /** Set with `focus_failed`: the pid of the editor already holding it. */
+      editorPid?: number
+      /** Set with `focus_failed`: WHY the window did not come forward. The UI
+       *  must not report a missing tool or a refused foreground change as a
+       *  permission problem. */
+      focusFailureReason?:
+        | 'permission_denied_automation'
+        | 'permission_denied_accessibility'
+        | 'no_window'
+        | 'tool_missing'
+        | 'unsupported_session'
+        | 'refused'
       detail?: string
     }
 
