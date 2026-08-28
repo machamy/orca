@@ -1,4 +1,5 @@
 import type { MarkdownToken } from '@tiptap/core'
+import { isInsideRange, markdownCodeRanges } from './markdown-code-ranges'
 
 // Toggle summaries can render at heading scales 1–5, mirroring the plain
 // heading levels the slash menu / toolbar dropdown offer (h1–h5).
@@ -66,14 +67,39 @@ export function parseDetailsAttributes(rawAttributes: string): Record<string, un
 }
 
 export function detailsBodyHtmlToMarkdown(body: string): string {
+  // Why: p/br tags inside fenced or inline code are literal text, not markup.
+  const codeRanges = markdownCodeRanges(body)
   return body
-    .replace(/<p\b[^>]*>/gi, '')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<p\b[^>]*>|<\/p>|<br\s*\/?>/gi, (tag, offset: number) => {
+      if (isInsideRange(offset, codeRanges)) {
+        return tag
+      }
+      if (/^<\/p/i.test(tag)) {
+        return '\n\n'
+      }
+      return /^<br/i.test(tag) ? '\n' : ''
+    })
     .trim()
 }
 
-export function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): string {
+export function renderDetailsOpeningTag(attrs: Record<string, unknown> | undefined): string {
+  // Why: the rich-mode gate demands the source opening tag byte-for-byte, so a
+  // block parsed from markdown keeps its raw attribute text until the user
+  // actually changes open/variant in the editor.
+  const source = typeof attrs?.sourceAttributes === 'string' ? attrs.sourceAttributes : null
+  if (source !== null) {
+    const parsed = parseDetailsAttributes(source)
+    if (
+      parsed.open === (attrs?.open === true) &&
+      parsed.variant === parseToggleHeadingVariant(attrs?.variant)
+    ) {
+      return `<details${source}>`
+    }
+  }
+  return `<details ${renderDetailsAttributes(attrs)}>`
+}
+
+function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): string {
   const attributes = ['class="orca-details"']
 
   const variant = parseToggleHeadingVariant(attrs?.variant)
@@ -88,52 +114,6 @@ export function renderDetailsAttributes(attrs: Record<string, unknown> | undefin
   return attributes.join(' ')
 }
 
-function markdownFenceRanges(content: string): [number, number][] {
-  const ranges: [number, number][] = []
-  let offset = 0
-  let openFence: { marker: '`' | '~'; length: number; start: number } | null = null
-
-  for (const lineMatch of content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)) {
-    const line = lineMatch[0]
-    if (line === '') {
-      break
-    }
-
-    const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
-    if (openFence) {
-      const closingFencePattern =
-        openFence.marker === '`'
-          ? new RegExp(`^ {0,3}\`{${openFence.length},}\\s*$`)
-          : new RegExp(`^ {0,3}~{${openFence.length},}\\s*$`)
-      if (closingFencePattern.test(lineText)) {
-        ranges.push([openFence.start, offset + line.length])
-        openFence = null
-      }
-    } else {
-      const openingFenceMatch = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)
-      if (openingFenceMatch?.[1]) {
-        openFence = {
-          marker: openingFenceMatch[1][0] as '`' | '~',
-          length: openingFenceMatch[1].length,
-          start: offset
-        }
-      }
-    }
-
-    offset += line.length
-  }
-
-  if (openFence) {
-    ranges.push([openFence.start, content.length])
-  }
-
-  return ranges
-}
-
-function isInsideRange(index: number, ranges: [number, number][]): boolean {
-  return ranges.some(([start, end]) => index >= start && index < end)
-}
-
 export function matchDetailsHtmlBlock(content: string, start: number): DetailsHtmlBlock | null {
   const openingMatch = content.slice(start).match(/^<details\b[^>]*>/i)
   if (!openingMatch) {
@@ -142,7 +122,8 @@ export function matchDetailsHtmlBlock(content: string, start: number): DetailsHt
 
   const detailsTagPattern = /<\/?details\b[^>]*>/gi
   detailsTagPattern.lastIndex = start
-  const fenceRanges = markdownFenceRanges(content)
+  // Why: a details tag inside fenced or inline code is literal text, not structure.
+  const codeRanges = markdownCodeRanges(content)
 
   let depth = 0
   let hasNestedDetails = false
@@ -154,7 +135,7 @@ export function matchDetailsHtmlBlock(content: string, start: number): DetailsHt
     }
 
     const tag = tagMatch[0]
-    if (tagMatch.index !== start && isInsideRange(tagMatch.index, fenceRanges)) {
+    if (tagMatch.index !== start && isInsideRange(tagMatch.index, codeRanges)) {
       continue
     }
 

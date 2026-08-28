@@ -110,15 +110,15 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('<!-- comment -->\n')).toBe('<!-- comment -->')
   })
 
-  it('preserves editable details blocks', () => {
+  it('preserves editable details blocks with their source opening tag', () => {
     expect(roundTripMarkdown('<details><summary>Toggle</summary><p>Body</p></details>\n')).toBe(
-      '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      '<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>'
     )
   })
 
   it('does not double-escape entities in editable details summaries', () => {
     expect(roundTripMarkdown('<details><summary>A &amp; B</summary><p>Body</p></details>\n')).toBe(
-      '<details class="orca-details">\n<summary>A &amp; B</summary>\n\nBody\n\n</details>'
+      '<details>\n<summary>A &amp; B</summary>\n\nBody\n\n</details>'
     )
   })
 
@@ -128,7 +128,7 @@ describe('rich markdown round trip', () => {
         '<details data-orca-toggle="heading-1"><summary>Toggle</summary><p>Body</p></details>\n'
       )
     ).toBe(
-      '<details class="orca-details" data-orca-toggle="heading-1">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      '<details data-orca-toggle="heading-1">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
     )
   })
 
@@ -140,18 +140,76 @@ describe('rich markdown round trip', () => {
           `<details data-orca-toggle="${variant}"><summary>Toggle</summary><p>Body</p></details>\n`
         )
       ).toBe(
-        `<details class="orca-details" data-orca-toggle="${variant}">\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+        `<details data-orca-toggle="${variant}">\n<summary>Toggle</summary>\n\nBody\n\n</details>`
       )
     }
   )
 
-  it('preserves a heading toggle when its attribute uses HTML whitespace around equals', () => {
+  it('preserves a heading toggle attribute byte-for-byte, HTML whitespace included', () => {
     expect(
       roundTripMarkdown(
         '<details data-orca-toggle = "heading-4"><summary>Toggle</summary><p>Body</p></details>\n'
       )
     ).toBe(
-      '<details class="orca-details" data-orca-toggle="heading-4">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      '<details data-orca-toggle = "heading-4">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+    )
+  })
+
+  it('round-trips a details block in the generated explain-doc shape byte-for-byte', () => {
+    const input = [
+      '<details>',
+      '<summary>정답 보기</summary>',
+      '',
+      '- first point',
+      '- second point',
+      '',
+      '```ts',
+      'const answer = 1',
+      '```',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('round-trips adjacent details blocks byte-for-byte, open attribute included', () => {
+    const input = [
+      '<details>',
+      '<summary>First</summary>',
+      '',
+      '- item',
+      '',
+      '</details>',
+      '',
+      '<details open>',
+      '<summary>Second</summary>',
+      '',
+      'Body text.',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('keeps a stamped class attribute already present in the source', () => {
+    const input = [
+      '<details class="orca-details" open>',
+      '<summary>Toggle</summary>',
+      '',
+      'Body',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('keeps the source opening tag when only the body text was edited', () => {
+    const input = '<details open>\n<summary>Toggle</summary>\n\nBody here\n\n</details>\n'
+    expect(markdownAfterTextReplace(input, 'here', 'edited')).toBe(
+      '<details open>\n<summary>Toggle</summary>\n\nBody edited\n\n</details>'
     )
   })
 
@@ -179,6 +237,52 @@ describe('rich markdown round trip', () => {
       '```',
       '</details>',
       '```',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('preserves literal p/br tags inside fenced code in an editable details body', () => {
+    const input = [
+      '<details>',
+      '<summary>Toggle</summary>',
+      '',
+      '```',
+      '<p>hello</p>',
+      '<br>',
+      '```',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('does not close a details block at a closing tag inside inline code', () => {
+    const input = [
+      '<details>',
+      '<summary>Toggle</summary>',
+      '',
+      'Inline `</details>` stays code, and more text follows.',
+      '',
+      'Another paragraph.',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('does not close a details block inside a double-backtick code span', () => {
+    // CommonMark: `` … `` closes only on a run of exactly two backticks, so the
+    // single backticks and the tag between them are all span content.
+    const input = [
+      '<details>',
+      '<summary>Toggle</summary>',
+      '',
+      'Inline `` `</details>` `` stays code, and more text follows.',
       '',
       '</details>',
       ''

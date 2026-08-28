@@ -11,7 +11,7 @@ import {
   matchDetailsHtmlBlock,
   parseDetailsAttributes,
   parseToggleHeadingVariant,
-  renderDetailsAttributes,
+  renderDetailsOpeningTag,
   type DetailsHtmlToken,
   type ToggleHeadingVariant
 } from './details-markdown-html'
@@ -206,6 +206,12 @@ const OrcaDetails = Details.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      // Why: raw opening-tag attribute text from the source file; lets an
+      // unedited block serialize back byte-identical (rich-mode gate).
+      sourceAttributes: {
+        default: null,
+        rendered: false
+      },
       variant: {
         default: null,
         parseHTML: (element) => parseToggleHeadingVariant(element.getAttribute('data-orca-toggle')),
@@ -247,7 +253,10 @@ const OrcaDetails = Details.extend({
         type: 'details',
         raw: detailsBlock.raw,
         block: true,
-        attributes: parseDetailsAttributes(detailsBlock.openingAttributes),
+        attributes: {
+          ...parseDetailsAttributes(detailsBlock.openingAttributes),
+          sourceAttributes: detailsBlock.openingAttributes
+        },
         summaryTokens: lexer.inlineTokens(summary),
         bodyTokens: lexer.blockTokens(detailsBodyHtmlToMarkdown(body))
       } as DetailsHtmlToken
@@ -280,9 +289,8 @@ const OrcaDetails = Details.extend({
       decodeHtmlEntities(helpers.renderChildren(summary?.content ?? [], ''))
     )
     const body = helpers.renderChildren(content?.content ?? [], '\n\n').trim()
-    const attrs = renderDetailsAttributes(node.attrs)
 
-    return `<details ${attrs}>\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
+    return `${renderDetailsOpeningTag(node.attrs)}\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
   }
 })
 
