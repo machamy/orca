@@ -43,6 +43,28 @@ export function getWorktreeCardContentIndent(args: {
   return (groupSteps + clampDepth(args.lineageDepth)) * SIDEBAR_TREE_INDENT + projectCardIndent
 }
 
+// Fork: folder nesting is its own indent axis (C7/C10) — composed with, never
+// folded into, lineage depth. Applied only to non-nested rows: an inline lineage
+// child already inherits its parent card's offset.
+export function getWorktreeFolderMemberIndent(folderDepth: number): number {
+  return clampDepth(folderDepth) * SIDEBAR_TREE_INDENT
+}
+
+/** Fork: the folder row sits at the tree step of an item at its own folder depth. */
+export function getWorktreeFolderRowContentIndent(args: {
+  isGrouped: boolean
+  groupDepth: number
+  folderDepth: number
+}): number {
+  return (
+    getWorktreeCardContentIndent({
+      isGrouped: args.isGrouped,
+      groupDepth: args.groupDepth,
+      lineageDepth: 0
+    }) + getWorktreeFolderMemberIndent(args.folderDepth)
+  )
+}
+
 export function getFolderBackedRepoWorktreeCardContentIndent(args: {
   groupDepth: number
   lineageDepth: number

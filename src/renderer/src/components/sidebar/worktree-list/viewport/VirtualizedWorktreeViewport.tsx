@@ -57,6 +57,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
+  // Fork: host-correct repo rows for worktree-folder reveal expansion (repoMap is bare-id keyed).
+  const repos = useAppStore((s) => s.repos)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
@@ -155,6 +157,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     worktrees: props.worktrees,
     folderWorkspaces: props.folderWorkspaces,
     repoMap,
+    repos,
     worktreeMap,
     worktreeLineageById,
     collapsedGroups,

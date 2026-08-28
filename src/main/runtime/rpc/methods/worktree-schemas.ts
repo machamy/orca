@@ -150,6 +150,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   isPinned: OptionalBoolean,
   sortOrder: OptionalFiniteNumber,
   manualOrder: OptionalFiniteNumber,
+  // Fork: JSON drops undefined, so null is the wire signal for "unfile".
+  worktreeFolderId: z.union([z.string(), z.null()]).optional(),
   lastActivityAt: OptionalFiniteNumber,
   createdAt: OptionalFiniteNumber,
   sparseDirectories: z.array(z.string()).optional(),

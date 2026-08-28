@@ -29,6 +29,9 @@ import {
   type WorktreeItemRowContext
 } from './item-row'
 import { renderWorktreeSectionHeaderRow, type SectionHeaderRowContext } from './SectionHeader'
+import { renderWorktreeFolderVirtualRow } from './worktree-folder-row'
+import { getWorktreeFolderGroupKey } from '../grouping/worktree-folder-rows'
+import { WorktreeFolderRowMenu } from '../../WorktreeFolderRowMenu'
 import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeVirtualRowContext = {
@@ -212,6 +215,23 @@ export function renderWorktreeVirtualRow(
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement
     })
+  }
+
+  if (row.type === 'worktree-folder') {
+    return (
+      // Fork E3: the menu wrapper is `display: contents`, so the virtual row's
+      // absolute frame and measurement are untouched by the extra element.
+      <WorktreeFolderRowMenu key={vItem.key} row={row}>
+        {renderWorktreeFolderVirtualRow({
+          row,
+          vItem,
+          groupBy: ctx.groupBy,
+          measureVirtualRowElement: ctx.measureVirtualRowElement,
+          // Collapse rides the id-scoped key so every lane of the folder folds together.
+          onToggle: () => ctx.toggleGroupWithScrollAnchor(getWorktreeFolderGroupKey(row.folder.id))
+        })}
+      </WorktreeFolderRowMenu>
+    )
   }
 
   const itemWorkspaceStatus =

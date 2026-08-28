@@ -67,6 +67,7 @@ function buildWorktreeRow(
     lineageChildCount: number
     lineageCollapsed: boolean
     hostContextLabel?: string
+    worktreeFolderDepth?: number
   }
 ): WorktreeRow {
   return {
@@ -80,6 +81,10 @@ function buildWorktreeRow(
     lineageTrail: options.lineageTrail,
     isLastLineageChild: options.isLastLineageChild,
     lineageChildCount: options.lineageChildCount,
+    // Fork: keyed absence keeps the no-folders stream byte-identical (C1).
+    ...(options.worktreeFolderDepth !== undefined
+      ? { worktreeFolderDepth: options.worktreeFolderDepth }
+      : {}),
     ...(options.hostContextLabel ? { hostContextLabel: options.hostContextLabel } : {}),
     ...(options.lineageChildCount > 0
       ? { lineageGroupKey: getWorktreeLineageGroupKey(worktree) }
@@ -102,6 +107,8 @@ export function appendWorktreeRows(
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
     cyclicLineageIds: ReadonlySet<string>
+    /** Fork: set only for worktree-folder members (§6 — the one optional argument). */
+    worktreeFolderDepth?: number
   }
 ): void {
   const {
@@ -111,7 +118,8 @@ export function appendWorktreeRows(
     sectionKey,
     hostContextLabelByRepoId,
     hostContextLabelByWorktreeIdentity,
-    cyclicLineageIds
+    cyclicLineageIds,
+    worktreeFolderDepth
   } = options
   if (!nestLineage) {
     for (const worktree of worktrees) {
@@ -125,6 +133,7 @@ export function appendWorktreeRows(
           isLastLineageChild: false,
           lineageChildCount: 0,
           lineageCollapsed: false,
+          worktreeFolderDepth,
           hostContextLabel:
             hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
             hostContextLabelByRepoId?.get(worktree.repoId)
@@ -195,6 +204,7 @@ export function appendWorktreeRows(
           isLastLineageChild: isLastChild,
           lineageChildCount: children.length,
           lineageCollapsed,
+          worktreeFolderDepth,
           hostContextLabel:
             hostContextLabelByWorktreeIdentity?.get(worktreeIdentity) ??
             hostContextLabelByRepoId?.get(worktree.repoId)

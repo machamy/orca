@@ -7083,6 +7083,12 @@
             "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
             "title": "New card style",
             "toggleLabel": "Toggle new card style"
+          },
+          "worktreeFolders": {
+            "copy": "Shows folder rows in the worktree sidebar so a project can file its worktrees under named folders. Turning this off only hides them — folders and their membership are kept and come back when re-enabled.",
+            "description": "File worktrees into named sidebar folders inside each project.",
+            "title": "Worktree folders",
+            "toggleLabel": "Toggle worktree folders"
           }
         },
         "FloatingWorkspacePane": {
@@ -10190,6 +10196,17 @@
               "title": "New card style",
               "worktree": "worktree",
               "worktrees": "worktrees"
+            },
+            "worktreeFolders": {
+              "description": "File worktrees into named sidebar folders inside each project.",
+              "folder": "folder",
+              "folders": "folders",
+              "group": "group",
+              "organize": "organize",
+              "sidebar": "sidebar",
+              "title": "Worktree folders",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             }
           }
         },
@@ -12492,6 +12509,13 @@
           "unityConfirmTitle": "Copy the Unity cache first?",
           "unityEditorMissing": "Unity {{version}} is not installed — opened Unity Hub instead",
           "unityEditorMissingNoHub": "Unity {{version}} is not installed. Install it via Unity Hub, then retry.",
+          "unityFocusDenied": "This project is already open in Unity (pid {{pid}}). Orca could not bring that window forward because macOS has not granted it Automation access — allow it under Privacy & Security → Automation.",
+          "unityFocusDeniedAccessibility": "This project is already open in Unity (pid {{pid}}). Orca could not bring that window forward because macOS has not granted it Accessibility access — allow it under Privacy & Security → Accessibility.",
+          "unityFocusNoWindow": "This project is already open in Unity (pid {{pid}}), but that process has no window yet — it may still be starting up.",
+          "unityFocusRefused": "This project is already open in Unity (pid {{pid}}), but the system declined to bring its window forward: {{detail}}",
+          "unityFocusStillStarting": "Unity is still starting up for this project — try again in a moment.",
+          "unityFocusToolMissing": "This project is already open in Unity (pid {{pid}}). Bringing another app’s window forward on Linux needs xdotool, which is not installed.",
+          "unityFocusUnsupported": "This project is already open in Unity (pid {{pid}}), but this desktop session offers no way to raise another app’s window: {{detail}}",
           "unityLaunchFailed": "Unity failed to launch: {{detail}}",
           "unityNotAProject": "This folder no longer holds a Unity project",
           "unityOpen": "Open in Unity",
@@ -12940,6 +12964,44 @@
         "worktreeIssueDisplacement": {
           "3f61c0a8d2": "Linear {{value}}",
           "9c4b7e1f60": "GitHub #{{value}}"
+        },
+        "worktreeFolderMenu": {
+          "convertPartial": "Some lineage children could not be moved into the folder",
+          "fileIntoFolderFailed": "Failed to move the workspace into the new folder",
+          "newFolderFromWorkspace": "New Folder from Workspace…",
+          "convertToFolder": "Convert to Folder…",
+          "newFolderTitle": "New Folder",
+          "newFolderDescription": "Create a folder and file this workspace into it.",
+          "folderNameLabel": "Folder Name",
+          "createLabel": "Create",
+          "offerDeleteTitle": "Delete the emptied worktree?",
+          "offerDeleteDescription": "{{name}} is now a folder and its children moved in. The old worktree is empty — you can delete it or keep it.",
+          "keepWorktree": "Keep",
+          "deleteWorktree": "Delete Worktree…"
+        },
+        "WorktreeFolderDeleteDialog": {
+          "memberSingular": "1 workspace moves out of this folder.",
+          "memberPlural": "{{count}} workspaces move out of this folder.",
+          "childrenPromoteInto": "Folders {{names}} move into “{{parent}}”.",
+          "childrenPromoteTopLevel": "Folders {{names}} move to the top level.",
+          "noWorkspaceDeleted": "No workspace is deleted.",
+          "title": "Delete Folder",
+          "delete": "Delete",
+          "cancel": "Cancel",
+          "deleting": "Deleting...",
+          "deleteFolder": "Delete Folder"
+        },
+        "WorktreeFolderRowMenu": {
+          "rename": "Rename Folder…",
+          "moveUp": "Move Up",
+          "moveDown": "Move Down",
+          "moveToFolder": "Move to Folder",
+          "topLevel": "Top Level",
+          "delete": "Delete Folder…",
+          "renameTitle": "Rename Folder",
+          "renameDescription": "Rename this worktree folder.",
+          "folderNameLabel": "Folder Name",
+          "save": "Save"
         }
       },
       "skills": {
@@ -15811,7 +15873,8 @@
               "meta": {
                 "persist": {
                   "4367540861": "Update the remote runtime to link Linear issues",
-                  "877e3638d8": "Update the remote runtime to change this workspace’s linked issue"
+                  "877e3638d8": "Update the remote runtime to change this workspace’s linked issue",
+                  "folderCapability": "Update the remote Orca server to use worktree folders"
                 }
               }
             }
@@ -15819,6 +15882,10 @@
           "preservedBranchCleanupHostAmbiguous": "Multiple preserved branch cleanups are pending for \"{{value0}}\"; specify the host.",
           "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.",
           "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access"
+        },
+        "worktreeFolderMembership": {
+          "hostUpdateRequired": "Update the remote Orca server to use worktree folders",
+          "writeFailed": "Failed to update worktree folder membership"
         }
       }
     },

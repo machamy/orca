@@ -26,6 +26,10 @@ import type {
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
 import { resolveUnitySidebarTintMode } from '../../shared/repo-types'
+import {
+  normalizeWorktreeFolders,
+  resolveWorktreeFolderStatusGrouping
+} from '../../shared/worktree-folder/types'
 import type { SparsePreset } from '../../shared/worktree/create-types'
 import type { FolderWorkspacePathStatusRequest } from '../../shared/folder-workspace-path-status'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -2131,6 +2135,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'unityWorktreeTint'
             | 'unityTintInSidebar'
             | 'unityTintOverrides'
+            | 'worktreeFolders'
+            | 'worktreeFolderStatusGrouping'
           >
         > & {
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
@@ -2168,6 +2174,24 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         if (v !== resolveUnitySidebarTintMode(v)) {
           delete updates.unityTintInSidebar
         }
+      }
+      // Why: folder records outlive the session in repos.json; a malformed entry would keep
+      // re-entering the resolver on every render. An empty array is a valid "no folders".
+      if ('worktreeFolders' in updates && updates.worktreeFolders !== undefined) {
+        const normalized = normalizeWorktreeFolders(updates.worktreeFolders)
+        if (normalized) {
+          updates.worktreeFolders = normalized
+        } else {
+          delete updates.worktreeFolders
+        }
+      }
+      if (
+        'worktreeFolderStatusGrouping' in updates &&
+        updates.worktreeFolderStatusGrouping !== undefined &&
+        updates.worktreeFolderStatusGrouping !==
+          resolveWorktreeFolderStatusGrouping(updates.worktreeFolderStatusGrouping)
+      ) {
+        delete updates.worktreeFolderStatusGrouping
       }
       // Why: worktree materialization calls .trim() per entry, so strip non-string[] at the boundary to avoid a silent throw later.
       if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {

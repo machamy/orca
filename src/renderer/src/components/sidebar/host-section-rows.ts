@@ -65,6 +65,9 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
       return getRepoHostId(row.repo, defaultHostId)
     case 'folder-workspace':
       return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
+    // Fork: folder rows carry the host they were emitted for.
+    case 'worktree-folder':
+      return row.hostId
     case 'header':
       return row.repo ? getRepoHostId(row.repo, defaultHostId) : null
   }

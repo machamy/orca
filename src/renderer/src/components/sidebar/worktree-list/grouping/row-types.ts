@@ -2,6 +2,7 @@ import type React from 'react'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import type { WorktreeFolder } from '../../../../../../shared/worktree-folder/types'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
@@ -44,6 +45,27 @@ export type WorktreeRow = {
   lineageGroupKey?: string
   lineageCollapsed?: boolean
   hostContextLabel?: string
+  /** Fork: folder nesting rides its own axis (C7) — `depth` stays lineage-only.
+   *  Absent (not 0) outside folders so the no-folders row stream is byte-identical. */
+  worktreeFolderDepth?: number
+}
+
+/** Fork: chrome for a worktree folder — never a `Worktree`, never a card. */
+export type WorktreeFolderRow = {
+  type: 'worktree-folder'
+  /** `worktree-folder:<hostId>:<sectionKey>:<id>:<runIndex>` — host- and
+   *  section-qualified from day one so `'repeat-header'` never has to re-key. */
+  key: string
+  folder: WorktreeFolder
+  repo: Repo
+  hostId: ExecutionHostId
+  sectionKey: string
+  groupDepth: number
+  /** Folder nesting depth (0 = top level of its project). Separate axis from lineage `depth`. */
+  folderDepth: number
+  /** Direct effective members after lineage inheritance — descendant folders' members not counted. */
+  memberCount: number
+  collapsed: boolean
 }
 
 export type ImportedWorktreesCardCandidate = {
@@ -100,3 +122,4 @@ export type Row =
   | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
+  | WorktreeFolderRow

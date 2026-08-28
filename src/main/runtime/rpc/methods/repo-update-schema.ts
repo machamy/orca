@@ -7,6 +7,7 @@ import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../../shared/worktree/visibility-sources'
+import { normalizeWorktreeFolders } from '../../../../shared/worktree-folder/types'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -70,7 +71,14 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber,
-      sourceControlAi: RepoSourceControlAiOverrides
+      sourceControlAi: RepoSourceControlAiOverrides,
+      // Fork: unlisted keys are stripped here, so folder state needs its own entry
+      // or a remote project silently keeps re-rendering flat after every edit.
+      worktreeFolders: z
+        .unknown()
+        .transform((value) => normalizeWorktreeFolders(value))
+        .optional(),
+      worktreeFolderStatusGrouping: z.enum(['hide', 'repeat-header']).optional()
     })
   }) as z.ZodObject<T & { updates: z.ZodObject<z.ZodRawShape> }>
 }

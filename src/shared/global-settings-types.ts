@@ -442,6 +442,9 @@ export type GlobalSettings = {
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
+  /** Fork, experimental: sidebar worktree folders. Gates rendering/entry points only —
+   *  never the persisted folder records or membership, so off→on round-trips losslessly. */
+  experimentalWorktreeFolders?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */

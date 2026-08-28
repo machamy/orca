@@ -51,6 +51,7 @@ import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
 import { createUnityProjectRepoProbeSlice } from './unity-project-repo-probe'
 import { createUnityTintSidebarPreviewSlice } from './unity-tint-sidebar-preview'
+import { createWorktreeFolderSlice } from './worktree-folders'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -107,7 +108,8 @@ export function createTestStore() {
     ...createRemoteServerUpdatesSlice(...a),
     ...createTerminalQuickCommandHostsSlice(...a),
     ...createUnityProjectRepoProbeSlice(...a),
-    ...createUnityTintSidebarPreviewSlice(...a)
+    ...createUnityTintSidebarPreviewSlice(...a),
+    ...createWorktreeFolderSlice(...a)
   }))
 }
 

@@ -11,6 +11,8 @@ const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 const PENDING_CREATION_ROW_HEIGHT = 56
 const FOLDER_WORKSPACE_ROW_HEIGHT = 64
+// Fork: chrome row (h-7), never the card-sized lineage-group estimate (C3).
+export const WORKTREE_FOLDER_ROW_HEIGHT = 28
 
 /**
  * Old row key -> current row key for rows that were re-keyed without moving.
@@ -97,6 +99,9 @@ export function estimateRenderRowSize(
   }
   if (row?.type === 'folder-workspace') {
     return FOLDER_WORKSPACE_ROW_HEIGHT
+  }
+  if (row?.type === 'worktree-folder') {
+    return WORKTREE_FOLDER_ROW_HEIGHT
   }
   return 116
 }

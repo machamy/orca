@@ -47,6 +47,7 @@ import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import { createUnityProjectRepoProbeSlice } from './slices/unity-project-repo-probe'
 import { createUnityTintSidebarPreviewSlice } from './slices/unity-tint-sidebar-preview'
+import { createWorktreeFolderSlice } from './slices/worktree-folders'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import {
@@ -110,7 +111,8 @@ export const useAppStore = create<AppState>()((...a) => {
     ...createRemoteServerUpdatesSlice(...a),
     ...createTerminalQuickCommandHostsSlice(...a),
     ...createUnityProjectRepoProbeSlice(...a),
-    ...createUnityTintSidebarPreviewSlice(...a)
+    ...createUnityTintSidebarPreviewSlice(...a),
+    ...createWorktreeFolderSlice(...a)
   }
 })
 

@@ -17,6 +17,7 @@ import {
   getLineageNestedRowGeometry,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset,
+  getWorktreeFolderMemberIndent,
   LINEAGE_CHILDREN_INLINE_OFFSET
 } from './indentation'
 import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
@@ -120,11 +121,16 @@ function getWorktreeItemRowGeometry(
           isGrouped: ctx.groupBy !== 'none',
           groupDepth: itemRow.groupDepth
         })
+  // Fork (C10): the folder axis indents only top-level rows — an inline lineage
+  // child already sits inside a parent card that carries the folder offset.
+  const worktreeFolderIndent = nested
+    ? 0
+    : getWorktreeFolderMemberIndent(itemRow.worktreeFolderDepth ?? 0)
   return {
     surfaceInset,
     cardContentIndent: nestedLineageGeometry
       ? nestedLineageGeometry.cardContentIndent
-      : Math.max(0, paddingLeft - surfaceInset),
+      : Math.max(0, paddingLeft + worktreeFolderIndent - surfaceInset),
     lineageChildrenInlineOffset: nestedLineageGeometry?.lineageChildrenInlineOffset
   }
 }

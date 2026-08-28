@@ -13,6 +13,7 @@ type WorktreeDragUnitRow =
   | { type: 'new-external-worktrees-inbox' }
   | { type: 'pending-creation' }
   | { type: 'folder-workspace' }
+  | { type: 'worktree-folder' }
 
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
@@ -40,7 +41,9 @@ export function getWorktreeDragUnitGroups(
       row.type === 'imported-worktrees-card' ||
       row.type === 'new-external-worktrees-inbox' ||
       row.type === 'pending-creation' ||
-      row.type === 'folder-workspace'
+      row.type === 'folder-workspace' ||
+      // Fork: a folder boundary never starts or joins a drag unit (C8).
+      row.type === 'worktree-folder'
     ) {
       continue
     }

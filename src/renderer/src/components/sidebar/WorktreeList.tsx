@@ -132,6 +132,7 @@ const WorktreeList = React.memo(function WorktreeList({
     pinnedDisplayPolicy,
     visibleWorktrees,
     repoMap,
+    repos,
     worktreeMap,
     worktreeLineageById,
     prCache,

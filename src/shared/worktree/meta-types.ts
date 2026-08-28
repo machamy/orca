@@ -52,6 +52,10 @@ export type WorktreeMeta = {
   sortOrder: number
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
+  /** Fork: the `Repo.worktreeFolders` entry this workspace is filed under.
+   *  Lives here, not as an id list on the folder, so `moveKey` carries it
+   *  through a rename and a default-worktree switch. Absent = unfiled. */
+  worktreeFolderId?: string
   lastActivityAt: number
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number

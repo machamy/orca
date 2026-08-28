@@ -153,6 +153,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         isPinned: params.isPinned,
         sortOrder: params.sortOrder,
         manualOrder: params.manualOrder,
+        worktreeFolderId: params.worktreeFolderId,
         lastActivityAt: params.lastActivityAt,
         createdAt: params.createdAt,
         sparseDirectories: params.sparseDirectories,

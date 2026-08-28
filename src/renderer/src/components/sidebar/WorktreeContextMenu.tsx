@@ -57,6 +57,7 @@ import {
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { useUnityWorktreeMenu } from './worktree-unity-menu'
+import { useWorktreeFolderWorktreeMenu } from './worktree-folder-menu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
@@ -505,6 +506,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const hasAnyContextLineage = activeContextWorktrees.some((item) =>
     hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
   )
+  // Fork E3a/E5: folder create/convert entries + their dialogs; lifecyclePending
+  // keeps this wrapper mounted while a dialog outlives the menu. The hook
+  // resolves its own host-correct repo — `repo` above answers for the active
+  // workspace's host, not necessarily this row's.
+  const folderMenu = useWorktreeFolderWorktreeMenu({
+    worktree,
+    menuOpen,
+    isDeleting,
+    allWorktrees,
+    lineageById: worktreeLineageById,
+    cyclicLineageIds
+  })
   const eligibleParentCount = useMemo(
     () =>
       menuOpen
@@ -548,7 +561,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       pendingParentPickerRef.current !== null ||
       // The unity confirm dialog (and an in-flight seed) outlive the menu; the
       // Agent Map wrapper unmounting here destroyed the dialog mid-question.
-      unityMenu.lifecyclePending
+      unityMenu.lifecyclePending ||
+      // Same contract: the folder create/offer-delete dialogs outlive the menu.
+      folderMenu.lifecyclePending
     ) {
       return
     }
@@ -562,6 +577,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     return () => window.clearTimeout(timer)
   }, [
     createGroupDialogOpen,
+    folderMenu.lifecyclePending,
     menuOpen,
     onLifecycleComplete,
     parentPicker,
@@ -1027,6 +1043,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   ) : null}
                 </>
               ) : null}
+              {folderMenu.menuItems}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={handleOpenParentPicker}
@@ -1161,6 +1178,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       {unityMenu.confirmDialog}
+      {folderMenu.dialogs}
       <ProjectGroupNameDialog
         open={createGroupDialogOpen}
         title={translate(

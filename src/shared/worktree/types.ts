@@ -101,6 +101,9 @@ export type Worktree = {
   sortOrder: number
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
+  /** Fork: see {@link WorktreeMeta.worktreeFolderId}. Absent = unfiled; there is
+   *  no "unknown" state, so an older host that never sends it reads as unfiled. */
+  worktreeFolderId?: string
   lastActivityAt: number
   /** Set once when Orca creates the worktree. Absent for worktrees discovered
    *  on disk or persisted before this field existed. Used by the sidebar to

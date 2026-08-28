@@ -9,8 +9,12 @@ import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/r
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
+import { getWorktreeFolderRevealGroupKeys } from '../navigation/worktree-folder-reveal'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 
@@ -22,6 +26,8 @@ export function useEffectiveCollapsedGroups(args: {
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   visibleWorktrees: readonly Worktree[]
   repoMap: Map<string, Repo>
+  /** Fork: host-correct repo records for worktree-folder reveal expansion. */
+  repos: readonly Repo[]
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   prCache: AppState['prCache'] | null
@@ -39,6 +45,7 @@ export function useEffectiveCollapsedGroups(args: {
     pinnedDisplayPolicy,
     visibleWorktrees,
     repoMap,
+    repos,
     worktreeMap,
     worktreeLineageById,
     prCache,
@@ -91,6 +98,23 @@ export function useEffectiveCollapsedGroups(args: {
       )) {
         next.delete(groupKey)
       }
+      // Fork: a collapsed worktree folder removes member rows outright, so the
+      // target's folder ancestor chain must open too (mirrors pending-reveal).
+      for (const groupKey of getWorktreeFolderRevealGroupKeys({
+        worktree: targetWorktree,
+        hostWorktreeMap: worktreeMap,
+        hostLineageById: worktreeLineageById,
+        repos,
+        settings,
+        groupBy,
+        hostId: getWorktreeExecutionHostId(
+          targetWorktree,
+          repoMap.get(targetWorktree.repoId),
+          defaultHostId
+        )
+      })) {
+        next.delete(groupKey)
+      }
     }
 
     for (const parent of getWorktreeLineageAncestors(
@@ -111,6 +135,7 @@ export function useEffectiveCollapsedGroups(args: {
     projectGroups,
     projectGrouping,
     repoMap,
+    repos,
     settings,
     workspaceStatuses,
     worktreeLineageById,

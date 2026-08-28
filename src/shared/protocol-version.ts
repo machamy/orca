@@ -114,6 +114,11 @@ export const DEFAULT_SWITCH_KEEP_UNTRACKED_RUNTIME_CAPABILITY =
   'worktree.default-set-keep-untracked.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
+// Fork: hosts without this strip `Repo.worktreeFolders` from repo.update and
+// `worktreeFolderId` from worktree.set (zod strip mode), then repo.update's
+// echo erases the folder in the same tick as the "successful" write. A folder
+// write is a field the client depends on, so Rule 1 does not cover it.
+export const WORKTREE_FOLDERS_RUNTIME_CAPABILITY = 'worktree.folders.v1' as const
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
@@ -155,6 +160,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
+  WORKTREE_FOLDERS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,

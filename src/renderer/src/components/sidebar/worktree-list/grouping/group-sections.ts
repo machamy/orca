@@ -15,12 +15,15 @@ import {
 } from './host-labels'
 import type { OrderedGroupEntry, ProjectGroupingIndex } from './project-grouping'
 import {
-  appendWorktreeRows,
   buildFolderWorkspaceRow,
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
 } from './row-builders'
+import {
+  appendWorktreeRowsWithFolders,
+  type SidebarWorktreeFolderModel
+} from './worktree-folder-rows'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -48,6 +51,8 @@ export type SectionAppendContext = {
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   cyclicLineageIds: ReadonlySet<string>
+  /** Fork: resolved once per project per host in buildRows; null = feature off / no folders. */
+  worktreeFolderModel: SidebarWorktreeFolderModel | null
 }
 
 export function appendOrderedGroups(
@@ -189,15 +194,25 @@ export function appendOrderedGroups(
       // host labels, which are keyed by host-qualified identity.
       const hostContextLabelByWorktreeIdentity =
         groupBy === 'repo' && hostContextLabelByRepoId ? undefined : mixedWorktreeHostContextLabels
-      appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
-        nestLineage,
-        collapsedGroups,
-        groupDepth: projectGroupDepth,
-        sectionKey: key,
-        hostContextLabelByRepoId,
-        hostContextLabelByWorktreeIdentity,
-        cyclicLineageIds
-      })
+      appendWorktreeRowsWithFolders(
+        result,
+        items,
+        repoMap,
+        lineageById,
+        worktreeMap,
+        {
+          nestLineage,
+          collapsedGroups,
+          groupDepth: projectGroupDepth,
+          sectionKey: key,
+          hostContextLabelByRepoId,
+          hostContextLabelByWorktreeIdentity,
+          cyclicLineageIds,
+          groupBy,
+          defaultHostId
+        },
+        ctx.worktreeFolderModel
+      )
       for (const pair of folderPairs) {
         result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
       }

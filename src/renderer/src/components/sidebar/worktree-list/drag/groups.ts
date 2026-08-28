@@ -27,7 +27,9 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
       row.type === 'imported-worktrees-card' ||
       row.type === 'new-external-worktrees-inbox' ||
       row.type === 'pending-creation' ||
-      row.type === 'folder-workspace'
+      row.type === 'folder-workspace' ||
+      // Fork: folder rows are skipped like other chrome — no new drag group.
+      row.type === 'worktree-folder'
     ) {
       continue
     }

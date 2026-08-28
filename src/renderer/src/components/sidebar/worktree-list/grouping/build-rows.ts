@@ -23,11 +23,12 @@ import type { ProjectGroupingModel } from './project-grouping'
 import { appendProjectGroupSections } from './project-group-sections'
 import { getPinnedSectionWorktrees } from '../../pinned-section-worktrees'
 import { emitPinnedGroup } from './pinned-group-rows'
+import { buildFolderWorkspaceRow, buildPendingCreationRow } from './row-builders'
 import {
-  appendWorktreeRows,
-  buildFolderWorkspaceRow,
-  buildPendingCreationRow
-} from './row-builders'
+  appendWorktreeRowsWithFolders,
+  resolveSidebarWorktreeFolders,
+  type WorktreeFolderRuntimeStatusLookup
+} from './worktree-folder-rows'
 import {
   compareFolderWorkspacesForDisplay,
   getRenderableFolderWorkspaces
@@ -69,7 +70,11 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  // Fork: host-correct repo records for worktree folders. Absent (older callers) = no folders.
+  repos?: readonly Repo[],
+  // Fork G5a: suppresses folder rows for paired hosts that don't advertise the capability.
+  runtimeStatusByEnvironmentId?: WorktreeFolderRuntimeStatusLookup | null
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -79,6 +84,20 @@ export function buildRows(
   const cyclicLineageIds = nestLineage
     ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
     : new Set<string>()
+  // Fork §6: folder membership resolves once per project per host, before any
+  // lane splitting. Null takes every downstream path byte-identically (C1/X1).
+  const worktreeFolderModel = repos
+    ? resolveSidebarWorktreeFolders({
+        worktrees,
+        repos,
+        repoMap,
+        settings,
+        lineageById,
+        cyclicLineageIds,
+        defaultHostId,
+        runtimeStatusByEnvironmentId
+      })
+    : null
 
   const pendingByRepo = new Map<string, PendingCreationRef[]>()
   for (const creation of pendingCreations) {
@@ -160,14 +179,24 @@ export function buildRows(
         worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
       })
       if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-        appendWorktreeRows(result, naturalWorktrees, repoMap, lineageById, worktreeMap, {
-          nestLineage,
-          collapsedGroups,
-          groupDepth: 0,
-          sectionKey: ALL_GROUP_KEY,
-          hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
-          cyclicLineageIds
-        })
+        appendWorktreeRowsWithFolders(
+          result,
+          naturalWorktrees,
+          repoMap,
+          lineageById,
+          worktreeMap,
+          {
+            nestLineage,
+            collapsedGroups,
+            groupDepth: 0,
+            sectionKey: ALL_GROUP_KEY,
+            hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
+            cyclicLineageIds,
+            groupBy,
+            defaultHostId
+          },
+          worktreeFolderModel
+        )
         for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
           compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
         )) {
@@ -211,7 +240,8 @@ export function buildRows(
     lineageById,
     worktreeMap,
     nestLineage,
-    cyclicLineageIds
+    cyclicLineageIds,
+    worktreeFolderModel
   }
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {

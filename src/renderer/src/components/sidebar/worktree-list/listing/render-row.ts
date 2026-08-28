@@ -27,5 +27,9 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'folder-workspace') {
     return `folder-workspace:${row.folderWorkspace.id}`
   }
+  if (row.type === 'worktree-folder') {
+    // Already host- and section-qualified; identical at 0 and N members (C2).
+    return row.key
+  }
   return `wt:${row.rowKey}`
 }

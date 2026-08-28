@@ -26090,8 +26090,10 @@ export class OrcaRuntimeService {
 
   async updateManagedWorktreeMeta(
     worktreeSelector: string,
-    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+    updates: Omit<Partial<WorktreeMeta>, 'pushTarget' | 'worktreeFolderId'> & {
       pushTarget?: GitPushTarget | null
+      /** Fork: null is the wire signal for "unfile" — see pushTarget. */
+      worktreeFolderId?: string | null
       lineage?: {
         parentWorktree?: string
         noParent?: boolean
@@ -26109,9 +26111,16 @@ export class OrcaRuntimeService {
     }
     const shouldClearPushTarget =
       Object.hasOwn(metaUpdates, 'pushTarget') && metaUpdates.pushTarget === null
-    const normalizedMetaUpdates: Partial<WorktreeMeta> = shouldClearPushTarget
-      ? { ...metaUpdates, pushTarget: undefined }
-      : (metaUpdates as Partial<WorktreeMeta>)
+    const shouldClearWorktreeFolder =
+      Object.hasOwn(metaUpdates, 'worktreeFolderId') && metaUpdates.worktreeFolderId === null
+    const normalizedMetaUpdates: Partial<WorktreeMeta> =
+      shouldClearPushTarget || shouldClearWorktreeFolder
+        ? {
+            ...(metaUpdates as Partial<WorktreeMeta>),
+            ...(shouldClearPushTarget ? { pushTarget: undefined } : {}),
+            ...(shouldClearWorktreeFolder ? { worktreeFolderId: undefined } : {})
+          }
+        : (metaUpdates as Partial<WorktreeMeta>)
     const persistedMetaUpdates: Partial<WorktreeMeta> = omitUndefinedProperties(
       normalizedMetaUpdates.displayName !== undefined
         ? {
@@ -26125,6 +26134,9 @@ export class OrcaRuntimeService {
       // Why: omitUndefinedProperties protects ordinary optional RPC fields, but
       // pushTarget:null is an explicit request to remove persisted target metadata.
       persistedMetaUpdates.pushTarget = undefined
+    }
+    if (shouldClearWorktreeFolder) {
+      persistedMetaUpdates.worktreeFolderId = undefined
     }
     if (lineage?.noParent === true) {
       this.store.removeWorktreeLineage?.(worktree.id)

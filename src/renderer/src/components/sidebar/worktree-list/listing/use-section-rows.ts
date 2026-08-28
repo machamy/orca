@@ -166,7 +166,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         args.visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        args.pinnedDisplayPolicy
+        args.pinnedDisplayPolicy,
+        repos,
+        runtimeStatusByEnvironmentId
       ),
     [
       args.groupBy,
@@ -189,7 +191,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       args.newExternalWorktreesInboxByRepo,
       pendingCreations,
       hostLabelById,
-      args.pinnedDisplayPolicy
+      args.pinnedDisplayPolicy,
+      repos,
+      runtimeStatusByEnvironmentId
     ]
   )
   const orderedHostOptions = useMemo(

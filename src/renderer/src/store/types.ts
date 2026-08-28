@@ -45,6 +45,7 @@ import type { RemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import type { TerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import type { UnityProjectRepoProbeSlice } from './slices/unity-project-repo-probe'
 import type { UnityTintSidebarPreviewSlice } from './slices/unity-tint-sidebar-preview'
+import type { WorktreeFolderSlice } from './slices/worktree-folders'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -90,4 +91,5 @@ export type AppState = RepoSlice &
   RemoteServerUpdatesSlice &
   TerminalQuickCommandHostsSlice &
   UnityProjectRepoProbeSlice &
-  UnityTintSidebarPreviewSlice
+  UnityTintSidebarPreviewSlice &
+  WorktreeFolderSlice

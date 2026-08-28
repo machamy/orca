@@ -18,6 +18,8 @@ type ProjectGroupNameDialogProps = {
   description: string
   initialName: string
   confirmLabel: string
+  /** Overrides the input's label; defaults to the project-group wording. */
+  inputLabel?: string
   onOpenChange: (open: boolean) => void
   onSubmit: (name: string) => Promise<void> | void
 }
@@ -28,6 +30,7 @@ export function ProjectGroupNameDialog({
   description,
   initialName,
   confirmLabel,
+  inputLabel,
   onOpenChange,
   onSubmit
 }: ProjectGroupNameDialogProps): React.JSX.Element {
@@ -95,7 +98,11 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
+              {inputLabel ??
+                translate(
+                  'auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313',
+                  'Group Name'
+                )}
             </Label>
             <Input
               id={inputId}

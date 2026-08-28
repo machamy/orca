@@ -5,6 +5,7 @@ import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
+import type { WorktreeFolder, WorktreeFolderStatusGroupingMode } from './worktree-folder/types'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
@@ -127,6 +128,16 @@ export type Repo = {
    *  that gets no colour at all — test it with `isUnityTintOptOut`, never by
    *  comparing to a literal. */
   unityTintOverrides?: Record<string, string>
+  /** Fork: virtual folders this project's worktrees can be filed under. Absent
+   *  and empty both mean "no folders" — there is no third, unknown state.
+   *  Membership lives on `WorktreeMeta.worktreeFolderId`, never as an id list
+   *  here, so it survives a rename and a default-worktree switch. Read through
+   *  `resolveWorktreeFolderTree`, never by walking `parentFolderId` directly. */
+  worktreeFolders?: WorktreeFolder[]
+  /** Fork: what folders do under workspace-status / pr-status grouping, where
+   *  members scatter into lanes. Undefined means `'hide'` — read through
+   *  `resolveWorktreeFolderStatusGrouping`. */
+  worktreeFolderStatusGrouping?: WorktreeFolderStatusGroupingMode
   /** External worktree paths explicitly imported while global visibility stays hide. */
   importedExternalWorktreePaths?: string[]
   /** Opt-in repo policy for coding-agent scratch worktrees; absent means hide. */

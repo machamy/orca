@@ -304,6 +304,10 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
+      {/* Worktree folders: built but held back this release — the toggle row is
+          deliberately not rendered so the feature is unreachable. Re-add the
+          SearchableSetting block (git history: ExperimentalPane worktreeFolders)
+          when the feature ships. */}
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}

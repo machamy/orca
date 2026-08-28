@@ -150,6 +150,8 @@ export type RepoUpdate = Partial<
     | 'unityWorktreeTint'
     | 'unityTintInSidebar'
     | 'unityTintOverrides'
+    | 'worktreeFolders'
+    | 'worktreeFolderStatusGrouping'
   >
 > & {
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null

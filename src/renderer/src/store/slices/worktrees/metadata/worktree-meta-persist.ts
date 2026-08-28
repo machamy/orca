@@ -5,6 +5,7 @@ import {
 } from '../../../../runtime/runtime-rpc-client'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_FOLDERS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
@@ -39,6 +40,18 @@ export async function persistWorktreeMeta(
       )
     )
   }
+  // Fork G4: an old host strips worktreeFolderId (zod strip mode) and reports
+  // success, so the write must be refused up front — 0 RPC calls, kept reason.
+  if (target.kind === 'environment' && 'worktreeFolderId' in updates) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_FOLDERS_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.folderCapability',
+        'Update the remote Orca server to use worktree folders'
+      )
+    )
+  }
   // task-source-context.v1 is a sound proxy for the Linear keys: #5322 added them
   // to the schema and is an ancestor of the commit introducing that capability.
   if (target.kind === 'environment' && 'linkedLinearIssue' in updates) {
@@ -56,7 +69,12 @@ export async function persistWorktreeMeta(
     'worktree.set',
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
-      ...encodePushTargetClearForRuntimeRpc(updates)
+      ...encodePushTargetClearForRuntimeRpc(updates),
+      // Fork: same reason as pushTarget — JSON drops undefined, so an unfile has
+      // to travel as null or the remote host keeps the old folder.
+      ...('worktreeFolderId' in updates && updates.worktreeFolderId === undefined
+        ? { worktreeFolderId: null }
+        : {})
     },
     { timeoutMs: 15_000 }
   )

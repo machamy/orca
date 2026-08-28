@@ -18,6 +18,7 @@ import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
+import { getWorktreeFolderRevealGroupKeys } from './worktree-folder-reveal'
 
 export const MAX_REVEAL_RETRIES = 8
 
@@ -33,6 +34,8 @@ export type PendingSidebarRevealArgs = {
   worktrees: Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
   repoMap: Map<string, Repo>
+  /** Fork: host-correct repo records for worktree-folder reveal expansion. */
+  repos: readonly Repo[]
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   collapsedGroups: Set<string>
@@ -84,7 +87,8 @@ export function expandGroupsForWorktreeReveal(
     return
   }
   const targetRepo = args.repoMap.get(targetWorktree.repoId)
-  const hostGroupKey = `host:${getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)}`
+  const targetHostId = getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)
+  const hostGroupKey = `host:${targetHostId}`
   if (args.collapsedGroups.has(hostGroupKey)) {
     args.toggleGroup(hostGroupKey)
   }
@@ -114,7 +118,7 @@ export function expandGroupsForWorktreeReveal(
     }
   }
 
-  const groupKeys =
+  const revealsInPinnedSection =
     args.pinnedDisplayPolicy === 'single-location' &&
     isPinnedSectionWorktree(
       targetWorktree,
@@ -122,24 +126,42 @@ export function expandGroupsForWorktreeReveal(
       args.worktreeLineageById,
       args.worktreeMap
     )
-      ? getPinnedWorktreeRevealCollapsedGroupKeys({
-          worktree: targetWorktree,
-          collapsedGroups: args.collapsedGroups,
-          inPinnedSection: true
-        })
-      : getGroupKeysForWorktree(
-          args.groupBy,
-          targetWorktree,
-          args.repoMap,
-          args.prCache,
-          args.workspaceStatuses,
-          args.settings,
-          args.projectGroups,
-          args.projectGrouping
-        )
+  const groupKeys = revealsInPinnedSection
+    ? getPinnedWorktreeRevealCollapsedGroupKeys({
+        worktree: targetWorktree,
+        collapsedGroups: args.collapsedGroups,
+        inPinnedSection: true
+      })
+    : getGroupKeysForWorktree(
+        args.groupBy,
+        targetWorktree,
+        args.repoMap,
+        args.prCache,
+        args.workspaceStatuses,
+        args.settings,
+        args.projectGroups,
+        args.projectGrouping
+      )
   for (const groupKey of groupKeys) {
     if (args.collapsedGroups.has(groupKey)) {
       args.toggleGroup(groupKey)
+    }
+  }
+  // Fork: a collapsed worktree folder hides member rows outright, so the target's
+  // folder ancestor chain must open too — the pinned copy renders outside folders.
+  if (!revealsInPinnedSection) {
+    for (const groupKey of getWorktreeFolderRevealGroupKeys({
+      worktree: targetWorktree,
+      hostWorktreeMap,
+      hostLineageById,
+      repos: args.repos,
+      settings: args.settings,
+      groupBy: args.groupBy,
+      hostId: targetHostId
+    })) {
+      if (args.collapsedGroups.has(groupKey)) {
+        args.toggleGroup(groupKey)
+      }
     }
   }
 }

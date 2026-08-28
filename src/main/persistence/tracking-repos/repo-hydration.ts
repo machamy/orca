@@ -14,6 +14,7 @@ import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../shared/worktree/visibility-sources'
+import { normalizeWorktreeFolders } from '../../../shared/worktree-folder/types'
 
 /**
  * Cache key for a repo's resolved git username. Host-scoped because the same checkout path can exist
@@ -36,6 +37,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     forkSyncMode: rawForkSyncMode,
     customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
     worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
+    worktreeFolders: rawWorktreeFolders,
     ...repoWithoutIcon
   } = repo
   const repoIcon = sanitizeRepoIcon(rawRepoIcon)
@@ -50,6 +52,8 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const worktreeVisibilitySourcePreferences = normalizeWorktreeVisibilitySourcePreferences(
     rawWorktreeVisibilitySourcePreferences
   )
+  // Why: corrupt persisted folders must degrade to flat, never crash the sidebar resolver.
+  const worktreeFolders = normalizeWorktreeFolders(rawWorktreeFolders)
   // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
   const gitUsername = isFolderRepo(repo)
     ? ''
@@ -67,6 +71,7 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ...(worktreeVisibilitySourcePreferences !== undefined
       ? { worktreeVisibilitySourcePreferences }
       : {}),
+    ...(worktreeFolders !== undefined ? { worktreeFolders } : {}),
     kind: isFolderRepo(repo) ? 'folder' : 'git',
     gitUsername,
     hookSettings: {

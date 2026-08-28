@@ -229,6 +229,8 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
+    // Worktree folders: row held back this release — keep it out of the global
+    // catalog too, or search navigates to a pane with no such control.
     getEphemeralVmsSearchEntry()
   ]
 )
@@ -274,6 +276,9 @@ export function getExperimentalSearchEntry() {
         'New card style'
       )
     ),
+    // Worktree folders: row held back this release (see ExperimentalPane) —
+    // kept out of the search catalog so search cannot point at a missing row.
+
     ephemeralVms: findEntry(
       translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
     )
