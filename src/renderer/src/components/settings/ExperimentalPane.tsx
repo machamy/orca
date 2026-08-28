@@ -54,8 +54,13 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showBrowserMarkdownHandoff = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().browserMarkdownHandoff
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  // Why: on by default — undefined (pre-feature profiles) must read as enabled.
+  const browserMarkdownHandoffEnabled = settings.browserMarkdownEditorHandoff !== false
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -297,6 +302,51 @@ export function ExperimentalPane({
               onChange={() =>
                 updateSettings({
                   experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
+                })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showBrowserMarkdownHandoff ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.browserMarkdownHandoff.title',
+            'Browser markdown handoff'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.browserMarkdownHandoff.description',
+            'Open markdown file URLs from the embedded browser in the editor instead of as raw source.'
+          )}
+          keywords={getExperimentalSearchEntry().browserMarkdownHandoff.keywords}
+          className="space-y-3 py-2"
+          id="experimental-browser-markdown-handoff"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.browserMarkdownHandoff.title',
+                  'Browser markdown handoff'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.browserMarkdownHandoff.copy',
+                  'Hands markdown file URLs (.md, .mdx) opened in the embedded browser to the editor, landing on a rendered view. Turn off to load them as raw source in a browser tab instead. Notebooks (.ipynb) always open in the editor.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={browserMarkdownHandoffEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.browserMarkdownHandoff.toggleLabel',
+                'Toggle browser markdown handoff'
+              )}
+              onChange={() =>
+                updateSettings({
+                  browserMarkdownEditorHandoff: !browserMarkdownHandoffEnabled
                 })
               }
             />

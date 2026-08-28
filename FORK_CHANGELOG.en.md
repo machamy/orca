@@ -45,6 +45,12 @@ worktree-folders feature ships as dormant code, locked away this revision.
   link, SPA pushState, agent CDP goto) or switching workspaces mid-probe drops it.
   Remote workspaces are judged per file owner and left alone.
 - A raw file an agent requests via `browser.goto` is deliberately served raw.
+- **Markdown carrying HTML/MDX still lands rendered.** When the rich editor
+  cannot represent the syntax, the handoff opens the sanitized markdown preview
+  instead of raw source, with the edit tab one click away.
+- **A switch restores the old behaviour.** Settings → Experimental → "Browser
+  markdown handoff" off makes the browser load markdown raw as before
+  (`.ipynb` handoff predates the fork and stays on). Default: on.
 
 ### Rich mode for `<details>` documents
 - A document whose only "unsupported" HTML is `<details>`/`<summary>` no longer

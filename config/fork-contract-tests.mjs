@@ -110,6 +110,7 @@ export const FORK_CARRYING_TESTS = [
   'src/main/window/attach-main-window-services.test.ts',
   'src/renderer/src/components/WorktreeJumpPalette.test.tsx',
   'src/renderer/src/components/browser-pane/describe-page/browser-page-url-display.test.ts',
+  'src/renderer/src/components/settings/ExperimentalPane.test.tsx',
   'src/renderer/src/components/settings/CliSkillRuntimeSetup.test.tsx',
   'src/renderer/src/components/sidebar/WorktreeCard.quick-actions.test.tsx',
   'src/renderer/src/components/sidebar/WorktreeContextMenu.test.ts',
@@ -126,6 +127,7 @@ export const FORK_CARRYING_TESTS = [
   'src/renderer/src/lib/language-detect.test.ts',
   'src/renderer/src/store/slices/store-sleep-pane-hibernation.test.ts',
   'src/renderer/src/store/slices/store-sleep-runtime-convergence.test.ts',
+  'src/shared/constants.test.ts',
   'src/shared/cross-platform-path.test.ts',
   'src/shared/git-binary-compatibility.test.ts',
   'src/shared/wsl-exec-mode-separator.test.ts'

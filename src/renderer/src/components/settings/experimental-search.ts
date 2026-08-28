@@ -3,6 +3,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
+import { getBrowserMarkdownHandoffSearchEntry } from './browser-markdown-handoff-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 
@@ -229,6 +230,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
+    getBrowserMarkdownHandoffSearchEntry(),
     // Worktree folders: row held back this release — keep it out of the global
     // catalog too, or search navigates to a pane with no such control.
     getEphemeralVmsSearchEntry()
@@ -274,6 +276,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
+      )
+    ),
+    browserMarkdownHandoff: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.browserMarkdownHandoff.title',
+        'Browser markdown handoff'
       )
     ),
     // Worktree folders: row held back this release (see ExperimentalPane) —

@@ -2,9 +2,11 @@ import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { useAppStore } from '@/store'
 import {
   isRemoteRuntimeFileOperation,
+  readRuntimeFilePreview,
   statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
@@ -14,7 +16,8 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
   getBrowserPageRuntimeEnvironmentId,
-  getEditorRenderedPathFromBrowserUrl
+  getEditorRenderedPathFromBrowserUrl,
+  isBrowserMarkdownEditorHandoffEnabled
 } from '../describe-page/browser-page-url-display'
 
 export type LoadBrowserGuestUrlArgs = {
@@ -97,11 +100,14 @@ export function loadBrowserGuestUrl({
   loadInGuest
 }: LoadBrowserGuestUrlArgs): void {
   // Every call supersedes the page's in-flight probe, sync loads included.
-  pruneClosedPageFences(useAppStore.getState(), browserPageId)
+  const storeAtLoad = useAppStore.getState()
+  pruneClosedPageFences(storeAtLoad, browserPageId)
   const requestId = nextProbeRequestId++
   requestSequenceByPage.set(browserPageId, requestId)
 
-  const editorRenderedPath = getEditorRenderedPathFromBrowserUrl(url)
+  const editorRenderedPath = getEditorRenderedPathFromBrowserUrl(url, {
+    markdownHandoff: isBrowserMarkdownEditorHandoffEnabled(storeAtLoad.settings)
+  })
   if (!editorRenderedPath) {
     loadInGuest(url)
     return
@@ -201,27 +207,70 @@ async function probeBrowserPathHandoff(
         toWorktreeRelativePath(editorRenderedPath, workspaceRootPath) ?? editorRenderedPath
     }
 
+    // Why: the handoff serves reader intent — markdown whose rich view would
+    // fall back to raw source (HTML/JSX/MDX, reference links, footnotes) must
+    // land rendered. Decide in the async half so the commit stays synchronous.
+    const language = detectLanguage(editorRenderedPath)
+    const openRenderedPreview =
+      canOpenMarkdownPreview({ language, mode: 'edit' }) &&
+      (await handedOffMarkdownLandsInSource(fileContext, editorRenderedPath))
+
     return () => {
       const current = useAppStore.getState()
       // Why: Chromium renders file:// notebooks as raw JSON and markdown as raw source; edit mode
       // defaults both to the editor's rich view.
       current.setActiveTabType('editor')
+      const targetGroupId = current.ensureWorktreeRootGroup(worktreeId)
       current.openFile(
         {
           filePath: editorRenderedPath,
           relativePath,
           worktreeId,
-          language: detectLanguage(editorRenderedPath),
+          language,
           mode: 'edit',
           // Why: pin the owner the probe verified — explicit null keeps the
           // editor from re-resolving the path against the workspace's runtime.
           runtimeEnvironmentId
         },
-        { preview: false, targetGroupId: current.ensureWorktreeRootGroup(worktreeId) }
+        { preview: false, targetGroupId }
       )
+      if (openRenderedPreview) {
+        // Anchored to the edit tab just opened, so source stays one click away.
+        current.openMarkdownPreview(
+          {
+            filePath: editorRenderedPath,
+            relativePath,
+            worktreeId,
+            language,
+            runtimeEnvironmentId
+          },
+          { targetGroupId }
+        )
+      }
     }
   } catch {
     return null
+  }
+}
+
+// Why: one extra content read, markdown handoffs only, through the ownership
+// context the probe already resolved (remote runtime files stay remote-read).
+async function handedOffMarkdownLandsInSource(
+  fileContext: RuntimeFileOperationArgs,
+  filePath: string
+): Promise<boolean> {
+  try {
+    const preview = await readRuntimeFilePreview(fileContext, filePath)
+    if (preview.isBinary) {
+      return false
+    }
+    // Dynamic import keeps TipTap's round-trip checker out of the browser-pane chunk.
+    const { getMarkdownRichModeUnsupportedMessage } =
+      await import('@/components/editor/markdown-rich-mode')
+    return getMarkdownRichModeUnsupportedMessage(preview.content) !== null
+  } catch {
+    // A failed read downgrades only the landing view, never the handoff itself.
+    return false
   }
 }
 

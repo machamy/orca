@@ -442,6 +442,9 @@ export type GlobalSettings = {
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
+  /** Fork: embedded-browser markdown file URLs hand off to the editor (machamy.8). Off restores
+   *  upstream's raw rendering for markdown only — notebooks predate the generalization and always hand off. */
+  browserMarkdownEditorHandoff?: boolean
   /** Fork, experimental: sidebar worktree folders. Gates rendering/entry points only —
    *  never the persisted folder records or membership, so off→on round-trips losslessly. */
   experimentalWorktreeFolders?: boolean

@@ -336,6 +336,52 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
+  it('renders the browser markdown handoff as an on-by-default searchable switch', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(settings.browserMarkdownEditorHandoff).toBe(true)
+    expect(markup).toContain('Browser markdown handoff')
+    expect(markup).toContain('Notebooks (.ipynb) always open in the editor')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
+      'Browser markdown handoff'
+    )
+  })
+
+  it('disables the browser markdown handoff through its switch', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({ updateSettings })
+    const switchButton = container.querySelector<HTMLButtonElement>(
+      '#experimental-browser-markdown-handoff button[role="switch"]'
+    )
+    if (!switchButton) {
+      throw new Error('Browser markdown handoff switch was not rendered')
+    }
+    expect(switchButton.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => {
+      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ browserMarkdownEditorHandoff: false })
+    root.unmount()
+  })
+
+  it('treats a pre-feature profile without the handoff key as enabled', async () => {
+    const settings = { ...getDefaultSettings('/tmp') }
+    delete settings.browserMarkdownEditorHandoff
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
+    const switchButton = container.querySelector<HTMLButtonElement>(
+      '#experimental-browser-markdown-handoff button[role="switch"]'
+    )
+
+    expect(switchButton?.getAttribute('aria-checked')).toBe('true')
+    root.unmount()
+  })
+
   it('enables new card style through the experimental switch', async () => {
     const updateSettings = vi.fn()
     const { root, container } = await renderExperimentalPane({ updateSettings })

@@ -367,6 +367,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
+    browserMarkdownEditorHandoff: true,
     experimentalWorktreeFolders: false,
     experimentalEphemeralVms: false,
     compactWorktreeCards: false,

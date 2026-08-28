@@ -13,7 +13,10 @@ import type { Repo } from '../../../../../shared/repo-types'
 
 const statRuntimePath = vi.fn(async () => ({ isDirectory: false }))
 const isRemoteRuntimeFileOperation = vi.fn((..._args: unknown[]) => false)
+const readRuntimeFilePreview = vi.fn(async () => ({ content: '# plain markdown', isBinary: false }))
+const getMarkdownRichModeUnsupportedMessage = vi.fn((_content: string): string | null => null)
 const openFile = vi.fn()
+const openMarkdownPreview = vi.fn()
 const setActiveTabType = vi.fn()
 const setBrowserPageUrl = vi.fn()
 const updateBrowserPageState = vi.fn()
@@ -23,13 +26,24 @@ let browserPagesByWorkspace: Record<string, BrowserPageState[]> = {}
 let repos: Repo[] = []
 let folderWorkspaces: FolderWorkspace[] = []
 let projectGroups: { id: string }[] = []
-let settings: { activeRuntimeEnvironmentId?: string | null } = {}
+let settings: {
+  activeRuntimeEnvironmentId?: string | null
+  browserMarkdownEditorHandoff?: boolean
+} = {}
 let activeWorktreeId: string | null = 'wt-1'
 
 vi.mock('@/runtime/runtime-file-client', () => ({
   statRuntimePath: (...args: unknown[]) => statRuntimePath(...(args as [])),
   isRemoteRuntimeFileOperation: (...args: unknown[]) =>
-    isRemoteRuntimeFileOperation(...(args as []))
+    isRemoteRuntimeFileOperation(...(args as [])),
+  readRuntimeFilePreview: (...args: unknown[]) => readRuntimeFilePreview(...(args as []))
+}))
+
+// Why: the real detector drags TipTap's round-trip editor into a node-env test;
+// its behavior is pinned by markdown-rich-mode.test.ts.
+vi.mock('@/components/editor/markdown-rich-mode', () => ({
+  getMarkdownRichModeUnsupportedMessage: (content: string) =>
+    getMarkdownRichModeUnsupportedMessage(content)
 }))
 
 vi.mock('@/store', () => ({
@@ -47,6 +61,7 @@ vi.mock('@/store', () => ({
       activeWorktreeId,
       setActiveTabType,
       openFile,
+      openMarkdownPreview,
       setBrowserPageUrl,
       updateBrowserPageState
     })
@@ -82,6 +97,8 @@ describe('loadBrowserGuestUrl', () => {
     vi.clearAllMocks()
     statRuntimePath.mockResolvedValue({ isDirectory: false })
     isRemoteRuntimeFileOperation.mockReturnValue(false)
+    readRuntimeFilePreview.mockResolvedValue({ content: '# plain markdown', isBinary: false })
+    getMarkdownRichModeUnsupportedMessage.mockReturnValue(null)
     // The page under test exists by default; individual tests override the URL or close it.
     browserPagesByWorkspace = { 'workspace-1': [page('https://example.com/elsewhere')] }
     repos = [localRepoFixture()]
@@ -127,6 +144,109 @@ describe('loadBrowserGuestUrl', () => {
         filePath: '/workspace/sample-project/analysis.ipynb',
         language: 'notebook'
       }),
+      expect.anything()
+    )
+    expect(loaded).toEqual([])
+  })
+
+  it('lands rich-unsupported markdown on the rendered preview, source one click below', async () => {
+    readRuntimeFilePreview.mockResolvedValue({
+      content: '# Doc\n\n<Component prop="x" />',
+      isBinary: false
+    })
+    getMarkdownRichModeUnsupportedMessage.mockReturnValue('unsupported: HTML, JSX, or MDX')
+
+    const { loaded } = load('file:///workspace/sample-project/docs/guide.mdx')
+
+    await vi.waitFor(() => expect(openMarkdownPreview).toHaveBeenCalled())
+    expect(openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/workspace/sample-project/docs/guide.mdx',
+        language: 'markdown',
+        mode: 'edit'
+      }),
+      { preview: false, targetGroupId: 'group-1' }
+    )
+    expect(openMarkdownPreview).toHaveBeenCalledWith(
+      {
+        filePath: '/workspace/sample-project/docs/guide.mdx',
+        relativePath: 'docs/guide.mdx',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        runtimeEnvironmentId: null
+      },
+      { targetGroupId: 'group-1' }
+    )
+    // The preview anchors to the edit tab, so the edit tab must exist first.
+    expect(openFile.mock.invocationCallOrder[0]).toBeLessThan(
+      openMarkdownPreview.mock.invocationCallOrder[0]
+    )
+    expect(loaded).toEqual([])
+  })
+
+  it('keeps the plain edit landing for markdown the rich editor supports', async () => {
+    readRuntimeFilePreview.mockResolvedValue({
+      content: '# Doc\n\n<details><summary>ok</summary>body</details>',
+      isBinary: false
+    })
+    getMarkdownRichModeUnsupportedMessage.mockReturnValue(null)
+
+    load('file:///workspace/sample-project/docs/guide.md')
+
+    await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
+    expect(openMarkdownPreview).not.toHaveBeenCalled()
+  })
+
+  it('reads the preview probe through the same ownership context as the stat probe', async () => {
+    getMarkdownRichModeUnsupportedMessage.mockReturnValue('unsupported')
+
+    load('file:///workspace/sample-project/docs/guide.md')
+
+    await vi.waitFor(() => expect(openMarkdownPreview).toHaveBeenCalled())
+    expect(readRuntimeFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreePath: '/workspace/sample-project' }),
+      '/workspace/sample-project/docs/guide.md'
+    )
+  })
+
+  it('does not read content for notebook handoffs', async () => {
+    load('file:///workspace/sample-project/analysis.ipynb')
+
+    await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
+    expect(readRuntimeFilePreview).not.toHaveBeenCalled()
+    expect(openMarkdownPreview).not.toHaveBeenCalled()
+  })
+
+  it('keeps the handoff when the preview content read fails', async () => {
+    readRuntimeFilePreview.mockRejectedValue(new Error('read failed'))
+
+    const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
+
+    await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
+    expect(openMarkdownPreview).not.toHaveBeenCalled()
+    expect(loaded).toEqual([])
+  })
+
+  it('loads markdown raw in the guest when the handoff setting is off', async () => {
+    settings = { browserMarkdownEditorHandoff: false }
+
+    const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
+
+    // Upstream behavior: no probe at all, the guest paints the raw source.
+    expect(loaded).toEqual(['file:///workspace/sample-project/docs/guide.md'])
+    await settle()
+    expect(statRuntimePath).not.toHaveBeenCalled()
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps the upstream notebook handoff when the markdown handoff is off', async () => {
+    settings = { browserMarkdownEditorHandoff: false }
+
+    const { loaded } = load('file:///workspace/sample-project/analysis.ipynb')
+
+    await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
+    expect(openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'notebook' }),
       expect.anything()
     )
     expect(loaded).toEqual([])
@@ -221,6 +341,11 @@ describe('loadBrowserGuestUrl', () => {
       targetPath: '/workspace/sample-project/docs/guide.md'
     })
     expect(statRuntimePath).toHaveBeenCalledWith(
+      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null } }),
+      '/workspace/sample-project/docs/guide.md'
+    )
+    // The rendered-preview probe must read through the same client-local owner.
+    expect(readRuntimeFilePreview).toHaveBeenCalledWith(
       expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null } }),
       '/workspace/sample-project/docs/guide.md'
     )

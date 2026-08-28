@@ -1,5 +1,8 @@
 import { toast } from 'sonner'
-import { getEditorRenderedPathFromBrowserUrl } from '@/components/browser-pane/describe-page/browser-page-url-display'
+import {
+  getEditorRenderedPathFromBrowserUrl,
+  isBrowserMarkdownEditorHandoffEnabled
+} from '@/components/browser-pane/describe-page/browser-page-url-display'
 import { openBrowserPathInEditor } from '@/components/browser-pane/navigate/load-browser-guest-url'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
@@ -155,7 +158,9 @@ export function openFileInBrowserTab(params: {
 
   // Why: the guest would only hand this document straight back to the editor, so a tab here would be
   // left parked on the blank page as a stray "New Tab".
-  const editorRenderedPath = getEditorRenderedPathFromBrowserUrl(target.url)
+  const editorRenderedPath = getEditorRenderedPathFromBrowserUrl(target.url, {
+    markdownHandoff: isBrowserMarkdownEditorHandoffEnabled(state.settings)
+  })
   if (editorRenderedPath) {
     void openBrowserPathInEditor(editorRenderedPath, params.worktreeId).then((handedOff) => {
       if (!handedOff) {

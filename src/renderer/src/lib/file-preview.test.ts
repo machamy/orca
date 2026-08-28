@@ -30,11 +30,15 @@ const mocks = vi.hoisted(() => ({
   environmentId: null as string | null,
   connectionId: null as string | null,
   layoutByWorktree: {} as Record<string, unknown>,
+  settings: {} as { browserMarkdownEditorHandoff?: boolean },
   toastError: vi.fn(),
   authorizeExternalPath: vi.fn(async () => undefined),
   openFile: vi.fn(),
+  openMarkdownPreview: vi.fn(),
   setActiveTabType: vi.fn(),
-  statRuntimePath: vi.fn(async () => ({ isDirectory: false }))
+  statRuntimePath: vi.fn(async () => ({ isDirectory: false })),
+  readRuntimeFilePreview: vi.fn(async () => ({ content: '# plain markdown', isBinary: false })),
+  richModeUnsupportedMessage: null as string | null
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
@@ -53,7 +57,13 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 
 vi.mock('@/runtime/runtime-file-client', () => ({
   statRuntimePath: mocks.statRuntimePath,
+  readRuntimeFilePreview: mocks.readRuntimeFilePreview,
   isRemoteRuntimeFileOperation: () => false
+}))
+
+// Why: the real detector pulls TipTap's round-trip editor into a node-env test.
+vi.mock('@/components/editor/markdown-rich-mode', () => ({
+  getMarkdownRichModeUnsupportedMessage: () => mocks.richModeUnsupportedMessage
 }))
 
 vi.mock('@/store', () => ({
@@ -69,10 +79,11 @@ vi.mock('@/store', () => ({
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
       },
-      settings: {},
+      settings: mocks.settings,
       allWorktrees: () => [{ id: 'wt-1', path: '/workspace/sample-project' }],
       ensureWorktreeRootGroup: () => 'group-1',
       openFile: mocks.openFile,
+      openMarkdownPreview: mocks.openMarkdownPreview,
       setActiveTabType: mocks.setActiveTabType
     })
   }
@@ -86,7 +97,10 @@ beforeEach(() => {
   mocks.environmentId = null
   mocks.connectionId = null
   mocks.layoutByWorktree = {}
+  mocks.settings = {}
   mocks.statRuntimePath.mockResolvedValue({ isDirectory: false })
+  mocks.readRuntimeFilePreview.mockResolvedValue({ content: '# plain markdown', isBinary: false })
+  mocks.richModeUnsupportedMessage = null
   mocks.authorizeExternalPath.mockResolvedValue(undefined)
   Object.assign(globalThis, {
     window: { api: { fs: { authorizeExternalPath: mocks.authorizeExternalPath } } }
@@ -137,6 +151,64 @@ describe('openFileInBrowserTab', () => {
         filePath: '/workspace/sample-project/analysis.ipynb',
         language: 'notebook'
       }),
+      expect.anything()
+    )
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('lands rich-unsupported markdown on the rendered preview tab', async () => {
+    mocks.richModeUnsupportedMessage = 'unsupported: HTML, JSX, or MDX'
+
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/docs/guide.mdx',
+      worktreeId: 'wt-1'
+    })
+
+    await vi.waitFor(() => expect(mocks.openMarkdownPreview).toHaveBeenCalled())
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'markdown', mode: 'edit' }),
+      expect.anything()
+    )
+    expect(mocks.openMarkdownPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/workspace/sample-project/docs/guide.mdx',
+        language: 'markdown'
+      }),
+      { targetGroupId: 'group-1' }
+    )
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('creates a raw browser tab for markdown when the handoff setting is off', async () => {
+    mocks.settings = { browserMarkdownEditorHandoff: false }
+
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/docs/guide.md',
+      worktreeId: 'wt-1'
+    })
+
+    // Upstream behavior: the tab is created synchronously, no probe runs.
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      'wt-1',
+      'file:///workspace/sample-project/docs/guide.md',
+      { title: 'guide.md', activate: true }
+    )
+    await Promise.resolve()
+    expect(mocks.statRuntimePath).not.toHaveBeenCalled()
+    expect(mocks.openFile).not.toHaveBeenCalled()
+  })
+
+  it('still hands notebooks to the editor when the markdown handoff is off', async () => {
+    mocks.settings = { browserMarkdownEditorHandoff: false }
+
+    openFileInBrowserTab({
+      filePath: '/workspace/sample-project/analysis.ipynb',
+      worktreeId: 'wt-1'
+    })
+
+    await vi.waitFor(() => expect(mocks.openFile).toHaveBeenCalled())
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'notebook' }),
       expect.anything()
     )
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
