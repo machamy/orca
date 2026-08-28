@@ -38,7 +38,9 @@ async function openInOrcaBrowser(page: Page, worktreeId: string, filePath: strin
   )
 }
 
-test('markdown opened in the embedded browser hands off to the editor', async ({ page }) => {
+test('markdown opened in the embedded browser hands off to the editor', async ({
+  orcaPage: page
+}) => {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
   const worktreeId = await getActiveWorktreeId(page)
