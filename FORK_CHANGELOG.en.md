@@ -24,6 +24,80 @@ source.
 
 ---
 
+## machamy.8 — on upstream `1.4.178-rc.2` · 2026-08-28
+
+A revision about how documents and Unity get *opened*. Markdown that used to render
+as raw source in the embedded browser now opens in the editor's rich view, documents
+with `<details>` folds keep rich mode, an already-running Unity is brought to the
+front instead of launched twice, and Unity/Rider open from keyboard shortcuts. The
+worktree-folders feature ships as dormant code, locked away this revision.
+
+### Browser markdown → editor handoff
+- Opening `.md`/`.mdx`/`.markdown`/`.ipynb` in the embedded browser (address bar,
+  the file explorer's "Open in Orca Browser", tab restore, retry — every entry
+  point) lands in the editor's rich view instead of Chromium's raw source. Every
+  guest URL assignment passes one choke point; a test fails the moment a fifth
+  bypass appears.
+- Markdown opened from the file explorer never creates a browser tab at all — no
+  stray empty "New Tab". A denied authorize or failed stat falls back to the
+  browser exactly as before (never a silent no-op).
+- A late async probe cannot interfere: navigating elsewhere (address bar, guest
+  link, SPA pushState, agent CDP goto) or switching workspaces mid-probe drops it.
+  Remote workspaces are judged per file owner and left alone.
+- A raw file an agent requests via `browser.goto` is deliberately served raw.
+
+### Rich mode for `<details>` documents
+- A document whose only "unsupported" HTML is `<details>`/`<summary>` no longer
+  falls back to code-only mode. The cause: saving stamped a class onto the opening
+  tag, failing the byte-preservation check — the tag is now re-emitted verbatim
+  when its semantics were not edited.
+- Four families of save corruption fixed alongside: literal tags stripped inside
+  fenced code, `</details>` inside inline code mistaken for the real closing tag
+  (exact backtick-run matching, multiline spans, block-boundary barriers),
+  4-space-indented code blocks, and spans crossing headings/thematic breaks. The
+  preservation gate itself is untouched — content genuinely survives, the check
+  wasn't loosened.
+
+### Unity: focus the running editor instead of launching another
+- "Open in Unity" now detects an editor already running on the project and raises
+  its window instead of spawning a second `-projectPath` process. Detection matches
+  editor processes only — a `-batchMode` AssetImportWorker on the same path is not
+  "open". Path comparison follows path syntax, not host-platform guessing.
+- Window raising is per platform (macOS: System Events with unminimize + raise;
+  Linux: xdotool; Windows: SetForegroundWindow). Failure shows a cause-specific
+  message carrying **the Unity pid** — Accessibility and Automation denials each
+  point at the right settings pane, and a missing xdotool or a windowless process
+  is never blamed on permissions. A just-launched editor with no window yet says
+  "still starting up" and invents no pid.
+- Concurrent opens of one project are serialized; a re-click right after launch is
+  suppressed by lockfile+grace so a clean quit can relaunch immediately; the seed
+  gate is re-checked right before spawn so a live `Library` never races the seeder.
+
+### Unity/Rider shortcuts
+- `⌃⌥U` opens Unity, `⌃⌥R` opens Rider (Rider's default binding is macOS-only —
+  discovery is macOS-only, so elsewhere the chord would swallow keys for nothing).
+  Rebindable in Settings → Shortcuts.
+- Targets the active worktree and behaves exactly like the menu item, including the
+  cache-copy offer dialog. Ineligible workspaces (SSH, runtime-hosted, folder
+  workspaces, non-Unity) get silence. Never fires with terminal focus (AltGr-safe),
+  yields to a plugin that claimed the chord, and refuses a worktree mid-deletion.
+
+### Worktree folders — aboard, but locked
+- Filing worktrees into named sidebar folders is complete in code (rendering,
+  create/rename/nest/delete, worktree→folder conversion, old-host protection) but
+  **cannot be enabled this revision** — the experimental settings row is not
+  rendered. Tests pin that with the feature absent, sidebar row output is
+  byte-identical to before. Planned to surface next revision behind an
+  experimental toggle, default off.
+
+### Verification
+- The fork contract suite grew from 956 to **1,298 tests** (109 contract files),
+  and the manifest guard — asserting every listed file still exists — finally runs
+  inside the gate; before this it could not catch the list silently shrinking.
+- Eight cross-vendor review rounds reproduced, fixed and pinned ~35 real defects,
+  including four data-loss families, six races, wrong permission guidance, and a
+  plugin-shortcut shadowing bug.
+
 ## machamy.7 — upstream `1.4.178-rc.2` · 2026-08-23
 
 Turns the Unity worktree colour from something assigned for you into something
