@@ -131,6 +131,69 @@ describe('selectUnityEditorProcesses', () => {
       )
     ).toEqual([])
   })
+
+  it('picks the editor, never the Unity Hub that launched it', () => {
+    // Hub keeps `-projectPath` on its own command line; `ps` does not quote, so
+    // `/Applications/Unity Hub.app/.../Unity Hub` used to read as the binary
+    // `/Applications/Unity`. Focusing the Hub pid raises the wrong window.
+    const rows = [
+      {
+        pid: 9047,
+        command:
+          '/Applications/Unity Hub.app/Contents/MacOS/Unity Hub -- --silent -- ' +
+          '-projectPath /w/feature-a'
+      },
+      {
+        pid: 8738,
+        command:
+          '/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity ' +
+          '-projectPath /w/feature-a'
+      }
+    ]
+    expect(selectUnityEditorProcesses(rows, '/w/feature-a').map((row) => row.pid)).toEqual([8738])
+    expect(selectUnityEditorProcesses([rows[0]!], '/w/feature-a')).toEqual([])
+  })
+
+  it('tells the Windows Unity Hub apart from Unity.exe', () => {
+    const rows = [
+      {
+        pid: 40,
+        command:
+          '"C:\\Program Files\\Unity Hub\\Unity Hub.exe" -- --silent -- -projectPath C:\\w\\a'
+      },
+      {
+        pid: 41,
+        command:
+          '"C:\\Program Files\\Unity\\Hub\\Editor\\6000.0.1f1\\Editor\\Unity.exe" ' +
+          '-projectPath C:\\w\\a'
+      }
+    ]
+    expect(selectUnityEditorProcesses(rows, 'C:\\w\\a').map((row) => row.pid)).toEqual([41])
+    // Windows path syntax folds the binary's case too.
+    expect(
+      selectUnityEditorProcesses(
+        [{ pid: 42, command: 'C:\\Unity\\Editor\\UNITY.EXE -projectPath C:\\w\\a' }],
+        'C:\\w\\a'
+      )
+    ).toHaveLength(1)
+  })
+
+  it('does not mistake an editor helper for the editor', () => {
+    // Helpers live under Unity.app and could carry the flag; only the editor
+    // binary itself owns a window.
+    const rows = [
+      {
+        pid: 50,
+        command:
+          '/Applications/Unity/Hub/Editor/6000.0.1f1/Unity.app/Contents/Helpers/UnityShaderCompiler ' +
+          '-projectPath /w/a'
+      },
+      { pid: 51, command: 'dotnet exec /opt/unity/Tools/VBCSCompiler.dll -projectPath /w/a' },
+      // POSIX basenames stay case-sensitive.
+      { pid: 52, command: '/opt/unity/Editor/unity -projectPath /w/a' }
+    ]
+    expect(selectUnityEditorProcesses(rows, '/w/a')).toEqual([])
+  })
 })
 
 describe('findUnityEditorProcess', () => {
@@ -475,6 +538,41 @@ describe('openUnityProject with a live editor', () => {
 
     expect(focusAttempts).toBe(0)
     expect(result.opened === false && result.reason === 'focus_failed').toBe(false)
+  })
+
+  it('launches when only the Unity Hub holds the project', async () => {
+    // Hub-only means no editor window exists; "already open" here would leave
+    // the user staring at the Hub with nothing to focus.
+    const worktree = makeUnityProject()
+    const launched: { binary: string; argv: readonly string[] }[] = []
+    let focusAttempts = 0
+
+    const result = await openUnityProject({
+      worktreePath: worktree,
+      platform: 'darwin',
+      listProcesses: async () => [
+        {
+          pid: 9047,
+          command:
+            '/Applications/Unity Hub.app/Contents/MacOS/Unity Hub -- --silent -- ' +
+            `-projectPath ${worktree}`
+        }
+      ],
+      runFocusCommand: async () => {
+        focusAttempts += 1
+        return { ok: true, stdout: '' }
+      },
+      editorBinaryExists: () => true,
+      launch: async (binary, argv) => {
+        launched.push({ binary, argv })
+        return { ok: true }
+      }
+    })
+
+    expect(result).toEqual({ opened: true })
+    expect(focusAttempts).toBe(0)
+    expect(launched).toHaveLength(1)
+    expect(launched[0]?.argv).toEqual(['-projectPath', worktree])
   })
 
   it('is not confused by a sibling worktree whose editor is up', async () => {

@@ -1,8 +1,8 @@
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import {
-  getCommandTokenPathBasename,
-  getFirstCommandToken
-} from '../../shared/command-token-scanner'
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../../shared/cross-platform-path'
+import { getCommandTokenPathBasename } from '../../shared/command-token-scanner'
 import { getFreshProcessTableSnapshot } from '../../shared/process-table-snapshot'
 import { queryWindowsProcessRowsFresh } from '../providers/windows-foreground-process-rows'
 
@@ -23,7 +23,8 @@ export type UnityProcessRow = { pid: number; command: string }
 
 const PROJECT_PATH_FLAG = '-projectpath'
 const BATCH_MODE_FLAG = '-batchmode'
-const EDITOR_BINARY_NAMES = new Set(['unity', 'unity.exe'])
+const POSIX_EDITOR_BINARY = 'Unity'
+const WINDOWS_EDITOR_BINARY = 'unity.exe'
 // Unity names its import workers; the flag catches them, this catches a worker
 // spawned without it.
 const IMPORT_WORKER_PREFIX = 'assetimportworker'
@@ -32,9 +33,33 @@ function isSpace(character: string | undefined): boolean {
   return character === undefined || /\s/.test(character)
 }
 
+/**
+ * Only the editor binary itself owns a window. Unity Hub keeps `-projectPath`
+ * on its own command line after launching a project, and the editor's helpers
+ * (`UnityShaderCompiler`, `Unity.Licensing.Client`, ...) all live under
+ * `Unity.app`, so "contains unity" is not an editor test. Case follows the
+ * path's syntax, as in `comparePathCandidate`.
+ */
 function isUnityEditorBinary(command: string): boolean {
-  const binary = getCommandTokenPathBasename(getFirstCommandToken(command))
-  return EDITOR_BINARY_NAMES.has(binary.toLowerCase())
+  const executable = executablePath(command)
+  const binary = getCommandTokenPathBasename(executable)
+  return isWindowsAbsolutePathLike(executable)
+    ? binary.toLowerCase() === WINDOWS_EDITOR_BINARY
+    : binary === POSIX_EDITOR_BINARY
+}
+
+/**
+ * The argv[0] of a command line, read with the same rules as a `-projectPath`
+ * value: a quoted head is the executable; an unquoted one (`ps` never quotes,
+ * and `/Applications/Unity Hub.app/.../Unity Hub` holds spaces) runs up to
+ * the first `-`-led token.
+ */
+function executablePath(command: string): string {
+  const head = command.trimStart()
+  return (
+    quotedArgumentValue(head) ??
+    head.slice(0, unquotedCandidateEnds(head)[0] ?? head.length).trimEnd()
+  )
 }
 
 function isHeadlessUnityProcess(command: string): boolean {
@@ -113,14 +138,20 @@ function unquotedCandidateEnds(argument: string): number[] {
   return ends
 }
 
-function argumentMatchRank(argument: string, projectPath: string): 0 | 1 | null {
+/** The quoted value heading an argument, or null when it is unquoted. */
+function quotedArgumentValue(argument: string): string | null {
   const quote = argument[0]
-  if (quote === '"' || quote === "'") {
-    const end = argument.indexOf(quote, 1)
-    return comparePathCandidate(
-      end === -1 ? argument.slice(1) : argument.slice(1, end),
-      projectPath
-    )
+  if (quote !== '"' && quote !== "'") {
+    return null
+  }
+  const end = argument.indexOf(quote, 1)
+  return end === -1 ? argument.slice(1) : argument.slice(1, end)
+}
+
+function argumentMatchRank(argument: string, projectPath: string): 0 | 1 | null {
+  const quoted = quotedArgumentValue(argument)
+  if (quoted !== null) {
+    return comparePathCandidate(quoted, projectPath)
   }
   let best: 0 | 1 | null = null
   for (const end of unquotedCandidateEnds(argument)) {
