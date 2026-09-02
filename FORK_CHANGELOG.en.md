@@ -80,7 +80,7 @@ worktree-folders feature ships as dormant code, locked away this revision.
   gate is re-checked right before spawn so a live `Library` never races the seeder.
 
 ### Unity/Rider shortcuts
-- `⌃⌥U` opens Unity, `⌃⌥R` opens Rider (Rider's default binding is macOS-only —
+- `⌘⌥U` opens Unity, `⌘⌥⇧R` opens Rider (Rider's default binding is macOS-only —
   discovery is macOS-only, so elsewhere the chord would swallow keys for nothing).
   Rebindable in Settings → Shortcuts.
 - Targets the active worktree and behaves exactly like the menu item, including the

@@ -22,8 +22,8 @@ import type { Worktree } from '../../../shared/worktree/types'
 import type { ActivePluginCommand } from '../store/plugin-panels'
 import { matchUnityEditorShortcut } from './unity-editor-shortcut-match'
 
-const UNITY_CHORD = { key: 'u', code: 'KeyU', control: true, alt: true, meta: false, shift: false }
-const RIDER_CHORD = { key: 'r', code: 'KeyR', control: true, alt: true, meta: false, shift: false }
+const UNITY_CHORD = { key: 'u', code: 'KeyU', control: false, alt: true, meta: true, shift: false }
+const RIDER_CHORD = { key: 'r', code: 'KeyR', control: false, alt: true, meta: true, shift: true }
 
 describe('Unity editor shortcut registry', () => {
   it('registers both actions so Settings can list and rebind them (C1)', () => {
@@ -52,32 +52,33 @@ describe('Unity editor shortcut registry', () => {
   it('keeps the default chords conflict-free on all three platforms (C2)', () => {
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
       expect(findKeybindingConflicts(platform)).toEqual([])
-      expect(getEffectiveKeybindingsForAction('unity.openEditor', platform)).toEqual(['Ctrl+Alt+U'])
+      expect(getEffectiveKeybindingsForAction('unity.openEditor', platform)).toEqual(['Mod+Alt+U'])
     }
     // Rider's launcher is darwin-only (findRiderAppPath); a default chord on
     // Windows/Linux would be consumed just to no-op, so only macOS ships one.
-    expect(getEffectiveKeybindingsForAction('unity.openRider', 'darwin')).toEqual(['Ctrl+Alt+R'])
+    expect(getEffectiveKeybindingsForAction('unity.openRider', 'darwin')).toEqual([
+      'Mod+Alt+Shift+R'
+    ])
     expect(getEffectiveKeybindingsForAction('unity.openRider', 'linux')).toEqual([])
     expect(getEffectiveKeybindingsForAction('unity.openRider', 'win32')).toEqual([])
   })
 
   it('labels the chord with platform glyphs (C3)', () => {
-    // Literal Ctrl, not Mod: on macOS that is Control+Option (⌃⌥), which is the
-    // binding the owner picked precisely to leave ⌘⌥ alone.
-    expect(formatKeybindingList(['Ctrl+Alt+U'], 'darwin')).toBe('⌃⌥U')
-    expect(formatKeybindingList(['Ctrl+Alt+R'], 'win32')).toBe('Ctrl+Alt+R')
-    expect(formatKeybindingList(['Ctrl+Alt+R'], 'linux')).toBe('Ctrl+Alt+R')
+    // Mod renders as ⌘ on macOS and Ctrl elsewhere.
+    expect(formatKeybindingList(['Mod+Alt+U'], 'darwin')).toBe('⌘⌥U')
+    expect(formatKeybindingList(['Mod+Alt+U'], 'win32')).toBe('Ctrl+Alt+U')
+    expect(formatKeybindingList(['Mod+Alt+Shift+R'], 'darwin')).toBe('⌘⌥⇧R')
   })
 
-  it('never fires with terminal focus, under either policy — AltGr must stay text', () => {
+  it('never fires with terminal focus, under either policy — terminal keeps its own input', () => {
     for (const policy of ['orca-first', 'terminal-first'] as const) {
       const terminal = { context: 'terminal', terminalShortcutPolicy: policy } as const
-      expect(matchUnityEditorShortcut(UNITY_CHORD, 'linux', undefined, terminal)).toBeNull()
-      expect(matchUnityEditorShortcut(RIDER_CHORD, 'win32', undefined, terminal)).toBeNull()
+      expect(matchUnityEditorShortcut(UNITY_CHORD, 'darwin', undefined, terminal)).toBeNull()
+      expect(matchUnityEditorShortcut(RIDER_CHORD, 'darwin', undefined, terminal)).toBeNull()
     }
     // App focus is untouched, whatever the terminal policy says.
     expect(
-      matchUnityEditorShortcut(UNITY_CHORD, 'linux', undefined, {
+      matchUnityEditorShortcut(UNITY_CHORD, 'darwin', undefined, {
         context: 'app',
         terminalShortcutPolicy: 'terminal-first'
       })
@@ -85,9 +86,12 @@ describe('Unity editor shortcut registry', () => {
   })
 
   it('routes each chord to its own action and nothing else', () => {
+    // Mod = Cmd on macOS, Ctrl elsewhere, so the physical chord differs per platform.
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
-      expect(matchUnityEditorShortcut(UNITY_CHORD, platform)).toBe('unity')
-      expect(matchUnityEditorShortcut({ ...UNITY_CHORD, alt: false }, platform)).toBeNull()
+      const chord =
+        platform === 'darwin' ? UNITY_CHORD : { ...UNITY_CHORD, meta: false, control: true }
+      expect(matchUnityEditorShortcut(chord, platform)).toBe('unity')
+      expect(matchUnityEditorShortcut({ ...chord, alt: false }, platform)).toBeNull()
     }
     // Rider fires by default only where its launcher exists; elsewhere the
     // chord stays free unless the user binds it themselves.
@@ -95,7 +99,9 @@ describe('Unity editor shortcut registry', () => {
     expect(matchUnityEditorShortcut(RIDER_CHORD, 'linux')).toBeNull()
     expect(matchUnityEditorShortcut(RIDER_CHORD, 'win32')).toBeNull()
     expect(
-      matchUnityEditorShortcut(RIDER_CHORD, 'linux', { 'unity.openRider': ['Ctrl+Alt+R'] })
+      matchUnityEditorShortcut({ ...RIDER_CHORD, meta: false, control: true }, 'linux', {
+        'unity.openRider': ['Mod+Alt+Shift+R']
+      })
     ).toBe('rider')
   })
 })
@@ -304,13 +310,14 @@ async function pressChord(init: KeyboardEventInit, target?: EventTarget): Promis
 const UNITY_KEY_EVENT: KeyboardEventInit = {
   key: 'u',
   code: 'KeyU',
-  ctrlKey: true,
+  metaKey: true,
   altKey: true
 }
 const RIDER_KEY_EVENT: KeyboardEventInit = {
   key: 'r',
   code: 'KeyR',
-  ctrlKey: true,
+  metaKey: true,
+  shiftKey: true,
   altKey: true
 }
 
@@ -411,7 +418,7 @@ describe('UnityEditorShortcuts (mounted)', () => {
     expect(unityApi.openInRider).not.toHaveBeenCalled()
   })
 
-  it('leaves the chord to a text field — Ctrl+Alt is AltGr on Windows/Linux', async () => {
+  it('leaves the chord to a text field', async () => {
     unityApi.worktreeStatus.mockResolvedValue(unityStatus())
     await mountShortcuts()
     const input = document.createElement('input')
@@ -467,7 +474,7 @@ describe('UnityEditorShortcuts (mounted)', () => {
     // plugin chord wins in app focus, so the Unity handler must leave the event
     // alone: no launch, and no preventDefault (the global dispatch still needs
     // to see the chord to run the plugin command).
-    activePluginCommands = [pluginCommandFixture('Ctrl+Alt+U')]
+    activePluginCommands = [pluginCommandFixture('Mod+Alt+U')]
     unityApi.worktreeStatus.mockResolvedValue(unityStatus())
     await mountShortcuts()
 

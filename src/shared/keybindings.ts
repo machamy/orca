@@ -893,9 +893,10 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'unity', 'editor', 'open', 'game', 'worktree'],
-    // Why: literal Ctrl (not Mod) on every platform — on macOS this is deliberately
-    // Control+Option, leaving Cmd+Opt+U free; the whole Ctrl+Alt family is unclaimed.
-    defaultBindings: platformBindings(['Ctrl+Alt+U']),
+    // Why: Cmd/Ctrl+Alt, after two rejected chords — Ctrl+Alt+U is Rectangle's
+    // top-left-quarter tiling default (it resized windows), and bare Alt+U is a
+    // macOS dead key that types ¨ into a terminal. Mod suppresses text input.
+    defaultBindings: platformBindings(['Mod+Alt+U']),
     neverInTerminal: true
   },
   {
@@ -904,12 +905,12 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'unity', 'rider', 'jetbrains', 'ide', 'open', 'worktree'],
-    // Why: Mod+Alt+R is workspace.rename on macOS, so the R mnemonic only survives
-    // on the Ctrl+Alt family, which pairs it with Open in Unity. darwin-only:
-    // findRiderAppPath knows no Rider elsewhere, so a default chord would be
-    // consumed just to no-op; users can still bind it manually.
+    // Why: Mod+Alt+R is workspace.rename on macOS, so Rider takes the Shift
+    // variant rather than stealing it. darwin-only: findRiderAppPath knows no
+    // Rider elsewhere, so a default chord would be consumed just to no-op;
+    // users can still bind it manually.
     defaultBindings: {
-      darwin: ['Ctrl+Alt+R'],
+      darwin: ['Mod+Alt+Shift+R'],
       linux: [],
       win32: []
     },
