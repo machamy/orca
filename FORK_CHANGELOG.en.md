@@ -24,6 +24,83 @@ source.
 
 ---
 
+## machamy.9 — on upstream `1.4.178-rc.2` · 2026-09-03
+
+Catches the fork up to upstream by **912 commits**. No new fork features; two
+problems machamy.8 surfaced — the Unity shortcuts and the window-focus lookup —
+are fixed.
+
+### Unity shortcuts moved
+- **`⌘⌥U` opens Unity, `⌘⌥⇧R` opens Rider.** machamy.8's `⌃⌥U`/`⌃⌥R` are
+  withdrawn for two reasons: `⌃⌥U` is Rectangle's top-left-quarter tiling
+  default, so the chord **resized windows** instead of opening Unity; and the
+  alternative `⌥U` is a macOS dead key, so a **terminal received the umlaut**
+  (`neverInTerminal` suppresses the action, not the text input). `⌘` suppresses
+  text input and Rectangle lives on `⌃⌥`, so this pair avoids both. Rider takes
+  the `⇧` variant because `⌘⌥R` is already workspace rename. Rebindable in
+  Settings → Shortcuts.
+
+### Unity refocus: Hub mistaken for the editor
+- When a project is launched from Hub, **the Hub process carries the same
+  `-projectPath`**, so the "already open" lookup could return Hub's pid —
+  raising Hub's window, or naming the wrong pid in the failure popup. The cause
+  was the **space** in `/Applications/Unity Hub.app/…`: splitting argv[0] at the
+  first space yielded `/Applications/Unity`, basename `Unity`, which passed the
+  editor check. argv[0] is now parsed with the same rules as a `-projectPath`
+  value, and only an executable named exactly `Unity` (`Unity.exe`) counts. The
+  seeding gate is unchanged — a Hub holding the project is still a reason not to
+  clone the cache.
+
+### Upstream merge (912 commits)
+- By area: terminal 49 · renderer 43 · **mobile 31** · native-chat 22 ·
+  worktree 20 · git 19 · browser 18 · Windows 17 · WSL 14 · runtime 14 · SSH 13 ·
+  Codex 13 · **relay 12**.
+- 26 mobile/relay fixes arrived: session-parity restore after extraction,
+  host-follow tab snapshots, dismissing the keyboard after sending to an agent,
+  the create-worktree sheet dying after picking a PR, reaping owned PTYs when the
+  daemon dies, PTY ids carrying the relay incarnation instead of a restarting
+  counter. Whether these reduce the error screens seen on the phone is a thing to
+  **check**, not a claim.
+- Upstream did not edit its big files — it **split them into modules and left
+  thin facades** (`orca-runtime.ts` 40,904→58 lines, `ipc/pty.ts` 8,134→39,
+  `useIpcEvents.ts` 4,539→7). Fork code living in those files had no home left
+  and was re-ported into upstream's new modules.
+
+### What the merge swallowed (the fork gate caught all of it)
+After the 55 conflicts were resolved, the contract suite failed in 18 places —
+none of which a typecheck would have caught.
+
+- `retainSurface` on both the sleep and hibernation kills (the point is that it
+  is a flag *separate* from `keepHistory`; upstream's modules kept only the latter)
+- the whole `clearDeadLeafPtyBindings` action
+- the entire cold-restore resume-claim path — which also exposed two sibling
+  tests that had been passing vacuously with nothing left to skip
+- follow-mode wake plumbing (two store actions plus a 200-line caller) and the
+  default-switch runtime plumbing
+- the default-worktree switch's context-menu entry point, and the Unity menu
+  with its confirm dialog
+- fork IPC listener registration, and `migrations`/`shieldOnly` on
+  `worktrees:changed`
+- two preload listeners, and six fork fields on `RepoUpdate`
+- two path-based policy helpers (the fork keys on the repo-path checkout because
+  git's main-worktree flag follows the displaced side after an in-place switch)
+
+### What upstream caught in the fork
+- Three Unity files added in machamy.8 imported `node:child_process` directly.
+  Upstream brought a ratchet test that watches for exactly this, and it was
+  right: they now go through the shared `runProcess`/`spawnProcess`, which pins
+  `windowsHide`, refuses `shell: true`, and encodes `.cmd`/`.bat` arguments.
+
+### Verification
+- Fork contract suite **113 files / 1,403 tests** green. Typecheck (node, web,
+  cli) clean, lint clean, no new `max-lines` suppression (six files were split
+  at real seams instead).
+- The browser markdown handoff E2E re-run against the real rendered app.
+- The merge changed `package.json` by 127 lines and the lockfile by 2,302, so
+  until dependencies were reinstalled the suite was running against the old
+  xterm. Reinstalling cleared 23 IME failures — an install-state problem, not a
+  code regression.
+
 ## machamy.8 — on upstream `1.4.178-rc.2` · 2026-08-28
 
 A revision about how documents and Unity get *opened*. Markdown that used to render
