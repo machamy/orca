@@ -26,8 +26,11 @@ export type SearchableBrowserPage = {
   worktree: Worktree
   repoName: string
   worktreeSortIndex: number
+  executionHostId?: ExecutionHostId
   isCurrentPage: boolean
   isCurrentWorktree: boolean
+  /** Last time the owning browser workspace was focused; null when never focused. */
+  lastActiveAt?: number | null
   /** Normalized field index, built once per entry rather than per keystroke. */
   document: PaletteDocument
 }
@@ -39,6 +42,8 @@ export type BrowserPaletteSearchResult = {
   workspaceId: string
   worktreeId: string
   title: string
+  /** Raw page URL, so callers can dedupe a row against another list of destinations. */
+  url: string
   secondaryText: string
   workspaceLabel: string | null
   repoName: string
@@ -55,6 +60,7 @@ export type BrowserPaletteSearchResult = {
   score: number
   qualityClass: PaletteResultQualityClass | null
   rank: PaletteDocumentRank | null
+  lastActiveAt?: number | null
 }
 
 export const BROWSER_PALETTE_QUERY_MAX_BYTES = 2 * 1024
@@ -129,8 +135,8 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-// Why: empty-query browser ordering is intentionally deterministic and context-first.
-// The palette should not invent hidden browser recency semantics.
+// Why: empty-query browser ordering is intentionally deterministic and context-first;
+// lastActiveAt only breaks ties between equally-ranked query matches.
 function positionScore(entry: SearchableBrowserPage): number {
   if (entry.isCurrentPage) {
     return entry.worktreeSortIndex * 100 - 4000
@@ -140,12 +146,14 @@ function positionScore(entry: SearchableBrowserPage): number {
 
 function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
   const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
+  const executionHostId = entry.executionHostId ?? entry.worktree.hostId
   return {
-    ...(entry.worktree.hostId ? { executionHostId: entry.worktree.hostId } : {}),
+    ...(executionHostId ? { executionHostId } : {}),
     pageId: entry.page.id,
     workspaceId: entry.workspace.id,
     worktreeId: entry.worktree.id,
     title: entry.page.title || formattedUrl,
+    url: entry.page.url,
     secondaryText: formattedUrl,
     workspaceLabel: entry.workspace.label ?? null,
     repoName: entry.repoName,
@@ -162,7 +170,8 @@ function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
     isCurrentWorktree: entry.isCurrentWorktree,
     score: positionScore(entry),
     qualityClass: null,
-    rank: null
+    rank: null,
+    lastActiveAt: entry.lastActiveAt ?? null
   }
 }
 
@@ -208,8 +217,18 @@ export function searchBrowserPages(
   return results.sort((a, b) =>
     a.rank && b.rank
       ? comparePaletteTabResults(
-          { rank: a.rank, positionScore: a.score, id: a.pageId },
-          { rank: b.rank, positionScore: b.score, id: b.pageId }
+          {
+            rank: a.rank,
+            positionScore: a.score,
+            id: a.pageId,
+            lastActiveAt: a.lastActiveAt ?? undefined
+          },
+          {
+            rank: b.rank,
+            positionScore: b.score,
+            id: b.pageId,
+            lastActiveAt: b.lastActiveAt ?? undefined
+          }
         )
       : compareEmptyQueryResults(a, b)
   )

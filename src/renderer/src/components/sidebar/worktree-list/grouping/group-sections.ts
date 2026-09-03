@@ -8,6 +8,7 @@ import {
 } from '../../workspace-status'
 import { PROJECT_GROUP_META, PR_GROUP_META } from './group-keys'
 import type { PRGroupKey } from './group-keys'
+import type { NoticeHostContext } from './host-labels'
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
@@ -47,6 +48,7 @@ export type SectionAppendContext = {
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
+  noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
@@ -164,13 +166,24 @@ export function appendOrderedGroups(
         for (const repoId of repoIds) {
           const candidate = importedWorktreesByRepo.get(repoId)
           if (candidate) {
-            result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
+            result.push(
+              buildImportedWorktreesCardRow(
+                candidate,
+                'repo-group',
+                ctx.noticeHostContextLabelByRepoId?.get(repoId)
+              )
+            )
           }
         }
         for (const repoId of repoIds) {
           const candidate = newExternalWorktreesInboxByRepo.get(repoId)
           if (candidate) {
-            result.push(buildNewExternalWorktreesInboxRow(candidate))
+            result.push(
+              buildNewExternalWorktreesInboxRow(
+                candidate,
+                ctx.noticeHostContextLabelByRepoId?.get(repoId)
+              )
+            )
           }
         }
         // Why: surface in-progress creates at the top of their own repo so the

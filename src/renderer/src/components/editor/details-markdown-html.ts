@@ -35,8 +35,11 @@ export type DetailsHtmlBlock = {
   raw: string
   openingAttributes: string
   inner: string
-  hasNestedDetails: boolean
 }
+
+// Code ranges (fences + inline spans) depend only on the scanned string, so callers
+// scanning one body repeatedly compute them once and share them across sibling matches.
+export type MarkdownFenceRanges = [number, number][]
 
 export type DetailsSummaryHtml = {
   attributes: string
@@ -114,7 +117,11 @@ function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): st
   return attributes.join(' ')
 }
 
-export function matchDetailsHtmlBlock(content: string, start: number): DetailsHtmlBlock | null {
+export function matchDetailsHtmlBlock(
+  content: string,
+  start: number,
+  precomputedFenceRanges?: MarkdownFenceRanges
+): DetailsHtmlBlock | null {
   const openingMatch = content.slice(start).match(/^<details\b[^>]*>/i)
   if (!openingMatch) {
     return null
@@ -123,10 +130,9 @@ export function matchDetailsHtmlBlock(content: string, start: number): DetailsHt
   const detailsTagPattern = /<\/?details\b[^>]*>/gi
   detailsTagPattern.lastIndex = start
   // Why: a details tag inside fenced or inline code is literal text, not structure.
-  const codeRanges = markdownCodeRanges(content)
+  const codeRanges = precomputedFenceRanges ?? markdownCodeRanges(content)
 
   let depth = 0
-  let hasNestedDetails = false
 
   for (;;) {
     const tagMatch = detailsTagPattern.exec(content)
@@ -148,14 +154,10 @@ export function matchDetailsHtmlBlock(content: string, start: number): DetailsHt
         return {
           raw: content.slice(start, closingEnd),
           openingAttributes: openingMatch[0].replace(/^<details\b/i, '').replace(/>$/u, ''),
-          inner: content.slice(start + openingMatch[0].length, tagMatch.index),
-          hasNestedDetails
+          inner: content.slice(start + openingMatch[0].length, tagMatch.index)
         }
       }
     } else {
-      if (depth > 0) {
-        hasNestedDetails = true
-      }
       depth += 1
     }
   }
@@ -248,11 +250,40 @@ function isHtmlTagNamePart(code: number): boolean {
   )
 }
 
-export function isEditableDetailsHtmlBlock(block: DetailsHtmlBlock): boolean {
-  if (block.hasNestedDetails) {
-    return false
-  }
+// Why: nested toggles validate recursively and each level rescans its own body,
+// so a pathological file would otherwise blow the stack or go quadratic.
+const MAX_DETAILS_NESTING_LEVELS = 16
 
+// Removes nested toggles that are themselves editable, so the caller's raw-tag
+// scan sees only the body's own markup. Null when a nested toggle can't be one.
+function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): string | null {
+  let result = ''
+  let index = 0
+  // Why: without sharing this, N sibling toggles rescan the whole body N times.
+  let fenceRanges: MarkdownFenceRanges | null = null
+
+  for (;;) {
+    const nestedStart = indexOfAsciiIgnoreCase(bodyHtml, '<details', index)
+    if (nestedStart === -1) {
+      return result + bodyHtml.slice(index)
+    }
+
+    if (nestingLevel >= MAX_DETAILS_NESTING_LEVELS) {
+      return null
+    }
+
+    fenceRanges ??= markdownCodeRanges(bodyHtml)
+    const nested = matchDetailsHtmlBlock(bodyHtml, nestedStart, fenceRanges)
+    if (!nested || !isEditableDetailsHtmlBlock(nested, nestingLevel + 1)) {
+      return null
+    }
+
+    result += bodyHtml.slice(index, nestedStart)
+    index = nestedStart + nested.raw.length
+  }
+}
+
+export function isEditableDetailsHtmlBlock(block: DetailsHtmlBlock, nestingLevel = 1): boolean {
   if (!hasOnlySupportedDetailsAttributes(block.openingAttributes)) {
     return false
   }
@@ -270,7 +301,11 @@ export function isEditableDetailsHtmlBlock(block: DetailsHtmlBlock): boolean {
     return false
   }
 
-  const bodyHtml = block.inner.slice(summary.rawLength)
+  const bodyHtml = stripEditableNestedDetails(block.inner.slice(summary.rawLength), nestingLevel)
+  if (bodyHtml === null) {
+    return false
+  }
+
   if (!hasOnlyPlainParagraphAndBreakTags(bodyHtml)) {
     return false
   }

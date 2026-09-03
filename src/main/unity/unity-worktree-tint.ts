@@ -1,7 +1,6 @@
-import { execFile } from 'node:child_process'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { promisify } from 'node:util'
+import { runProcess } from '../../shared/child-process/run-process'
 import { isUnityTintOptOut, pickUnityWorktreeTint } from '../../shared/unity-worktree-tint-palette'
 import type { UnityWorktreeTint } from '../../shared/unity-worktree-tint-palette'
 
@@ -49,10 +48,12 @@ async function scriptPathIsGitIgnored(worktreePath: string): Promise<boolean> {
   try {
     // Exit 0 = ignored. `--no-index` so a path git already tracks still reports
     // its ignore rules rather than short-circuiting.
-    await promisify(execFile)('git', ['check-ignore', '--quiet', '--no-index', SCRIPT_RELPATH], {
+    const result = await runProcess({
+      program: 'git',
+      args: ['check-ignore', '--quiet', '--no-index', SCRIPT_RELPATH],
       cwd: worktreePath
     })
-    return true
+    return result.code === 0
   } catch {
     return false
   }

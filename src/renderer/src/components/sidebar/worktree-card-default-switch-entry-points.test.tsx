@@ -28,7 +28,13 @@ describe('default-worktree switch entry points survive card refactors', () => {
     expect(read('worktree-card-meta-row.tsx')).toContain('WorktreeCard.defaultWorktree')
   })
 
+  // Upstream split WorktreeContextMenu.tsx into a model hook and a view; the menu
+  // item and its handler moved with them, so the check follows them there.
   it('still offers the menu item when a handler is supplied', () => {
-    expect(read('WorktreeContextMenu.tsx')).toContain('onDefaultSwitchRequest')
+    expect(read('use-worktree-context-menu-model.tsx')).toContain(
+      'onDefaultSwitchRequest?.(worktree)'
+    )
+    expect(read('WorktreeContextMenuView.tsx')).toContain('{onDefaultSwitchRequest ? (')
+    expect(read('WorktreeContextMenuView.tsx')).toContain('onSelect={handleDefaultSwitch}')
   })
 })

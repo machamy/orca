@@ -2,6 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompactAgentSummaryButton } from './worktree-card-compact-agents'
 
 function makeAgent(state: string, tabTitle: string, updatedAt = 0): DashboardAgentRowData {
@@ -14,15 +15,24 @@ function makeAgent(state: string, tabTitle: string, updatedAt = 0): DashboardAge
   } as unknown as DashboardAgentRowData
 }
 
-function renderCollapsed(agents: DashboardAgentRowData[]): string {
+// The state dots inside the pill hang a tooltip off a context provider App supplies.
+function renderPill(props: { agents: DashboardAgentRowData[]; expanded: boolean }): string {
   return renderToStaticMarkup(
-    React.createElement(CompactAgentSummaryButton, {
-      agents,
-      subjectLabel: 'agents',
-      expanded: false,
-      onToggle: () => {}
-    })
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(CompactAgentSummaryButton, {
+        agents: props.agents,
+        subjectLabel: 'agents',
+        expanded: props.expanded,
+        onToggle: () => {}
+      })
+    )
   )
+}
+
+function renderCollapsed(agents: DashboardAgentRowData[]): string {
+  return renderPill({ agents, expanded: false })
 }
 
 describe('collapsed agent summary', () => {
@@ -49,14 +59,7 @@ describe('collapsed agent summary', () => {
   })
 
   it('keeps the name out of the expanded header, which already has one', () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(CompactAgentSummaryButton, {
-        agents: [makeAgent('working', 'T1-클로드', 5)],
-        subjectLabel: 'agents',
-        expanded: true,
-        onToggle: () => {}
-      })
-    )
+    const markup = renderPill({ agents: [makeAgent('working', 'T1-클로드', 5)], expanded: true })
 
     expect(markup).toContain('agents')
     expect(markup).not.toContain('T1-클로드')

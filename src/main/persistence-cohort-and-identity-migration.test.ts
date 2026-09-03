@@ -303,10 +303,33 @@ describe('Store.migrateWorktreeIdentity', () => {
       },
       activeFileIdByWorktree: { [OLD]: '/ws/cunner/a.ts' },
       browserTabsByWorktree: {
-        [OLD]: [{ id: 'browser1', worktreeId: OLD, title: 'Browser', url: 'about:blank' }]
+        [OLD]: [
+          {
+            id: 'browser1',
+            worktreeId: OLD,
+            title: 'Browser',
+            url: 'about:blank',
+            docLocation: {
+              kind: 'workspace-doc',
+              worktreeId: OLD,
+              filePath: '/ws/cunner/docs/report.html'
+            }
+          }
+        ]
       },
       browserPagesByWorkspace: {
-        browser1: [{ id: 'page1', workspaceId: 'browser1', worktreeId: OLD }]
+        browser1: [
+          {
+            id: 'page1',
+            workspaceId: 'browser1',
+            worktreeId: OLD,
+            docLocation: {
+              kind: 'workspace-doc',
+              worktreeId: OLD,
+              filePath: '/ws/cunner/docs/report.html'
+            }
+          }
+        ]
       },
       activeBrowserTabIdByWorktree: { [OLD]: 'browser1' },
       activeTabTypeByWorktree: { [OLD]: 'browser' },
@@ -389,6 +412,16 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(session.browserTabsByWorktree?.[OLD]).toBeUndefined()
     expect(session.browserTabsByWorktree?.[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(session.browserPagesByWorkspace?.browser1?.[0]?.worktreeId).toBe(NEW)
+    expect(session.browserTabsByWorktree?.[NEW]?.[0]?.docLocation).toEqual({
+      kind: 'workspace-doc',
+      worktreeId: NEW,
+      filePath: '/ws/worktree-creation-spinner/docs/report.html'
+    })
+    expect(session.browserPagesByWorkspace?.browser1?.[0]?.docLocation).toEqual({
+      kind: 'workspace-doc',
+      worktreeId: NEW,
+      filePath: '/ws/worktree-creation-spinner/docs/report.html'
+    })
     expect(session.activeBrowserTabIdByWorktree?.[NEW]).toBe('browser1')
     expect(session.activeTabTypeByWorktree?.[NEW]).toBe('browser')
     expect(session.activeWorktreeId).toBe(NEW)
@@ -426,6 +459,8 @@ describe('Store.migrateWorktreeIdentity', () => {
 
   it('moves persisted mobile selections across reloads', async () => {
     const store = await createStore()
+    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    store.addRepo(makeRepo({ id: 'repo1', path: '/repo1' }))
     store.setMobileClientTabSelections({
       'device-a': {
         [OLD]: { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: {} }
@@ -447,6 +482,19 @@ describe('Store.migrateWorktreeIdentity', () => {
     const NEWER = 'repo1::/ws/final-name'
     store.migrateWorktreeIdentity(NEW, NEWER)
     expect(store.getWorktreeMeta(NEWER)?.priorWorktreeIds).toEqual([OLD, NEW])
+  })
+
+  it('keeps the newest visit timestamp when a partial migration left both identities', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { [OLD]: 100, [NEW]: 900 }
+    })
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.[OLD]).toBeUndefined()
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.[NEW]).toBe(900)
   })
 
   it('is a no-op when the ids match', async () => {

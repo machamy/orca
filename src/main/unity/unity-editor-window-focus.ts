@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../../shared/child-process/run-process'
 import { isCommandOnLocalPath } from '../ipc/command-path-resolver'
 import { findUnityEditorProcess, type UnityProcessRow } from './unity-editor-process-lookup'
 import type { UnityOpenResult } from '../../shared/unity-worktree'
@@ -47,9 +47,10 @@ export type FocusCommandRunner = (
 ) => Promise<FocusCommandResult>
 
 const FOCUS_COMMAND_TIMEOUT_MS = 5_000
-// Why: execFile's own timeout only sends SIGTERM; a child that ignores it would
-// leave the callback — and the user's click — pending forever.
+// Why: the run timeout only sends SIGTERM; a child that ignores it would leave
+// the promise — and the user's click — pending forever.
 const FOCUS_COMMAND_HARD_SETTLE_MS = 8_000
+const FOCUS_COMMAND_MAX_OUTPUT_BYTES = 1024 * 1024
 
 // Frontmost-by-unix-id, so the right editor rises when several are open. Needs
 // the macOS Automation grant; the first attempt is what makes macOS ask.
@@ -97,6 +98,9 @@ function windowsFocusScript(pid: number): string {
 function defaultRunCommand(file: string, argv: readonly string[]): Promise<FocusCommandResult> {
   return new Promise((resolve) => {
     let settled = false
+    // Why abort rather than a kill: runProcess owns the child, and aborting is
+    // how a caller that has stopped waiting takes the tree down with it.
+    const abort = new AbortController()
     const settle = (result: FocusCommandResult): void => {
       if (settled) {
         return
@@ -106,30 +110,34 @@ function defaultRunCommand(file: string, argv: readonly string[]): Promise<Focus
       resolve(result)
     }
     const hardSettle = setTimeout(() => {
-      child.kill()
+      abort.abort()
       settle({ ok: false, detail: `${file} did not answer in time` })
     }, FOCUS_COMMAND_HARD_SETTLE_MS)
-    if (typeof hardSettle.unref === 'function') {
-      hardSettle.unref()
-    }
-    const child = execFile(
-      file,
-      [...argv],
-      {
-        timeout: FOCUS_COMMAND_TIMEOUT_MS,
-        maxBuffer: 1024 * 1024,
-        // Why: Electron's main has no console, so an unhidden PowerShell fork
-        // pops a conhost window that flashes and steals keyboard focus — the
-        // exact thing this module is trying to give to Unity.
-        windowsHide: true
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          settle({ ok: false, detail: (stderr || error.message).trim() })
+    hardSettle.unref?.()
+    // Why runProcess: it pins windowsHide, and Electron's main has no console —
+    // an unhidden PowerShell fork pops a conhost that flashes and steals the
+    // keyboard focus this module is trying to give to Unity.
+    runProcess({
+      program: file,
+      args: argv,
+      timeoutMs: FOCUS_COMMAND_TIMEOUT_MS,
+      maxOutputBytes: FOCUS_COMMAND_MAX_OUTPUT_BYTES,
+      signal: abort.signal
+    }).then(
+      (result) => {
+        if (result.code === 0) {
+          settle({ ok: true, stdout: result.stdout })
           return
         }
-        settle({ ok: true, stdout: stdout.toString() })
-      }
+        // Why this exact shape: the failure classifiers below read the detail,
+        // and a silent non-zero exit must stay distinguishable from a diagnostic.
+        settle({
+          ok: false,
+          detail: (result.stderr || `Command failed: ${[file, ...argv].join(' ')}`).trim()
+        })
+      },
+      (error: unknown) =>
+        settle({ ok: false, detail: error instanceof Error ? error.message : String(error) })
     )
   })
 }

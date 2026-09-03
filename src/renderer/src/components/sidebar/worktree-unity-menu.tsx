@@ -61,7 +61,8 @@ export function useUnityWorktreeMenu(args: {
       ? probedUnityStatus.status
       : null
   useEffect(() => {
-    if (!menuOpen || !unityEligible || !repo || !unityProbeTarget) {
+    // `unity` is absent wherever the preload bridge is stubbed; skip the probe rather than throw.
+    if (!menuOpen || !unityEligible || !repo || !unityProbeTarget || !window.api?.unity) {
       return
     }
     let cancelled = false

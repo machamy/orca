@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '../../shared/child-process/run-process'
 
 export type EditorLaunchResult = { ok: true } | { ok: false; detail: string }
 
@@ -12,7 +12,7 @@ export type EditorLauncher = (binary: string, argv: string[]) => Promise<EditorL
  */
 export function launchDetachedEditor(binary: string, argv: string[]): Promise<EditorLaunchResult> {
   return new Promise((resolve) => {
-    const child = spawn(binary, argv, { detached: true, stdio: 'ignore' })
+    const child = spawnProcess({ program: binary, args: argv, detached: true, stdio: 'ignore' })
     child.once('spawn', () => {
       child.unref()
       resolve({ ok: true })

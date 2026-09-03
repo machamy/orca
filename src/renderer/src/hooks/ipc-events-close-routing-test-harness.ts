@@ -1,12 +1,12 @@
-import type * as ReactModule from 'react'
 import { vi } from 'vitest'
+import { mockCloseRoutingModules } from './ipc-events-close-routing-module-mocks'
 
 export type RequestTabCloseListener = (data: {
   requestId: string
   tabId: string | null
   worktreeId?: string
 }) => void
-export type CloseActiveTabListener = () => void
+export type CloseActiveTabListener = (payload?: { sourceId: string }) => void
 export type CloseFloatingItemListener = (payload: { sourceId: string }) => void
 export type SelectFloatingIndexListener = (payload: { index: number }) => void
 export type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
@@ -52,96 +52,13 @@ export async function useIpcEventsForCloseRouting({
   respondTerminalTabClose?: ReturnType<typeof vi.fn>
   persistWorkspaceSession?: ReturnType<typeof vi.fn>
 }): Promise<void> {
-  vi.doMock('react', async () => {
-    const actual = await vi.importActual<typeof ReactModule>('react')
-    return {
-      ...actual,
-      useEffect: (effect: () => void | (() => void)) => {
-        effect()
-      }
-    }
-  })
-
-  const appStoreModule = {
-    useAppStore: {
-      subscribe: vi.fn(() => () => {}),
-      getState: () => ({
-        setUpdateStatus: vi.fn(),
-        fetchRepos: vi.fn(),
-        fetchWorktrees: vi.fn(),
-        setActiveView: vi.fn(),
-        activeModal: null,
-        closeModal: vi.fn(),
-        openModal: vi.fn(),
-        activeWorktreeId: 'wt-1',
-        activeView: 'terminal',
-        setActiveRepo: vi.fn(),
-        setActiveWorktree: vi.fn(),
-        revealWorktreeInSidebar: vi.fn(),
-        setIsFullScreen: vi.fn(),
-        updateBrowserTabPageState: vi.fn(),
-        activeTabType: 'browser',
-        editorFontZoomLevel: 0,
-        setEditorFontZoomLevel: vi.fn(),
-        setRateLimitsFromPush: vi.fn(),
-        setSshConnectionState: vi.fn(),
-        setSshTargetLabels: vi.fn(),
-        setPortForwards: vi.fn(),
-        clearPortForwards: vi.fn(),
-        setDetectedPorts: vi.fn(),
-        enqueueSshCredentialRequest: vi.fn(),
-        removeSshCredentialRequest: vi.fn(),
-        settings: { activeRuntimeEnvironmentId: null, terminalFontSize: 13 },
-        activeBrowserTabId: 'workspace-1',
-        activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
-        browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
-        browserPagesByWorkspace: {},
-        openFiles: [],
-        unifiedTabsByWorktree: {},
-        closeBrowserTab: vi.fn(),
-        closeBrowserPage: vi.fn(),
-        requestPinnedTabCloseConfirm: vi.fn(),
-        ...getState()
-      })
-    }
-  }
-
-  vi.doMock('../store', () => appStoreModule)
-  vi.doMock('@/store', () => appStoreModule)
-
-  vi.doMock('@/lib/ui-zoom', () => ({
-    applyUIZoom: vi.fn()
-  }))
-  vi.doMock('@/lib/worktree-activation', () => ({
-    activateAndRevealWorktree: vi.fn(),
-    ensureWorktreeHasInitialTerminal: vi.fn()
-  }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
-    getVisibleWorktreeIds: () => []
-  }))
-  vi.doMock('@/lib/editor-font-zoom', () => ({
-    nextEditorFontZoomLevel: vi.fn(() => 0),
-    computeEditorFontSize: vi.fn(() => 13)
-  }))
-  vi.doMock('@/components/settings/SettingsConstants', () => ({
-    zoomLevelToPercent: vi.fn(() => 100),
-    ZOOM_MIN: -3,
-    ZOOM_MAX: 3
-  }))
-  vi.doMock('@/lib/zoom-events', () => ({
-    dispatchZoomLevelChanged: vi.fn()
-  }))
-  vi.doMock('@/lib/workspace-session-host-persistence', () => ({
-    persistWorkspaceSessionByHost: persistWorkspaceSession
-  }))
-  vi.doMock('@/lib/workspace-session', () => ({
-    buildWorkspaceSessionPayload: vi.fn(() => ({}))
-  }))
+  mockCloseRoutingModules({ getState, persistWorkspaceSession })
 
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
     api: {
       repos: { onChanged: () => () => {} },
+      automations: { onChanged: () => () => {} },
       worktrees: {
         onChanged: () => () => {},
         onBaseStatus: () => () => {},
@@ -294,7 +211,9 @@ export async function useIpcEventsForCloseRouting({
         getBrowserDrivers: () => Promise.resolve([]),
         onTerminalFitOverrideChanged: () => () => {},
         onTerminalDriverChanged: () => () => {},
-        onBrowserDriverChanged: () => {}
+        onBrowserDriverChanged: () => {},
+        onClientHostedBrowserRowsChanged: () => {},
+        getClientHostedBrowserRows: async () => []
       },
       agentStatus: { onSet: () => () => {} }
     }

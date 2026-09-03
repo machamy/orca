@@ -135,6 +135,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
+  suppressedGitHubPR: z.number().int().positive().nullable().optional(),
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
@@ -192,7 +193,7 @@ export const WorktreeRemove = WorktreeSelector.extend({
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
-  hostId: OptionalString,
+  hostId: OptionalExecutionHostId,
   branchName: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

@@ -2,11 +2,13 @@ import {
   isDefaultSwitchTempWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
-import { remapPathInsideWorktreeRoot } from '../../../shared/cross-platform-path'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
+import { migrateWorkspaceSessionIdentity } from './worktree-identity-session-migration'
 
 /**
  * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
@@ -14,44 +16,8 @@ import type { StoreOwnedPersistedState } from '../loading-store/store-owned-stat
  * See `Store.migrateWorktreeIdentity` for why the rename happens.
  */
 
-/**
- * Fork (default-worktree switch): combine a re-key's incoming value with
- * whatever already sits at the destination. Overwriting is what a plain
- * assignment does, and for tab lists that silently destroyed the destination
- * worktree's tabs. Lists merge (by id where the entries have one); for
- * anything else the incoming value wins, the historical behaviour for scalars.
- */
-function mergeReKeyedValue<T>(incoming: T, existing: T | undefined): T {
-  if (existing === undefined || incoming === existing) {
-    return incoming
-  }
-  if (!Array.isArray(incoming) || !Array.isArray(existing)) {
-    return incoming
-  }
-  const merged = [...(existing as unknown[])]
-  const seen = new Set(
-    merged.map((entry) =>
-      entry && typeof entry === 'object' && 'id' in entry
-        ? String((entry as { id: unknown }).id)
-        : entry
-    )
-  )
-  for (const entry of incoming as unknown[]) {
-    const key =
-      entry && typeof entry === 'object' && 'id' in entry
-        ? String((entry as { id: unknown }).id)
-        : entry
-    if (seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    merged.push(entry)
-  }
-  return merged as unknown as T
-}
-
 export function migrateWorktreeIdentity(
-  state: StoreOwnedPersistedState,
+  state: PersistedState,
   oldWorktreeId: string,
   newWorktreeId: string
 ): boolean {
@@ -76,140 +42,30 @@ export function migrateWorktreeIdentity(
   }
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
-  const migrateSession = (session: WorkspaceSessionState | undefined): boolean => {
-    if (!session) {
-      return false
-    }
-    let sessionChanged = false
-    const moveSessionKey = <T>(
-      record: Record<string, T> | undefined,
-      mapValue: (value: T) => T = (value) => value
-    ): boolean => {
-      if (!record) {
-        return false
-      }
-      let moved = false
-      const pairs: [string, string][] = [
-        [oldWorktreeId, newWorktreeId],
-        [oldWorkspaceKey, newWorkspaceKey]
-      ]
-      for (const [oldKey, newKey] of pairs) {
-        if (!(oldKey in record)) {
-          continue
+  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
+  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+  const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
+    const renamedValue = withNewWorktreeId(value)
+    return value.docLocation?.worktreeId === oldWorktreeId
+      ? {
+          ...renamedValue,
+          docLocation: remapBrowserPageDocLocation(
+            value.docLocation,
+            oldWorktreeId,
+            newWorktreeId,
+            oldWorktreePath,
+            newWorktreePath
+          )
         }
-        record[newKey] = mergeReKeyedValue(mapValue(record[oldKey]), record[newKey])
-        delete record[oldKey]
-        moved = true
-      }
-      return moved
-    }
-
-    // Fork: persisted tab startupCwd / open-file paths are absolute under the
-    // old home; leaving them makes a restart hydrate the swapped workspace
-    // pointing at the other checkout.
-    const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
-    const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
-    const remapPathValue = (value: string): string =>
-      oldWorktreePath && newWorktreePath
-        ? (remapPathInsideWorktreeRoot(oldWorktreePath, newWorktreePath, value) ?? value)
-        : value
-    sessionChanged =
-      moveSessionKey(session.tabsByWorktree, (tabs) =>
-        tabs.map((tab) => {
-          const moved = withNewWorktreeId(tab)
-          return moved.startupCwd
-            ? { ...moved, startupCwd: remapPathValue(moved.startupCwd) }
-            : moved
-        })
-      ) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.openFilesByWorktree, (files) =>
-        files.map((file) => {
-          const moved = withNewWorktreeId(file)
-          return moved.filePath ? { ...moved, filePath: remapPathValue(moved.filePath) } : moved
-        })
-      ) || sessionChanged
-    // File ids derive from file paths, so the active pointer moves with them.
-    sessionChanged =
-      moveSessionKey(session.activeFileIdByWorktree, (fileId) =>
-        fileId === null ? fileId : remapPathValue(fileId)
-      ) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.browserTabsByWorktree, (workspaces) =>
-        workspaces.map(withNewWorktreeId)
-      ) || sessionChanged
-    if (session.browserPagesByWorkspace) {
-      let pagesChanged = false
-      const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
-      for (const [workspaceId, pages] of Object.entries(nextPagesByWorkspace)) {
-        if (!pages.some((page) => page.worktreeId === oldWorktreeId)) {
-          continue
-        }
-        nextPagesByWorkspace[workspaceId] = pages.map(withNewWorktreeId)
-        pagesChanged = true
-      }
-      if (pagesChanged) {
-        session.browserPagesByWorkspace = nextPagesByWorkspace
-        sessionChanged = true
-      }
-    }
-    sessionChanged = moveSessionKey(session.activeBrowserTabIdByWorktree) || sessionChanged
-    sessionChanged = moveSessionKey(session.activeTabTypeByWorktree) || sessionChanged
-    sessionChanged = moveSessionKey(session.activeTabIdByWorktree) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId)) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || sessionChanged
-    sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
-    sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
-    sessionChanged = moveSessionKey(session.lastVisitedAtByWorktreeId) || sessionChanged
-    sessionChanged =
-      moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId) || sessionChanged
-    if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
-      session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
-        id === oldWorktreeId ? newWorktreeId : id
-      )
-      sessionChanged = true
-    }
-    if (session.activeWorktreeId === oldWorktreeId) {
-      session.activeWorktreeId = newWorktreeId
-      sessionChanged = true
-    }
-    if (session.activeWorkspaceKey === oldWorkspaceKey) {
-      session.activeWorkspaceKey = newWorkspaceKey
-      sessionChanged = true
-    }
-    if (session.sleepingAgentSessionsByPaneKey) {
-      let sleepingChanged = false
-      const nextSleeping = { ...session.sleepingAgentSessionsByPaneKey }
-      for (const [paneKey, record] of Object.entries(nextSleeping)) {
-        if (record.worktreeId !== oldWorktreeId) {
-          continue
-        }
-        nextSleeping[paneKey] = { ...record, worktreeId: newWorktreeId }
-        sleepingChanged = true
-      }
-      if (sleepingChanged) {
-        session.sleepingAgentSessionsByPaneKey = nextSleeping
-        sessionChanged = true
-      }
-    }
-    if (session.terminalSurfaceTombstonesByPaneKey) {
-      let tombstonesChanged = false
-      const nextTombstones = { ...session.terminalSurfaceTombstonesByPaneKey }
-      for (const [paneKey, tombstone] of Object.entries(nextTombstones)) {
-        if (tombstone.worktreeId !== oldWorktreeId) {
-          continue
-        }
-        nextTombstones[paneKey] = { ...tombstone, worktreeId: newWorktreeId }
-        tombstonesChanged = true
-      }
-      if (tombstonesChanged) {
-        session.terminalSurfaceTombstonesByPaneKey = nextTombstones
-        sessionChanged = true
-      }
-    }
-    return sessionChanged
+      : renamedValue
+  }
+  const reKey = {
+    oldWorktreeId,
+    newWorktreeId,
+    oldWorkspaceKey,
+    newWorkspaceKey,
+    withNewWorktreeId,
+    withNewBrowserWorktreeId
   }
 
   let changed = moveKey(state.worktreeMeta)
@@ -279,9 +135,9 @@ export function migrateWorktreeIdentity(
     }
   }
 
-  changed = migrateSession(state.workspaceSession) || changed
+  changed = migrateWorkspaceSessionIdentity(state.workspaceSession, reKey) || changed
   for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
-    changed = migrateSession(session) || changed
+    changed = migrateWorkspaceSessionIdentity(session, reKey) || changed
   }
   for (const selectionsByWorktree of Object.values(
     state.mobileClientTabSelectionsByDeviceId ?? {}

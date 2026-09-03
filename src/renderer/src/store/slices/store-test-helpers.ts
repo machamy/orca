@@ -52,6 +52,7 @@ import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-h
 import { createUnityProjectRepoProbeSlice } from './unity-project-repo-probe'
 import { createUnityTintSidebarPreviewSlice } from './unity-tint-sidebar-preview'
 import { createWorktreeFolderSlice } from './worktree-folders'
+import { createSleepingAgentSessionReseedSlice } from '../sleeping-agent-session-reseed'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -109,7 +110,8 @@ export function createTestStore() {
     ...createTerminalQuickCommandHostsSlice(...a),
     ...createUnityProjectRepoProbeSlice(...a),
     ...createUnityTintSidebarPreviewSlice(...a),
-    ...createWorktreeFolderSlice(...a)
+    ...createWorktreeFolderSlice(...a),
+    ...createSleepingAgentSessionReseedSlice(...a)
   }))
 }
 
