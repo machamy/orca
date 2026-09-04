@@ -128,6 +128,15 @@ Drag a worktree onto the **Default** card, or run
 the branch** toggle sleeps both worktrees and resumes each agent where its branch
 now lives (Claude/Codex).
 
+> **Commit or stash before you switch.** This is the fork's most invasive
+> operation: it rewrites both worktrees' checkouts and moves uncommitted work
+> across them, and with *agents follow the branch* it also swaps the two
+> workspaces' session metadata. Upstream never runs this path, so it carries
+> only the fork's own tests. Interrupting it — quitting Orca, losing the machine,
+> a failure partway — can leave a checkout or an agent session somewhere you did
+> not expect. Clean worktrees switch safely; a pile of uncommitted work is the
+> case to think twice about.
+
 </td>
 <td width="50%">
   <img src="docs/assets/fork-make-default-worktree.png" alt="Dragging a worktree onto the Default card to promote it to the repo's default checkout" width="100%" />
