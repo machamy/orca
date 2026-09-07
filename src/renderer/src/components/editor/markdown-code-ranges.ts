@@ -11,7 +11,7 @@ export function isInsideRange(index: number, ranges: [number, number][]): boolea
 function markdownFenceRanges(content: string): [number, number][] {
   const ranges: [number, number][] = []
   let offset = 0
-  let openFence: { marker: '`' | '~'; length: number; start: number } | null = null
+  let openFence: { closingPattern: RegExp; start: number } | null = null
 
   for (const lineMatch of content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)) {
     const line = lineMatch[0]
@@ -21,11 +21,8 @@ function markdownFenceRanges(content: string): [number, number][] {
 
     const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
     if (openFence) {
-      const closingFencePattern =
-        openFence.marker === '`'
-          ? new RegExp(`^ {0,3}\`{${openFence.length},}\\s*$`)
-          : new RegExp(`^ {0,3}~{${openFence.length},}\\s*$`)
-      if (closingFencePattern.test(lineText)) {
+      // Built once per fence: rebuilding it per line recompiled the same regex for every fenced line.
+      if (openFence.closingPattern.test(lineText)) {
         ranges.push([openFence.start, offset + line.length])
         openFence = null
       }
@@ -33,8 +30,9 @@ function markdownFenceRanges(content: string): [number, number][] {
       const openingFenceMatch = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)
       if (openingFenceMatch?.[1]) {
         openFence = {
-          marker: openingFenceMatch[1][0] as '`' | '~',
-          length: openingFenceMatch[1].length,
+          closingPattern: new RegExp(
+            `^ {0,3}${openingFenceMatch[1][0]}{${openingFenceMatch[1].length},}\\s*$`
+          ),
           start: offset
         }
       }

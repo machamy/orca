@@ -24,6 +24,67 @@ source.
 
 ---
 
+## machamy.10 — on upstream `1.4.197` · 2026-09-07
+
+Catches the fork up to upstream by **561 commits**. No new fork features. Unlike
+machamy.9, the merge swallowed **nothing** — upstream's large module-splitting
+wave had already passed in machamy.9. This upstream batch is mostly **fixes (237)
+and performance (136)** rather than new capability.
+
+### Upstream merge (561 commits, `1.4.178-rc.2` → `1.4.197`)
+- Commits by area: **SSH 43** · native chat 32 · **relay 23** · terminal 19 ·
+  renderer 18 · cloud 14 · Windows 13 · **mobile 10** · worktrees 9 · sidebar 9 ·
+  orchestration 9 · i18n 9.
+- 136 of them are performance work (renderer 16 · terminal 10 · persistence 7 ·
+  worktrees 9 · sidebar 5 · startup 4 · editor 4). Upstream also brought a lint
+  rule for repeated sort setup and performance-regression contracts.
+- Notable upstream features: structured native Claude chat moved onto the
+  **Claude Agent SDK and is enabled on macOS and Linux**, **real background push
+  notifications** on mobile, durable multi-agent workflows (#16904), a **Show
+  Whitespace** toggle in the diff viewer, and **Korean, French and Japanese**
+  locale coverage (Orca Account settings, onboarding).
+- 33 further mobile and relay fixes came with it — the phone learning its desktop
+  signed out, relay cell crash-rate alerts, dynamic NAT port allocation.
+
+### What the fork had to change
+Twelve conflicts were resolved and the fork contract gate reported **zero
+failures**, meaning no fork behavior was lost. What remains is follow-up to
+upstream's moves:
+
+- **Unity process lookup rewired.** Upstream moved the process-table reader, so
+  `unity-editor-process-lookup.ts` now reads
+  `shared/process-table-snapshot-reader`. The Windows reader hands back a readonly
+  view, so only that path copies before returning.
+- **`visible-worktrees.ts` split.** Upstream added to the file and pushed it past
+  `max-lines`. Split at a real seam instead of a disable comment — published cache
+  (`visible-worktree-publication.ts`) and runtime lookups
+  (`visible-worktree-runtime-lookups.ts`). Re-exports keep every import site as is.
+- **Fork files registered with upstream's new census and fixture.** machamy.9's
+  test stub is now declared in the browser tab-close census, and upstream's new
+  Chromium error-page fixture carries the `worktreeId` the fork requires.
+
+### One test upstream broke with its own fixture
+- `orchestration-cli-subprocess` came up red. It looked like a merge regression at
+  first, but a clean upstream `main` fails identically — #16904's new
+  `stable_pane_required` guard disagrees with upstream's own fixture. Upstream CI
+  never sees it because it does not build `out/cli`, so the file is skipped. Fixed
+  by giving the fixture a live pane and a Run binding; **no production code was
+  touched** and the assertions are unchanged.
+
+### Verification
+- Fork contract suite: **113 files / 1,406 tests** green. Sidebar-related suites:
+  321 files / 2,735 tests green. Typecheck (node, web, cli) 0 errors, lint 0
+  errors, no new `max-lines` disables.
+- Classifying the full suite produced **zero fork-caused regressions**.
+- Two diagnostic notes. A merge that changes `package.json` and the lockfile makes
+  every pre-reinstall result untrustworthy — it ran against the old libraries. And
+  running `patched-dependencies-frozen-install` directly falls back to npm, which
+  strips the patches out of `node_modules`; `pnpm install --frozen-lockfile`
+  restores them.
+- `cross-version-agent-session-wire` was red only because it reads `HEAD` while the
+  merge was still uncommitted. After the commit all 13 tests pass — an ordering
+  problem, not a code one.
+
 ## machamy.9 — on upstream `1.4.178-rc.2` · 2026-09-03
 
 Catches the fork up to upstream by **912 commits**. No new fork features; two
