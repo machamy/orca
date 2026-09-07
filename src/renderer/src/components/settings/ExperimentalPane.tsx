@@ -10,6 +10,7 @@ import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
+import { AgentModelBadgeExperimentalSetting } from './AgentModelBadgeExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
@@ -53,6 +54,9 @@ export function ExperimentalPane({
   ])
   const showBrowserMarkdownHandoff = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().browserMarkdownHandoff
+  ])
+  const showAgentModelBadge = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().agentModelBadge
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
@@ -320,6 +324,9 @@ export function ExperimentalPane({
           deliberately not rendered so the feature is unreachable. Re-add the
           SearchableSetting block (git history: ExperimentalPane worktreeFolders)
           when the feature ships. */}
+      {showAgentModelBadge ? (
+        <AgentModelBadgeExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}

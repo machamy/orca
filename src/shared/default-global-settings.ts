@@ -1,3 +1,4 @@
+import { DEFAULT_AGENT_MODEL_BADGE } from './agent-model-badge-settings'
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
@@ -232,6 +233,7 @@ export function buildDefaultSettings(args: {
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
     browserMarkdownEditorHandoff: true,
+    agentModelBadge: { ...DEFAULT_AGENT_MODEL_BADGE },
     experimentalWorktreeFolders: false,
     experimentalEphemeralVms: false,
     compactWorktreeCards: false,

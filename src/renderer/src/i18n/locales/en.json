@@ -9669,6 +9669,15 @@
               "editor": "editor",
               "preview": "preview",
               "raw": "raw"
+            },
+            "agentModelBadge": {
+              "title": "Model badge",
+              "description": "Show the agent's current model and reasoning effort in a corner of its pane.",
+              "model": "model",
+              "effort": "effort",
+              "badge": "badge",
+              "reasoning": "reasoning",
+              "pane": "pane"
             }
           }
         },
@@ -12020,6 +12029,16 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "agentModelBadge": {
+          "copy": "Shows the agent's model and reasoning effort in a corner of each agent pane. A dimmed, italic badge means the values are what Orca launched with and the agent has not reported back — Codex changes its model in its own picker, which Orca cannot read. Right- or left-click the badge to move or hide it.",
+          "toggleLabel": "Toggle model badge",
+          "positionLabel": "Model badge position",
+          "corner": {
+            "topLeft": "Top left",
+            "topRight": "Top right",
+            "bottomRight": "Bottom right"
+          }
         }
       },
       "right": {
@@ -16881,6 +16900,21 @@
       "terminalPane": {
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
+        },
+        "AgentModelBadge": {
+          "corner": {
+            "topLeft": "Top left",
+            "topRight": "Top right",
+            "bottomRight": "Bottom right"
+          },
+          "tooltip": {
+            "observed": "Model and effort reported by the running agent.",
+            "unconfirmed": "What Orca launched this agent with. The agent has not reported back, so it may have changed since."
+          },
+          "menu": {
+            "position": "Position",
+            "hide": "Hide (Settings → Experimental to restore)"
+          }
         }
       },
       "WorktreeBaseFallbackDialog": {

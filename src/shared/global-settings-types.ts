@@ -1,3 +1,4 @@
+import type { AgentModelBadgeSettings } from './agent-model-badge-settings'
 import type { ExecutionHostId } from './execution-host'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
@@ -472,6 +473,9 @@ export type GlobalSettings = {
   /** Fork, experimental: sidebar worktree folders. Gates rendering/entry points only —
    *  never the persisted folder records or membership, so off→on round-trips losslessly. */
   experimentalWorktreeFolders?: boolean
+  /** Fork: pane-corner badge naming the agent's current model and reasoning effort.
+   *  Absent means the default (on, bottom-right) — see resolveAgentModelBadgeSettings. */
+  agentModelBadge?: AgentModelBadgeSettings
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
