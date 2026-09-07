@@ -24,6 +24,46 @@ source.
 
 ---
 
+## machamy.11 — on upstream `1.4.197` · 2026-09-07
+
+No upstream merge. One fork feature: **every agent pane names the model and
+reasoning effort it is running, in one of its corners.**
+
+### Model and effort badge
+- A pill like `Opus · High` sits in a corner of **each agent pane** — Claude and
+  Codex alike. Per pane rather than per tab, so a split showing Claude beside
+  Codex names both instead of only the focused one.
+- **Left- or right-clicking the pill opens its own menu**: move it between the
+  top-left, top-right and bottom-right corners, or hide it. Hiding leaves nothing
+  to click, so **Settings → Experimental owns turning it back on** (and picking
+  the corner).
+- Bottom-right by default. A pane's top edge already carries the title and the
+  split/close cluster, so a top corner sits on chrome the user reaches for.
+
+### What entitles it to claim a value
+Three sources, strongest first, because they carry different proof:
+1. **Claude's own TUI header frame** — the only source carrying effort (it reuses
+   the parser upstream already had).
+2. **The agent's reported status row** (`AgentStatusEntry.model`) — model only.
+3. **The persisted launch pick** — what Orca started the agent with, never
+   evidence about what is running now.
+
+When anything on screen came from the third source the pill is drawn **dimmed and
+italic**, and its tooltip says the agent has not reported back. **Codex changes
+its model inside its own picker, which Orca cannot read**, so a Codex TUI pane
+usually lands there. Showing an unverified value as fact is a lie the user cannot
+check, so a confirmed model beside a guessed effort still downgrades the pill.
+
+### Verification
+- 20 new unit tests across 3 files, registered in the fork contract gate:
+  **116 files / 1,426 tests** green. Typecheck (node, web, cli) 0 errors, lint 0.
+- Two Playwright checks in the rendered app: the badge lands inside the pane it
+  describes, right-click opens the menu, and choosing "Top left" really moves it.
+  The second **measures a vertical split** — each pane gets its own badge, within
+  its own bounds. `.pane` has no `position: relative` CSS rule, so a split looked
+  like it might let the badge escape to the tab's corner; measuring showed it does
+  not, and the test now pins that.
+
 ## machamy.10 — on upstream `1.4.197` · 2026-09-07
 
 Catches the fork up to upstream by **561 commits**. No new fork features. Unlike
