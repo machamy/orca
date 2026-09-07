@@ -579,6 +579,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
+    const goldenCommand = packageScripts['test:e2e:terminal-rendering-golden']
+    expect(goldenCommand).toContain('--project electron-headless')
+    expect(goldenCommand).toContain('--project electron-headful')
     expect(packageScripts['test:e2e:windows-fresh-startup-golden']).toContain(
       'golden-windows-fresh-startup.spec.ts'
     )
@@ -655,6 +658,8 @@ describe('Electron runtime package contract', () => {
     expect(releaseWindowsRunStep.run).toContain(
       'pnpm run --if-present test:e2e:windows-fresh-startup-golden'
     )
+    expect(releaseWindowsRunStep.run).not.toContain('test:e2e:workspace-session-golden')
+    expect(releaseWindowsRunStep.run).not.toContain('test:e2e:source-control-golden')
     expect(releaseEvidenceJob['continue-on-error']).toBe(true)
     expect(
       releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()

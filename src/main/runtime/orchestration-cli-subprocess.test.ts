@@ -71,6 +71,20 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    // Why: a consuming `check` refuses (`stable_pane_required`) unless the caller's handle
+    // resolves to a live pane bound to a Run, so bind one — the wait itself is what we test.
+    const waiterPaneKey = 'tab_wait:44444444-4444-4444-8444-444444444444'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_nobody' ? waiterPaneKey : null
+    )
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      runtime.getTerminalPaneKey(handle)
+    )
+    db.createRun({
+      objective: 'CLI keepalive wait fixture',
+      coordinatorHandle: 'term_nobody',
+      coordinatorPaneKey: waiterPaneKey
+    })
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
     await server.start()
 

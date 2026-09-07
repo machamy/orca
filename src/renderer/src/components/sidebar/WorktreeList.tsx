@@ -118,7 +118,7 @@ const WorktreeList = React.memo(function WorktreeList({
     sortedIds,
     repoMap,
     worktreeLineageById,
-    settings,
+    defaultHostId,
     agentSendTargetWorktreeId
   })
   // Fork: default-worktree switch UI — context-menu request → confirm dialog.

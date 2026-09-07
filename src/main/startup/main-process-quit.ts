@@ -24,6 +24,7 @@ import { shutdownObservability } from '../observability'
 import { isQuittingForUpdate } from '../updater'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { stopTccPromptNotice } from '../macos-tcc-prompt-notice'
+import { cancelHistoryGc } from '../terminal-history-gc'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
@@ -71,6 +72,9 @@ function installBeforeQuitHandler(): void {
     }
     state.isQuitting = true
     state.desktopRelayService?.fenceAndCloseNow()
+    // Why: drops the notification subscription so a late dispatch cannot start a
+    // push (and its unref'd outbox retry) on the way out.
+    state.desktopPushService?.stop()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
     state.unsubscribeAgentAwakeStatusChanges = null
@@ -82,6 +86,9 @@ function installBeforeQuitHandler(): void {
     state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
     // Why: defer PTY cleanup to will-quit so the renderer captures scrollback before PTY-exit events unmount TerminalPane (dropping its capture callbacks).
     state.rateLimits?.stop()
+    // Why safe on a vetoed quit: background history GC is idempotent and re-scheduled next launch,
+    // so abandoning the walk here only costs one deferred sweep, never a half-applied prune.
+    cancelHistoryGc()
   })
 }
 

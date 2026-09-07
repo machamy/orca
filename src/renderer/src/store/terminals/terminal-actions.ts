@@ -147,6 +147,8 @@ export type TerminalActions = {
   /** Mode-B default switch: drop the migrated worktrees' recordless PTY bindings
    *  so plain shells respawn in place instead of attaching to a killed session. */
   releaseFollowSwitchShellPtyBindings: (worktreeIds: readonly string[]) => number
+  /** Records the relay's own answer that a PTY id is gone; the one `exited` a respawn may act on. */
+  markPtySourceDisowned: (ptyId: string) => void
   clearDirectSshTargetPtyBindings: (targetId: string) => number
   invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
   retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number

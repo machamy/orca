@@ -89,6 +89,14 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
     why: 'Store binding exposes the close action to terminal controllers.'
   },
   {
+    path: 'src/renderer/src/hooks/ipc-events-close-routing-module-mocks.ts',
+    closeBrowserTabMentions: 1,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'Fork: test-only store stub for the close-routing suites — names the action, never closes anything.'
+  },
+  {
     path: 'src/renderer/src/hooks/ipc-events/browser-request-ipc-bridge.ts',
     closeBrowserTabMentions: 3,
     reasonCarryingCloseCalls: 0,

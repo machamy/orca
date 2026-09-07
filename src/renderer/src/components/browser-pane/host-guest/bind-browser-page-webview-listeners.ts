@@ -117,6 +117,7 @@ export function bindBrowserPageWebviewListeners({
 
   const {
     handleDidStartNavigation,
+    handleDidRedirectNavigation,
     handleFullDidNavigate,
     handleDidNavigateInPage,
     handleTitleUpdate,
@@ -150,6 +151,7 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('focus', dismissAddressBarSuggestions)
   webview.addEventListener('did-start-loading', handleDidStartLoading)
   webview.addEventListener('did-start-navigation', handleDidStartNavigation)
+  webview.addEventListener('did-redirect-navigation', handleDidRedirectNavigation)
   webview.addEventListener('did-stop-loading', handleDidStopLoading)
   // Why: close find only on full 'did-navigate', not the shared handler, which also fires on SPA in-page hash/pushState changes.
   const handleFindCloseOnNavigate = (): void => {
@@ -194,6 +196,7 @@ export function bindBrowserPageWebviewListeners({
     webview.removeEventListener('focus', dismissAddressBarSuggestions)
     webview.removeEventListener('did-start-loading', handleDidStartLoading)
     webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
+    webview.removeEventListener('did-redirect-navigation', handleDidRedirectNavigation)
     webview.removeEventListener('did-stop-loading', handleDidStopLoading)
     webview.removeEventListener('did-navigate', handleFullDidNavigate)
     webview.removeEventListener('did-navigate', handleFindCloseOnNavigate)
