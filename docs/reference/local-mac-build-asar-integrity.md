@@ -51,10 +51,12 @@ const base = 8 + head.readUInt32LE(4)
 const json = Buffer.alloc(head.readUInt32LE(12))
 fs.readSync(fd, json, 0, json.length, 16)
 
-let bad = 0, total = 0
+let bad = 0, total = 0, unpacked = 0
 ;(function walk(node) {
   for (const entry of Object.values(node.files ?? {})) {
     if (entry.files) { walk(entry); continue }
+    // Unpacked entries live in app.asar.unpacked, so the archive holds no bytes to hash.
+    if (entry.unpacked) { unpacked++; continue }
     if (!entry.integrity) continue
     const buf = Buffer.alloc(entry.size)
     fs.readSync(fd, buf, 0, entry.size, base + Number(entry.offset))
@@ -62,7 +64,7 @@ let bad = 0, total = 0
     if (crypto.createHash('sha256').update(buf).digest('hex') !== entry.integrity.hash) bad++
   }
 })(JSON.parse(json.toString('utf8')))
-console.log(bad === 0 ? `ok (${total} entries)` : `CORRUPT: ${bad}/${total} mismatched`)
+console.log(bad === 0 ? `ok (${total} entries, ${unpacked} unpacked)` : `CORRUPT: ${bad}/${total} mismatched`)
 fs.closeSync(fd)
 ```
 
