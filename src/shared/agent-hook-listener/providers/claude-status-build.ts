@@ -5,6 +5,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../agent-status-types'
 import { claudeRosterToSnapshots } from '../../claude-subagent-roster'
+import { readClaudeEffortField, readClaudeModelField } from './claude-model-effort-fields'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import type { HookListenerState } from '../listener-state'
@@ -41,6 +42,8 @@ export function buildClaudeStatusPayload(
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
     agentType: 'claude',
+    model: readClaudeModelField(hookPayload),
+    effort: readClaudeEffortField(hookPayload),
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,

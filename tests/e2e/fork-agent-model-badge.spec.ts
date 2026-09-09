@@ -31,9 +31,14 @@ async function readActivePane(page: Page): Promise<ActivePane | null> {
 
 /** Publishes the row a live Claude pane would publish; the badge reads `model`
  *  from it whenever the pane's own screen carries no Claude frame to scrape. */
-async function reportClaudePane(page: Page, pane: ActivePane, model: string): Promise<void> {
+async function reportClaudePane(
+  page: Page,
+  pane: ActivePane,
+  model: string,
+  effort?: string
+): Promise<void> {
   await page.evaluate(
-    ({ tabId, leafId, reportedModel }) => {
+    ({ tabId, leafId, reportedModel, reportedEffort }) => {
       const store = window.__store
       const paneKey = `${tabId}:${leafId}`
       const now = Date.now()
@@ -47,6 +52,7 @@ async function reportClaudePane(page: Page, pane: ActivePane, model: string): Pr
             stateStartedAt: now,
             agentType: 'claude',
             model: reportedModel,
+            ...(reportedEffort ? { effort: reportedEffort } : {}),
             paneKey,
             tabId,
             stateHistory: []
@@ -54,7 +60,7 @@ async function reportClaudePane(page: Page, pane: ActivePane, model: string): Pr
         }
       })
     },
-    { tabId: pane.tabId, leafId: pane.leafId, reportedModel: model }
+    { tabId: pane.tabId, leafId: pane.leafId, reportedModel: model, reportedEffort: effort }
   )
 }
 
@@ -74,10 +80,12 @@ test('the agent model badge renders in the pane and its menu moves it', async ({
     .poll(async () => (await readActivePane(page)) !== null, { timeout: 30_000 })
     .toBe(true)
   const pane = (await readActivePane(page)) as ActivePane
-  await reportClaudePane(page, pane, 'opus')
+  await reportClaudePane(page, pane, 'opus', 'high')
 
   // The badge samples on a 3s poll, so give it more than one tick.
-  const badge = page.locator('button', { hasText: /^Opus$/ }).first()
+  // Model AND effort come from the pane's reported status row — the path that was
+  // dropping Claude's object-shaped fields entirely.
+  const badge = page.locator('button', { hasText: /^Opus · High$/ }).first()
   await expect(badge).toBeVisible({ timeout: 15_000 })
 
   // It must live inside the pane it describes, not float over the workspace.

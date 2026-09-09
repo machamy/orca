@@ -67,9 +67,11 @@ export function useAgentModelBadgeReadings(args: {
         if (!agent) {
           continue
         }
+        const status = state.agentStatusByPaneKey[makePaneKey(tabId, pane.leafId)]
         const reading = readAgentModelBadge({
           agent,
-          reportedModel: state.agentStatusByPaneKey[makePaneKey(tabId, pane.leafId)]?.model,
+          reportedModel: status?.model,
+          reportedEffort: status?.effort,
           screen: agent === 'claude' ? pane.serializeAddon.serialize({ scrollback: 0 }) : null,
           persisted: state.settings?.nativeChatSessionOptions
         })

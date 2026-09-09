@@ -24,6 +24,48 @@ source.
 
 ---
 
+## machamy.12 — on upstream `1.4.197` · 2026-09-09
+
+Fixes machamy.11's badge appearing on some agent panes and not others. Digging
+into it found a defect **a layer below the badge**.
+
+### Orca was discarding Claude's model and effort
+- Claude puts the model in use and the effort applied to the current turn on
+  **every tool-use hook** (PreToolUse, PostToolUse, Stop, …) — as
+  `model: { id, display_name }` and `effort: { level }` (effort is also exposed as
+  the `CLAUDE_EFFORT` environment variable).
+- The shared normalizer keeps **string fields only**:
+  `if (typeof value !== 'string') return undefined`. Both of Claude's values are
+  objects, so both were dropped — and `buildClaudeStatusPayload` never passed them
+  in the first place. **A Claude pane's status row has never carried a model.**
+- machamy.11's badge therefore leaned on its only remaining source, the startup
+  frame scraped off the screen. That frame is printed once and never redrawn: it
+  scrolls away (badge goes blank) and a mid-session `/model` leaves it **wrong**.
+
+Both values are now read off the hook and carried on the status row
+(`claude-model-effort-fields.ts`). The model uses `display_name` rather than the
+dated id — the name the user picked in `/model`.
+
+### Badge precedence corrected
+- **The reported status row now wins for both model and effort.** It refreshes on
+  every tool-use hook, so a mid-session `/model` or `/effort` is picked up on the
+  next tool call.
+- The startup frame is **demoted to a fallback**, and its effort is used only when
+  the model the frame names is the model being displayed — an effort left over from
+  a model the session has since left would state a pairing the agent is not running.
+- Side benefit: with the model finally landing on the status row, every other
+  surface that reads that row learns the Claude session's model too.
+
+### Verification
+- 2 new unit files (12 field-reader cases, 3 ingestion cases) registered in the
+  fork gate: **115 files / 1,437 tests** green. Typecheck 0, lint 0.
+- The ingestion test feeds real hook payloads and asserts a **mid-session model
+  switch is tracked**, not pinned.
+- Both Playwright checks re-run in the rendered app: the badge reads `Opus · High`
+  from the status row, its right-click menu moves it, and a vertical split gives
+  each pane a badge within its own bounds.
+- machamy.11 shipped a test asserting the wrong precedence was correct. Flipped.
+
 ## machamy.11 — on upstream `1.4.197` · 2026-09-07
 
 No upstream merge. One fork feature: **every agent pane names the model and

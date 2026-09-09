@@ -13,19 +13,49 @@ function claudeFrame(descriptor: string): string {
 }
 
 describe('readAgentModelBadge', () => {
-  it('prefers the Claude frame, which is the only source carrying effort', () => {
+  it('prefers the reported row, which is the only source that tracks /model', () => {
+    // The frame is printed once at startup and never redrawn, so after a
+    // mid-session switch it names the model the session has left behind.
     expect(
       readAgentModelBadge({
         agent: 'claude',
-        // A stale status row must lose to what the screen says right now.
-        reportedModel: 'sonnet',
+        reportedModel: 'Sonnet 4.5',
+        reportedEffort: 'medium',
         screen: claudeFrame('Opus with high effort · API Usage Billing'),
         persisted: { claude: { model: 'haiku' } }
+      })
+    ).toEqual({ modelLabel: 'Sonnet 4.5', effortLabel: 'Medium', observed: true })
+  })
+
+  it('drops the frame effort once the session has moved to another model', () => {
+    // Showing `high` (the old model's level) beside the new model would state a
+    // pairing the agent is not running.
+    expect(
+      readAgentModelBadge({
+        agent: 'claude',
+        reportedModel: 'Sonnet 4.5',
+        screen: claudeFrame('Opus with high effort · API Usage Billing')
+      })
+    ).toEqual({ modelLabel: 'Sonnet 4.5', effortLabel: null, observed: true })
+  })
+
+  it('still reads the frame when the agent has reported nothing yet', () => {
+    expect(
+      readAgentModelBadge({
+        agent: 'claude',
+        screen: claudeFrame('Opus with high effort · API Usage Billing')
       })
     ).toEqual({ modelLabel: 'Opus', effortLabel: 'High', observed: true })
   })
 
-  it('falls back to the reported model when the screen has no frame to read', () => {
+  it('labels a reported effort even when the model is a display name', () => {
+    // Hooks report "Opus 5", not the catalog id, so the level must still resolve.
+    expect(
+      readAgentModelBadge({ agent: 'claude', reportedModel: 'Opus 5', reportedEffort: 'xhigh' })
+    ).toEqual({ modelLabel: 'Opus 5', effortLabel: 'Extra high', observed: true })
+  })
+
+  it('uses the reported model when the screen has no frame to read', () => {
     expect(
       readAgentModelBadge({
         agent: 'claude',

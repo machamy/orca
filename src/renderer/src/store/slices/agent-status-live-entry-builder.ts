@@ -231,6 +231,10 @@ export function buildAgentStatusLiveEntry(
     agentType: identity.agentType,
     model:
       payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),
+    // Fork: same carry-forward as model — only tool-use hooks report effort, so a
+    // lifecycle event in between must not blank it.
+    effort:
+      payload.effort ?? (existing?.agentType === identity.agentType ? existing.effort : undefined),
     paneKey,
     terminalHandle: statusTerminalHandle,
     worktreeId:
