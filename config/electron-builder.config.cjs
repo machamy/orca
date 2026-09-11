@@ -522,6 +522,14 @@ module.exports = {
     // under Documents/Desktop/Downloads fails with EPERM and no re-prompt. At 24
     // builds a day that revokes the user's grants faster than they can re-grant.
     notarize: isMacRelease,
+    // Why: electron-builder's signing pass passes `--timestamp` per file, which asks
+    // Apple's TSA for every one of hundreds of files. On the local path that is the
+    // build's only network dependency, and it buys nothing — timestamps extend an
+    // Apple-issued certificate's validity past expiry, and "Orca Local Signing" is
+    // self-signed. Two consecutive builds died mid-arm64 on TSA errors
+    // (2026-09-11: "service is not available", then "timestamps differ by 472
+    // seconds") while the clock was correct. `none` is codesign's own opt-out.
+    timestamp: isMacRelease ? undefined : 'none',
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
