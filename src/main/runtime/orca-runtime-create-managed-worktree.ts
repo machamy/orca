@@ -11,6 +11,7 @@ import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-crea
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
+import { autoSeedUnityAfterLocalWorktreeCreate } from './runtime-local-worktree-unity-seed'
 
 export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   async createManagedWorktree(
@@ -186,6 +187,20 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
+    // Fork: a Unity repo's fresh worktree is seeded from the default checkout in
+    // the background, so the first editor open skips the full reimport.
+    void this.listResolvedWorktrees()
+      .then((worktrees) =>
+        autoSeedUnityAfterLocalWorktreeCreate({
+          repo,
+          worktreePath: created.path,
+          repoWorktreePaths: worktrees
+            .filter((entry) => entry.repoId === repo.id)
+            .map((entry) => entry.path),
+          offer: () => this.notifier?.unityAutoSeedOffer?.(repo.id, created.path)
+        })
+      )
+      .catch((error) => console.warn('[unity] auto-seed after worktree create failed:', error))
     // Why: the filesystem-auth layer maintains a separate cache of registered
     // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
     // to authorize paths. Without invalidating it here, CLI-created worktrees

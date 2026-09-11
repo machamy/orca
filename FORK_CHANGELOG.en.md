@@ -56,9 +56,34 @@ dated id — the name the user picked in `/model`.
 - Side benefit: with the model finally landing on the status row, every other
   surface that reads that row learns the Claude session's model too.
 
+### Unity auto-seed had been dead since machamy.9
+- The call that CoW-clones the default checkout's `Library` into a fresh worktree
+  used to live at `orca-runtime.ts:24937`. The machamy.9 merge took upstream's
+  split of that file (40,904 → 58 lines) and **the call went with it.** The seeder
+  and its tests survived, so the gate stayed green — a function nobody invoked,
+  with passing tests. New Unity worktrees have only been seedable from the
+  context menu since.
+- Re-transplanted at its original position (`orca-runtime-create-managed-worktree.ts`,
+  right after the local worktree is materialized). The logic lives in
+  `runtime-local-worktree-unity-seed.ts` so the upstream file carries a single
+  fork line, and **a source census now pins that line** — the next merge that
+  swallows it turns the gate red.
+
+### The webview server's `node_modules` — solved with no fork code
+- Every worktree was missing `web/node_modules` (~419MB) and needed a fresh
+  `npm install`. Upstream already has the answer: a repo-root **`.worktreeinclude`**
+  listing gitignored paths to copy into each new worktree — by **APFS CoW clone**
+  on macOS, seconds and shared blocks (`materializeWorktreePaths(..., 'copy')` →
+  `cloneWorktreePathWithApfs`). Absent paths are skipped silently, so a project
+  without a webview server is untouched.
+- Nothing was added to the fork. One line on the project side:
+  ```
+  web/node_modules
+  ```
+
 ### Verification
-- 2 new unit files (12 field-reader cases, 3 ingestion cases) registered in the
-  fork gate: **115 files / 1,437 tests** green. Typecheck 0, lint 0.
+- 3 new unit files (12 field-reader, 3 ingestion, 5 seed-call-site cases) registered
+  in the fork gate: **117 files / 1,445 tests** green. Runtime suite: 1,259 green. Typecheck 0, lint 0.
 - The ingestion test feeds real hook payloads and asserts a **mid-session model
   switch is tracked**, not pinned.
 - Both Playwright checks re-run in the rendered app: the badge reads `Opus · High`
