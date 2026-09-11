@@ -186,6 +186,11 @@ module.exports = {
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
+    // Why: agent-session output parked at the repo root (design mockups and the like).
+    // Never a runtime input, and written while sessions run — the mid-build churn
+    // that displaces every arm64 asar offset after it. Observed 2026-09-10: 21 files
+    // rode into app.asar because nothing excluded them.
+    '!mockups{,/**/*}',
     // Why: fork-local churn at the repo root. electron-builder scans file metadata once
     // and reuses it for both mac archs, so a file rewritten between the x64 and arm64
     // packs shifts every asar offset after it and the arm64 app silently fails to boot.
