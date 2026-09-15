@@ -39,6 +39,8 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 import { AgentModelBadge } from './AgentModelBadge'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 

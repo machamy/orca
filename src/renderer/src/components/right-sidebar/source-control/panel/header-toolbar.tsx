@@ -1,3 +1,4 @@
+import { SourceControlFilterPreset } from './SourceControlFilterPreset'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
@@ -281,14 +282,18 @@ export function SourceControlHeaderToolbar({
                   }
                 }}
                 placeholder={translate(
-                  'auto.components.right.sidebar.SourceControl.c35baf2f1e',
-                  'Filter files…'
+                  'auto.components.right.sidebar.SourceControl.fork.filterPlaceholder',
+                  'Filter files… (.cs .json for extensions)'
                 )}
                 className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
                 aria-label={translate(
                   'auto.components.right.sidebar.SourceControl.c35baf2f1e',
                   'Filter files…'
                 )}
+              />
+              <SourceControlFilterPreset
+                filterQuery={filterQuery}
+                onFilterQueryChange={onFilterQueryChange}
               />
             </div>
             <Button

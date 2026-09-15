@@ -36,6 +36,8 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/browser-pane/navigate/retry-browser-page-load.test.ts',
   'src/renderer/src/components/editor/details-markdown-html.test.ts',
   'src/renderer/src/components/editor/markdown-rich-mode.test.ts',
+  'src/renderer/src/components/right-sidebar/source-control/listing/file-filter.test.ts',
+  'src/renderer/src/components/right-sidebar/source-control/panel/SourceControlFilterPreset.test.tsx',
   'src/main/runtime/runtime-local-worktree-unity-seed.test.ts',
   'src/shared/agent-hook-listener-claude-model-effort.test.ts',
   'src/shared/agent-hook-listener/providers/claude-model-effort-fields.test.ts',

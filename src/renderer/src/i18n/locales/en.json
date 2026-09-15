@@ -12568,7 +12568,13 @@
             "c1a8f3e204": "1 commit behind {{value0}}",
             "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
             "d2b9g4f315": "{{value0}} commits behind {{value1}}",
-            "f9b2441bb6": "1 commit ahead of {{value0}}"
+            "f9b2441bb6": "1 commit ahead of {{value0}}",
+            "fork": {
+              "filterPlaceholder": "Filter files… (.cs .json for extensions)",
+              "reviewPreset": {
+                "title": "Review preset: only code, data and docs. Type your own like \".cs .cs.meta\"."
+              }
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

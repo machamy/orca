@@ -5,6 +5,31 @@ export const SOURCE_CONTROL_FILE_FILTER_QUERY_MAX_BYTES = 2 * 1024
 export type SourceControlFileFilterState = {
   normalizedFilter: string
   tooLarge: boolean
+  /** Fork: lower-cased suffixes (`.cs`, `.cs.meta`) when every token is written as an
+   *  extension; null keeps the plain substring match. */
+  extensionSuffixes: string[] | null
+}
+
+// Why a leading dot decides the mode: `.cs` is how people type an extension, and a
+// bare word (`assets`) must keep matching folders. A suffix match is what makes
+// `.cs` stop dragging in `Foo.cs.meta`, `Foo.csproj` and `style.css`.
+const EXTENSION_TOKEN = /^\*?\.([a-z0-9]+(?:\.[a-z0-9]+)*)$/
+
+/** Fork: `.cs .json` / `*.cs, *.md` → `['.cs', '.json']`; anything else → null. */
+export function parseSourceControlExtensionFilter(trimmedLowerQuery: string): string[] | null {
+  const tokens = trimmedLowerQuery.split(/[\s,]+/).filter(Boolean)
+  if (tokens.length === 0) {
+    return null
+  }
+  const suffixes: string[] = []
+  for (const token of tokens) {
+    const match = EXTENSION_TOKEN.exec(token)
+    if (!match) {
+      return null
+    }
+    suffixes.push(`.${match[1]}`)
+  }
+  return [...new Set(suffixes)]
 }
 
 export type SourceControlPathEntry = {
@@ -26,13 +51,18 @@ export function isSourceControlFileFilterQueryTooLarge(
 
 export function getSourceControlFileFilterState(query: string): SourceControlFileFilterState {
   if (isSourceControlFileFilterQueryTooLarge(query)) {
-    return { normalizedFilter: '', tooLarge: true }
+    return { normalizedFilter: '', tooLarge: true, extensionSuffixes: null }
   }
   const trimmed = query.trim()
   if (!trimmed) {
-    return { normalizedFilter: '', tooLarge: false }
+    return { normalizedFilter: '', tooLarge: false, extensionSuffixes: null }
   }
-  return { normalizedFilter: trimmed.toLowerCase(), tooLarge: false }
+  const normalizedFilter = trimmed.toLowerCase()
+  return {
+    normalizedFilter,
+    tooLarge: false,
+    extensionSuffixes: parseSourceControlExtensionFilter(normalizedFilter)
+  }
 }
 
 export function filterSourceControlPathEntries<T extends SourceControlPathEntry>(
@@ -44,6 +74,13 @@ export function filterSourceControlPathEntries<T extends SourceControlPathEntry>
   }
   if (!filter.normalizedFilter) {
     return entries
+  }
+  const { extensionSuffixes } = filter
+  if (extensionSuffixes) {
+    return entries.filter((entry) => {
+      const path = entry.path.toLowerCase()
+      return extensionSuffixes.some((suffix) => path.endsWith(suffix))
+    })
   }
   return entries.filter((entry) => entry.path.toLowerCase().includes(filter.normalizedFilter))
 }
