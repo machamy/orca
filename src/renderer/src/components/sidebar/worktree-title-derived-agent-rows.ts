@@ -9,12 +9,14 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../../shared/agent-status-types'
+import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import {
+  resolveRuntimePaneTitleLeafIdFromRoot,
+  resolveRuntimePaneTitleLeafIdFromSparseSlots,
+  collectRuntimePaneLeafIds
+} from '@/lib/runtime-pane-title-leaf-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab
-} from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner,
@@ -22,6 +24,11 @@ import {
 } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { isClaudeIdentityFrameTitle } from '../../../../shared/terminal-title-agent-type'
+import {
+  TITLE_AGENT_LABEL_TO_TYPE,
+  isBareShellTitle,
+  resolveLaunchCorroboratedAgentType
+} from './worktree-title-agent-identity'
 
 /** Fixed, not per-process: title rows are a pure projection of the current title, so they are
  *  comparable across restarts in a way a sequenced authority's rows are not. Ordering against
@@ -31,24 +38,6 @@ export const TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID = 'renderer-title-projection'
 const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
 const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> = {}
-
-const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
-  'Claude Code': 'claude',
-  OpenClaude: 'openclaude',
-  Codex: 'codex',
-  'Gemini CLI': 'gemini',
-  'GitHub Copilot': 'copilot',
-  Grok: 'grok',
-  Devin: 'devin',
-  Antigravity: 'antigravity',
-  OpenCode: 'opencode',
-  Aider: 'aider',
-  Cursor: 'cursor',
-  Droid: 'droid',
-  Hermes: 'hermes',
-  Pi: 'pi',
-  OMP: 'omp'
-}
 
 const CLAUDE_AGENT_TOKEN_RE = /(?<![\w./\\-])claude(?![\w./\\-])/i
 
@@ -74,14 +63,32 @@ export function buildTitleDerivedAgentRows(args: {
     const paneTitles = runtimePaneTitlesByTabId[tab.id]
     const paneTitleEntries =
       paneTitles && Object.keys(paneTitles).length > 0
-        ? Object.entries(paneTitles).sort(([a], [b]) => Number(a) - Number(b))
+        ? Object.entries(paneTitles).sort(([a], [b]) => {
+            const paneIdA = Number(a)
+            const paneIdB = Number(b)
+            const isLiveA = paneIdA >= FIRST_PANE_ID
+            return isLiveA !== paneIdB >= FIRST_PANE_ID ? (isLiveA ? -1 : 1) : paneIdA - paneIdB
+          })
         : []
 
     if (paneTitleEntries.length > 0) {
+      // Why: hoisted per tab — the leaf lists are layout-derived, not pane-derived.
+      const leafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
+      const liveSlotIds = paneTitleEntries
+        .map(([paneId]) => Number(paneId))
+        .filter((paneId) => paneId >= FIRST_PANE_ID)
+      // Why: pane ids only encode creation order while they are the dense sequence a
+      // fresh mount or replay allocates; an in-session pane close leaves them sparse.
+      const liveSlotsAreDense =
+        liveSlotIds.length === leafIds.length &&
+        liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
       for (const [paneId, title] of paneTitleEntries) {
         const leafId = resolveLeafIdForTitleFallback({
           layout,
-          paneTitleEntries,
+          leafIds,
+          ptyIds: ptyIdsByTabId[tab.id] ?? [],
+          liveSlotIds,
+          liveSlotsAreDense,
           paneId: Number(paneId),
           title
         })
@@ -105,7 +112,7 @@ export function buildTitleDerivedAgentRows(args: {
       continue
     }
 
-    const leafId = layout?.activeLeafId ?? collectLeafIds(layout?.root ?? null)[0]
+    const leafId = layout?.activeLeafId ?? collectRuntimePaneLeafIds(layout?.root ?? null)[0]
     if (!leafId) {
       continue
     }
@@ -162,8 +169,6 @@ function buildTitleDerivedAgentRow(args: {
   // a plain terminal after every default-worktree switch. Only a single-leaf tab
   // resolves an owner (`resolveTitleDerivedPaneOwner` refuses a split), so this
   // cannot brand a split pane with the tab-scoped launch agent.
-  // A bare shell name is the exception: it says the user left the agent and is
-  // sitting at a prompt, so the owner must not resurrect a row for it.
   if ((!status || !label) && (!args.ownerAgentType || isBareShellTitle(title))) {
     return null
   }
@@ -182,19 +187,10 @@ function buildTitleDerivedAgentRow(args: {
   // surface only decorated task titles; fall back to the pane's known owner instead
   // of hiding the pane. Safe because the `!status || !label` gate above already
   // rejects plain shell titles — this path must never manufacture a row from one.
-  // Why the launch agent may corroborate a split pane: `resolveTitleDerivedPaneOwner`
-  // refuses an owner for a split, and the identity resolver refuses a Claude-labelled
-  // title that does not literally say "claude" — so a 3-pane all-claude split whose
-  // panes are titled `✳ Remember token PANE-3` produced no rows at all and read as
-  // plain terminals. Requiring the title's OWN label to name this tab's agent keeps
-  // upstream's guard intact: a Claude-labelled title on a codex tab is contradictory
-  // evidence and still gets nothing.
-  const labelAgentType = label ? (TITLE_AGENT_LABEL_TO_TYPE[label] ?? null) : null
-  const launchIdentity = args.tab.launchAgent ?? null
   const agentType =
     titleAgentType ??
     args.ownerAgentType ??
-    (labelAgentType && labelAgentType === launchIdentity ? labelAgentType : null)
+    resolveLaunchCorroboratedAgentType(label, args.tab.launchAgent)
   if (!agentType) {
     return null
   }
@@ -271,26 +267,6 @@ export function resolveTitleDerivedAgentType(
   return agentType
 }
 
-/** Titles that name a shell rather than any work being done in it. */
-const BARE_SHELL_TITLES = new Set([
-  'sh',
-  'bash',
-  'zsh',
-  'dash',
-  'ksh',
-  'ash',
-  'fish',
-  'nu',
-  'pwsh',
-  'powershell',
-  'cmd',
-  'cmd.exe'
-])
-
-function isBareShellTitle(title: string): boolean {
-  return BARE_SHELL_TITLES.has(title.trim().toLowerCase())
-}
-
 function resolveTitleDerivedPaneOwner(
   tab: TerminalTab,
   layout: TerminalLayoutSnapshot | undefined,
@@ -339,12 +315,54 @@ function titleStatusToRowState(
   return 'idle'
 }
 
+/**
+ * Resolves the layout leaf that owns a runtime pane title.
+ *
+ * `runtimePaneTitlesByTabId` mixes two disjoint id spaces: live PaneManager ids
+ * (`>= FIRST_PANE_ID`, allocated in pane-creation order) and the `-(leafIndex + 1)`
+ * slots parked tabs mint in `fallbackParkedPaneCandidates`. Neither space is ordered
+ * like the layout's in-order leaf traversal, so attributing a title by its position
+ * in the slot list lands one pane's status on a sibling's row.
+ */
 function resolveLeafIdForTitleFallback(args: {
   layout: TerminalLayoutSnapshot | undefined
-  paneTitleEntries: [string, string][]
+  leafIds: string[]
+  ptyIds: string[]
+  liveSlotIds: number[]
+  liveSlotsAreDense: boolean
   paneId: number
   title: string
 }): string | null {
+  if (args.leafIds.length === 1) {
+    return args.leafIds[0]
+  }
+  if (args.paneId < FIRST_PANE_ID) {
+    // Parked slots are defined off the in-order leaf list, so invert that definition.
+    return args.leafIds[-args.paneId - 1] ?? null
+  }
+  if (args.liveSlotsAreDense) {
+    const creationOrderLeafId = resolveRuntimePaneTitleLeafIdFromRoot(
+      args.layout?.root,
+      String(args.paneId)
+    )
+    if (creationOrderLeafId) {
+      return creationOrderLeafId
+    }
+  }
+
+  // After an in-session close, PaneManager ids are sparse while the tab's live
+  // PTYs retain their relative order. Use the durable PTY-to-leaf bindings to
+  // recover the exact leaf instead of assigning a survivor by layout position.
+  const ptyBoundLeafId = resolveRuntimePaneTitleLeafIdFromSparseSlots({
+    layout: args.layout,
+    paneId: args.paneId,
+    liveSlotIds: args.liveSlotIds,
+    ptyIds: args.ptyIds
+  })
+  if (ptyBoundLeafId) {
+    return ptyBoundLeafId
+  }
+
   const matchingTitleLeafIds = Object.entries(args.layout?.titlesByLeafId ?? {})
     .filter(([, title]) => title === args.title)
     .map(([leafId]) => leafId)
@@ -352,21 +370,8 @@ function resolveLeafIdForTitleFallback(args: {
     return matchingTitleLeafIds[0]
   }
 
-  const leafIds = collectLeafIds(args.layout?.root ?? null)
-  if (leafIds.length === 1) {
-    return leafIds[0]
-  }
-
-  const paneIndex = args.paneTitleEntries.findIndex(([paneId]) => Number(paneId) === args.paneId)
-  return paneIndex !== -1 ? (leafIds[paneIndex] ?? null) : null
-}
-
-function collectLeafIds(node: TerminalPaneLayoutNode | null): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLeafIds(node.first), ...collectLeafIds(node.second)]
+  // Why: in-session pane closes leave the survivors' ids sparse, which creation order
+  // cannot resolve. Index within the LIVE slots only — never across both id spaces.
+  const paneIndex = args.liveSlotIds.indexOf(args.paneId)
+  return paneIndex !== -1 ? (args.leafIds[paneIndex] ?? null) : null
 }

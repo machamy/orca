@@ -1,38 +1,38 @@
 import { expect, it } from 'vitest'
 import { createHarness, notification, registration, flush } from './push-dispatcher.test-fixture'
 
-it('routes a desktop-disabled bell only to a phone that independently permits bells', async () => {
-  const filter = registration().filter
+it('applies desktop category eligibility regardless of phone sound preferences', async () => {
   const harness = createHarness({
     devices: [
       {
         deviceId: 'mirror',
         pushRegistration: registration({
-          registrationId: 'mirror',
-          filter: { ...filter, followDesktop: true }
+          registrationId: 'mirror'
         })
       },
       {
-        deviceId: 'override',
+        deviceId: 'quiet',
         pushRegistration: registration({
-          registrationId: 'override',
-          filter: { ...filter, followDesktop: false, sound: false }
+          registrationId: 'quiet',
+          filter: { sound: false }
         })
       },
       {
-        deviceId: 'no-bells',
-        pushRegistration: registration({
-          registrationId: 'no-bells',
-          filter: { ...filter, followDesktop: false, sources: ['agent-task-complete'] }
-        })
+        deviceId: 'second-phone',
+        pushRegistration: registration({ registrationId: 'second-phone' })
       }
     ]
   })
   harness.dispatcher.enqueue(notification({ source: 'terminal-bell', desktopAllowed: false }))
   await flush()
-  expect(harness.sends).toHaveLength(1)
-  expect(harness.sends[0]).toMatchObject({
-    registrationIds: ['override'],
+  expect(harness.sends).toHaveLength(0)
+
+  harness.dispatcher.enqueue(notification({ source: 'terminal-bell', desktopAllowed: true }))
+  await flush()
+  expect(harness.sends).toHaveLength(2)
+  expect(harness.sends[0]).toMatchObject({ registrationIds: ['mirror', 'second-phone'] })
+  expect(harness.sends[1]).toMatchObject({
+    registrationIds: ['quiet'],
     notification: { sound: false }
   })
 })
@@ -61,21 +61,19 @@ it('keeps sound preferences separate when several phones receive the same event'
   })
 })
 
-it('applies burst suppression after each phone filters event types', async () => {
+it('applies burst suppression independently to each eligible phone', async () => {
   const harness = createHarness({
     devices: [
       {
         deviceId: 'all',
         pushRegistration: registration({
-          registrationId: 'all',
-          filter: { ...registration().filter, followDesktop: false }
+          registrationId: 'all'
         })
       },
       {
-        deviceId: 'no-bells',
+        deviceId: 'second-phone',
         pushRegistration: registration({
-          registrationId: 'no-bells',
-          filter: { ...registration().filter, sources: ['agent-task-complete'] }
+          registrationId: 'second-phone'
         })
       }
     ]
@@ -83,5 +81,5 @@ it('applies burst suppression after each phone filters event types', async () =>
   harness.dispatcher.enqueue(notification({ source: 'terminal-bell', emittedAt: 10000 }))
   harness.dispatcher.enqueue(notification({ emittedAt: 10250 }))
   await flush()
-  expect(harness.sends.map((send) => send.registrationIds)).toEqual([['all'], ['no-bells']])
+  expect(harness.sends.map((send) => send.registrationIds)).toEqual([['all', 'second-phone']])
 })

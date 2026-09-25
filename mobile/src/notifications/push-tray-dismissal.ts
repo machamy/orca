@@ -1,30 +1,63 @@
 import { readNativeNotificationData } from './native-notification-data'
 import * as Notifications from 'expo-notifications'
-import { readOrcaPushPayload } from './push-payload'
+import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
+import { rememberPushDismissal, wasPushDismissed } from './push-dismissal-watermarks'
 
-/**
- * Retire a push the OS presented for a notification the desktop has now dismissed.
- * The local scheduling registry knows nothing about it — the OS drew it while Orca
- * was closed — so the notification tray is the only place it can be found.
- *
- * Kept out of push-receive.ts deliberately: this runs on the socket dismiss path,
- * which must not pull the host store (and its native keychain deps) behind it.
- */
-export async function dismissPresentedPushNotification(notificationId: string): Promise<void> {
-  try {
-    const presented = await Notifications.getPresentedNotificationsAsync()
-    await Promise.all(
-      presented.map(async (notification) => {
-        const payload = readOrcaPushPayload(readNativeNotificationData(notification.request))
-        if (payload?.notificationId !== notificationId) {
-          return
-        }
-        await Notifications.dismissNotificationAsync(notification.request.identifier).catch(
-          () => {}
-        )
-      })
+async function dismissMatchingPresentedPushes(
+  matches: (payload: OrcaPushPayload) => boolean | Promise<boolean>
+): Promise<void> {
+  const presented = await Notifications.getPresentedNotificationsAsync()
+  await Promise.all(
+    presented.map(async (notification) => {
+      const payload = readOrcaPushPayload(readNativeNotificationData(notification.request))
+      if (payload && (await matches(payload))) {
+        await Notifications.dismissNotificationAsync(notification.request.identifier)
+      }
+    })
+  )
+}
+
+export function dismissRememberedPushNotifications(
+  hostFingerprint: string,
+  confirmed: readonly OrcaPushPayload[]
+): Promise<void> {
+  return dismissMatchingPresentedPushes(async (payload) => {
+    if (payload.hostFingerprint !== hostFingerprint) {
+      return false
+    }
+    return (
+      confirmed.some(
+        (fence) =>
+          fence.notificationId === payload.notificationId &&
+          fence.notificationEpoch === payload.notificationEpoch &&
+          fence.notificationSeq !== undefined &&
+          payload.notificationSeq !== undefined &&
+          fence.notificationSeq >= payload.notificationSeq
+      ) || wasPushDismissed(payload)
     )
-  } catch {
-    // Older native shells lack the tray query; local dismissal still runs.
+  })
+}
+
+// Pushes shown while Orca was closed are absent from the local scheduling registry.
+export async function dismissPresentedPushNotification(
+  notificationId: string,
+  hostFingerprint: string,
+  fence?: { notificationEpoch?: string; notificationSeq?: number }
+): Promise<void> {
+  if (fence) {
+    await rememberPushDismissal({ hostFingerprint, notificationId, ...fence })
   }
+  await dismissMatchingPresentedPushes((payload) => {
+    if (payload.hostFingerprint !== hostFingerprint) {
+      return false
+    }
+    return (
+      payload.notificationId === notificationId &&
+      (fence?.notificationEpoch && fence.notificationSeq !== undefined
+        ? payload.notificationEpoch === fence.notificationEpoch &&
+          payload.notificationSeq !== undefined &&
+          payload.notificationSeq <= fence.notificationSeq
+        : payload.notificationEpoch === undefined && payload.notificationSeq === undefined)
+    )
+  })
 }

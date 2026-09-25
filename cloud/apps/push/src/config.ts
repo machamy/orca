@@ -1,4 +1,4 @@
-import { PUSH_DEFAULTS, PUSH_LIMITS } from '@orca-cloud/push-contract'
+import { PUSH_DEFAULTS } from '@orca-cloud/push-contract'
 import { z } from 'zod'
 
 export const PUSH_DATABASE_POOL_MAX = 10
@@ -9,6 +9,7 @@ const OptionalTextSchema = z.preprocess(
 )
 
 const EnvSchema = z.object({
+  ORCA_PUSH_MODE: z.enum(['active', 'validation']).default('active'),
   PORT: z.coerce.number().int().positive().default(8080),
   ORCA_PUSH_PUBLIC_URL: z.string().url(),
   ORCA_PUSH_DATABASE_URL: OptionalTextSchema,
@@ -17,23 +18,20 @@ const EnvSchema = z.object({
   ORCA_PUSH_APNS_KEY: OptionalTextSchema,
   ORCA_PUSH_APNS_KEY_ID: z.preprocess(
     (value) => (value === '' ? undefined : value),
-    z.string().regex(/^[A-Z0-9]{10}$/).optional()
+    z
+      .string()
+      .regex(/^[A-Z0-9]{10}$/)
+      .optional()
   ),
   ORCA_PUSH_APPLE_TEAM_ID: z.preprocess(
     (value) => (value === '' ? undefined : value),
-    z.string().regex(/^[A-Z0-9]{10}$/).optional()
+    z
+      .string()
+      .regex(/^[A-Z0-9]{10}$/)
+      .optional()
   ),
   ORCA_PUSH_APNS_TOPIC: z.string().min(1).max(255).default(PUSH_DEFAULTS.apnsTopic),
-  ORCA_PUSH_FCM_PROJECT_ID: z
-    .string()
-    .regex(/^[a-z0-9-]{4,64}$/)
-    .default(PUSH_DEFAULTS.fcmProjectId),
-  ORCA_PUSH_COALESCE_MS: z.coerce
-    .number()
-    .int()
-    .nonnegative()
-    .max(60_000)
-    .default(PUSH_LIMITS.coalesceWindowMs),
+  ORCA_PUSH_FCM_PROJECT_ID: z.string().regex(/^[a-z0-9-]{4,64}$/),
   // How many proxies append to x-forwarded-for after the client. 0 is Cloud Run
   // alone; raise it to 1 when a load balancer fronts the service.
   ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0)
@@ -42,6 +40,7 @@ const EnvSchema = z.object({
 export type ApnsCredentials = { keyPem: string; keyId: string; teamId: string }
 
 export type PushConfig = {
+  mode: 'active' | 'validation'
   port: number
   publicUrl: string
   databaseUrl?: string
@@ -50,7 +49,6 @@ export type PushConfig = {
   apns?: ApnsCredentials
   apnsTopic: string
   fcmProjectId: string
-  coalesceMs: number
   trustedProxyHops: number
 }
 
@@ -66,9 +64,7 @@ function canonicalOrigin(value: string, name: string): string {
 
 // The APNs key, key id, and team id are one credential; a partial set would
 // pass startup and then fail every iOS send at runtime.
-function readApnsCredentials(
-  parsed: z.infer<typeof EnvSchema>
-): ApnsCredentials | undefined {
+function readApnsCredentials(parsed: z.infer<typeof EnvSchema>): ApnsCredentials | undefined {
   const parts = [
     parsed.ORCA_PUSH_APNS_KEY,
     parsed.ORCA_PUSH_APNS_KEY_ID,
@@ -89,8 +85,16 @@ function readApnsCredentials(
 }
 
 export function loadPushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig {
-  const parsed = EnvSchema.parse(env)
+  const parsed = EnvSchema.parse(
+    Object.fromEntries(
+      Object.entries(env).map(([key, value]) => [
+        key,
+        key !== 'ORCA_PUSH_MODE' && value?.trim() === '' ? undefined : value
+      ])
+    )
+  )
   return {
+    mode: parsed.ORCA_PUSH_MODE,
     port: parsed.PORT,
     publicUrl: canonicalOrigin(parsed.ORCA_PUSH_PUBLIC_URL, 'ORCA_PUSH_PUBLIC_URL'),
     databaseUrl: parsed.ORCA_PUSH_DATABASE_URL,
@@ -99,7 +103,6 @@ export function loadPushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig
     apns: readApnsCredentials(parsed),
     apnsTopic: parsed.ORCA_PUSH_APNS_TOPIC,
     fcmProjectId: parsed.ORCA_PUSH_FCM_PROJECT_ID,
-    coalesceMs: parsed.ORCA_PUSH_COALESCE_MS,
     trustedProxyHops: parsed.ORCA_PUSH_TRUSTED_PROXY_HOPS
   }
 }

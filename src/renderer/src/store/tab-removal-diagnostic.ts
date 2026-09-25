@@ -27,7 +27,14 @@ export function installTabRemovalDiagnostic(api: StoreApi<AppState>): void {
   // `getState()` still returns undefined — reading it there threw and took the
   // whole store down, leaving the runtime stuck at `graph_not_ready`.
   let previous: Set<string> | null = null
+  let previousTabsByWorktree: AppState['tabsByWorktree'] | undefined
   api.subscribe((state) => {
+    // Why: most updates leave the tab map untouched; walking every tab on each one
+    // scaled with workspace count and blew the store's per-update read budget.
+    if (state?.tabsByWorktree === previousTabsByWorktree) {
+      return
+    }
+    previousTabsByWorktree = state?.tabsByWorktree
     if (previous === null) {
       previous = collectTabIds(state)
       return

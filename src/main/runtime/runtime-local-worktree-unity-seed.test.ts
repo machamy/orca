@@ -72,9 +72,9 @@ describe('worktree create still invokes the Unity auto-seed', () => {
   })
 
   it('calls it after a local worktree is materialized', () => {
-    expect(createSource).toContain('autoSeedUnityAfterLocalWorktreeCreate({')
+    expect(createSource).toContain('scheduleUnitySeedAfterLocalWorktreeCreate({')
     // Ordering: the call must sit after materialization, or there is no worktree to seed.
-    expect(createSource.indexOf('autoSeedUnityAfterLocalWorktreeCreate({')).toBeGreaterThan(
+    expect(createSource.indexOf('scheduleUnitySeedAfterLocalWorktreeCreate({')).toBeGreaterThan(
       createSource.indexOf('await createRuntimeLocalManagedWorktree({')
     )
   })

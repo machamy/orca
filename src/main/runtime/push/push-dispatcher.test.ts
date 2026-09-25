@@ -70,7 +70,7 @@ describe('PushDispatcher', () => {
     expect(harness.cleared).toEqual(['device-24'])
   })
 
-  it('never pushes a dismissal', async () => {
+  it('pushes a silent dismissal with an absolute expiry', async () => {
     const harness = createHarness({
       devices: [{ deviceId: 'a', pushRegistration: registration() }]
     })
@@ -83,7 +83,13 @@ describe('PushDispatcher', () => {
     })
     await flush()
 
-    expect(harness.sends).toHaveLength(0)
+    expect(harness.sends).toHaveLength(1)
+    expect(harness.sends[0]?.notification).toMatchObject({
+      kind: 'dismiss',
+      sound: false,
+      notificationId: 'agent:one',
+      expiresAt: expect.any(Number)
+    })
   })
 
   it('stays silent while the agent is still working', async () => {
@@ -95,53 +101,6 @@ describe('PushDispatcher', () => {
     await flush()
 
     expect(harness.sends).toHaveLength(0)
-  })
-
-  it('applies each device filter independently', async () => {
-    const harness = createHarness({
-      devices: [
-        {
-          deviceId: 'needs-input-only',
-          pushRegistration: registration({
-            registrationId: 'reg-needs',
-            filter: { sources: ['agent-task-complete'], agentStates: ['needs-input'] }
-          })
-        },
-        {
-          deviceId: 'bells-only',
-          pushRegistration: registration({
-            registrationId: 'reg-bell',
-            filter: { sources: ['terminal-bell'], agentStates: ['needs-input', 'finished'] }
-          })
-        },
-        { deviceId: 'everything', pushRegistration: registration({ registrationId: 'reg-all' }) }
-      ]
-    })
-
-    harness.dispatcher.enqueue(notification({ agentState: 'blocked' }))
-    await flush()
-
-    expect(harness.sends[0]?.registrationIds).toEqual(['reg-needs', 'reg-all'])
-  })
-
-  it('pushes a bell to a device that filtered agent states out', async () => {
-    const harness = createHarness({
-      devices: [
-        {
-          deviceId: 'a',
-          pushRegistration: registration({
-            filter: { sources: ['terminal-bell'], agentStates: [] }
-          })
-        }
-      ]
-    })
-
-    harness.dispatcher.enqueue(
-      notification({ source: 'terminal-bell', agentState: undefined, title: 'Bell in x' })
-    )
-    await flush()
-
-    expect(harness.sends[0]?.notification.agentState).toBeNull()
   })
 
   it('drops a registration the gateway reports dead', async () => {

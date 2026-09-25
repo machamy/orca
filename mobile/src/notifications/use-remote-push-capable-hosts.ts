@@ -70,6 +70,10 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
     }
     for (const [hostId, client] of connected) {
       if (!probes.has(hostId)) {
+        setSupportedByHostId((previous) => {
+          const { [hostId]: _removed, ...remaining } = previous
+          return remaining
+        })
         const stop = startRuntimeCapabilityProbe(client, (capabilities) => {
           setSupportedByHostId((previous) => ({
             ...previous,
@@ -93,7 +97,7 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
 
   const answeredHostIds = hostIds.filter((hostId) => hostId in supportedByHostId)
   return {
-    supported: answeredHostIds.some((hostId) => supportedByHostId[hostId] === true),
+    supported: answeredHostIds.some((hostId) => supportedByHostId[hostId]),
     // A connected host that has not answered yet is exactly the case the silence is
     // for, so one outstanding probe holds the whole section back. Disconnected hosts
     // do not: their earlier answer stands, and one that never answered never will.

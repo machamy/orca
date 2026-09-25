@@ -41,6 +41,7 @@ export type WorktreeCardProps = {
   isDefaultSwitchDropTarget?: boolean
   onDefaultSwitchRequest?: (worktree: Worktree) => void
   onActivate?: () => void
+  onWorktreeCardClick?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onContextMenuSelect?: (

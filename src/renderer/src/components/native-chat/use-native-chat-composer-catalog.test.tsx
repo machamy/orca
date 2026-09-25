@@ -7,6 +7,7 @@ import { EMPTY_HISTORY } from './native-chat-composer-state'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import { structuredSlashCommands } from '../../../../shared/structured-agent-session-composer'
 
 function transport(sessionCommands?: NativeChatStructuredComposerTransport['sessionCommands']) {
@@ -19,8 +20,52 @@ describe('composer catalog authority', () => {
     expect(pty.result.current.agentCommands).toEqual(getVerifiedNativeChatCommands('claude'))
     expect(pty.result.current.sessionSkillNames).toBeUndefined()
     const oldHost = renderHook(() => useNativeChatComposerCatalog('claude', transport()))
-    expect(oldHost.result.current.agentCommands).toEqual(structuredSlashCommands('claude'))
+    expect(oldHost.result.current.agentCommands).toEqual(structuredSlashCommands())
     expect(oldHost.result.current.sessionSkillNames).toBeUndefined()
+  })
+  it('offers supported conversation commands when the host has no reported catalog', () => {
+    const { result, rerender } = renderHook(
+      ({ conversationCommands }) =>
+        useNativeChatComposerCatalog('claude', { ...transport(), conversationCommands }),
+      {
+        initialProps: {
+          conversationCommands: ['clear', 'compact'] as NonNullable<
+            NativeChatStructuredComposerTransport['conversationCommands']
+          >
+        }
+      }
+    )
+    expect(result.current.agentCommands.map(({ name }) => name)).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact'
+    ])
+    rerender({ conversationCommands: ['clear'] })
+    expect(result.current.agentCommands.map(({ name }) => name)).toEqual([
+      'model',
+      'effort',
+      'clear'
+    ])
+  })
+  // Codex reports no catalog, so the hook's fallback is its entire `/` menu; the
+  // agent has to reach structuredSlashCommands or `/goal` is invisible there.
+  it('offers Codex the commands its model runs from message text', () => {
+    const { result } = renderHook(() => useNativeChatComposerCatalog('codex', transport()))
+    expect(result.current.agentCommands).toEqual(structuredSlashCommands([], 'codex'))
+    expect(result.current.agentCommands.map(({ name }) => name)).toContain('goal')
+  })
+  it('leaves the Claude route on its own commands, reported or not', () => {
+    const reported = [{ name: 'init', kind: 'command' as const }]
+    const withReport = renderHook(() => useNativeChatComposerCatalog('claude', transport(reported)))
+    expect(withReport.result.current.agentCommands).toEqual(
+      sessionSlashCommandSuggestions('claude', reported)
+    )
+    const withoutReport = renderHook(() => useNativeChatComposerCatalog('claude', transport()))
+    expect(withoutReport.result.current.agentCommands.map(({ name }) => name)).toEqual([
+      'model',
+      'effort'
+    ])
   })
   it('respects empty catalogs and command-only catalogs without reviving disk skills', () => {
     const { result, rerender } = renderHook(
@@ -78,6 +123,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
           items,
           triggerKey: '/',
           prefix: '/',
+          dispatchable: true,
           grouped: true,
           commandsEnabled: true,
           skillsEnabled: true,

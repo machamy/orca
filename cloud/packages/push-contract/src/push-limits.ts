@@ -5,39 +5,24 @@ export const PUSH_LIMITS = {
   // A host pairs phones, not a fleet. The cap bounds what one session can write
   // through a caller-chosen deviceId.
   maxDevicesPerHost: 64,
-  // The list response is bounded well above the per-host cap so the query LIMIT
-  // and the response schema can never disagree.
-  maxDevicesPerListResponse: 1024,
   maxHttpBodyBytes: 16 * 1024,
-  hostSendsPerRollingHour: 60,
-  registrationSendsPerRollingDay: 200,
-  coalesceWindowMs: 3_000,
+  hostEventsPerWindow: 300,
+  eventQuotaWindowMs: 15 * 60 * 1000,
   challengeTtlMs: 10_000,
   // Covers routine NTP drift without extending the signed challenge window.
   clockSkewToleranceMs: 30_000,
   sessionTtlMs: 24 * 60 * 60 * 1000,
-  // One hour past the widest quota window so a rolling day never reads a pruned row.
-  sendLogRetentionMs: 25 * 60 * 60 * 1000,
-  notificationTtlSeconds: 4 * 60 * 60,
-  apnsCollapseIdMaxBytes: 64,
-  // Nothing reads a host row, and any keypair mints one for free, so a host
-  // with no registration left is kept only long enough to survive a phone swap.
-  hostRetentionMs: 60 * 60 * 1000,
+  notificationTtlSeconds: 5 * 60,
   // The challenge and session routes are the only unauthenticated writes, so
   // they are capped per client IP before any key material is generated.
   unauthenticatedRequestsPerMinutePerIp: 30,
-  // Every other route looks its bearer up in the database before it can refuse
-  // it, so a flood of forged bearers is capped per client IP ahead of that.
-  // Wide enough for an office NAT full of hosts, each of which sends at most
-  // its hourly quota plus a registration per connect.
-  authenticatedRequestsPerMinutePerIp: 240
+  authenticatedRequestsPerMinutePerIp: 6_000,
+  authenticatedRequestsPerMinutePerHost: 600
 } as const
 
 export const PUSH_DEFAULTS = {
   apnsTopic: 'com.stably.orca.mobile',
-  fcmProjectId: 'onorca-cloud',
-  androidChannelId: 'orca-desktop',
-  gatewayUrl: 'https://push.onorca.dev'
+  androidChannelId: 'orca-desktop'
 } as const
 
 export const PUSH_HOST_FINGERPRINT_LENGTH = 16

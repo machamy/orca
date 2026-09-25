@@ -2,7 +2,9 @@
 // registration each paired phone asked for, and the durable delete queue. Built
 // alongside DesktopRelayService but deliberately not gated on cloud sign-in: the
 // gateway authenticates with the host keypair, so accountless hosts push too.
+import { randomUUID } from 'node:crypto'
 import type {
+  MobilePushTestResult,
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../../shared/mobile-push-contract'
@@ -105,6 +107,53 @@ export class DesktopPushService {
     this.runtime.setMobilePushRegistrar(null)
   }
 
+  async test(deviceId: string): Promise<MobilePushTestResult> {
+    const device = this.registry.getDevice(deviceId)
+    const registration = device?.pushRegistration
+    if (device?.scope !== 'mobile' || !registration || registration.expiresAt <= Date.now()) {
+      return { accepted: false, reason: 'not_registered' }
+    }
+    if (this.stopped) {
+      return { accepted: false, reason: 'unavailable' }
+    }
+    // Explicit tests target only the caller and bypass automatic activity filters.
+    const result = await this.client.send({
+      registrationIds: [registration.registrationId],
+      notification: {
+        source: 'terminal-bell',
+        agentState: null,
+        title: 'Test notification',
+        body: '',
+        notificationId: randomUUID(),
+        notificationEpoch: randomUUID(),
+        notificationSeq: 0,
+        expiresAt: Date.now() + 300_000,
+        sound: registration.filter.sound !== false
+      }
+    })
+    if (!result.ok) {
+      return {
+        accepted: false,
+        reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected'
+      }
+    }
+    const status = result.results.find(
+      (entry) => entry.registrationId === registration.registrationId
+    )?.status
+    if (status === 'queued') {
+      return { accepted: true }
+    }
+    return {
+      accepted: false,
+      reason:
+        status === 'rate_limited'
+          ? 'rate_limited'
+          : status === 'dead'
+            ? 'not_registered'
+            : 'rejected'
+    }
+  }
+
   async register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {
     if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile') {
       return { registered: false, reason: 'not_mobile' }
@@ -122,6 +171,9 @@ export class DesktopPushService {
   private async registerAfterCleanup(
     input: MobilePushRegisterInput
   ): Promise<MobilePushRegisterResult> {
+    if (this.outbox.isUnreadable()) {
+      return { registered: false, reason: 'registration_storage_failed' }
+    }
     // A stable gateway ID must not inherit a delete from an earlier registration.
     for (const item of this.outbox.pending().filter((entry) => entry.deviceId === input.deviceId)) {
       if (!(await this.deleteQueued(item.reqId, item.registrationId))) {
@@ -129,8 +181,11 @@ export class DesktopPushService {
         return { registered: false, reason: 'gateway_unreachable' }
       }
     }
-    if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile' || this.stopped) {
+    if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile') {
       return { registered: false, reason: 'not_mobile' }
+    }
+    if (this.stopped) {
+      return { registered: false, reason: 'gateway_unreachable' }
     }
     const result = await this.client.registerDevice(input)
     if (!result.ok) {
@@ -164,29 +219,38 @@ export class DesktopPushService {
     }
     // Persist cleanup before forgetting its ID; neither write waits on the gateway.
     this.outbox.enqueue({ registrationId, deviceId })
-    this.registry.setPushRegistration(deviceId, null)
-    void this.flushUnregisterOutbox()
+    try {
+      this.registry.setPushRegistration(deviceId, null)
+    } finally {
+      void this.flushUnregisterOutbox()
+    }
     return { unregistered: true }
   }
 
   /** Joining an in-flight drain still waits for the item this call queued. */
   async flushUnregisterOutbox(): Promise<void> {
+    if (this.stopped) {
+      return
+    }
     this.flushRequested = true
-    this.flushLoop ??= this.runFlushLoop().finally(() => {
-      this.flushLoop = null
-    })
+    this.flushLoop ??= this.runFlushLoop()
     await this.flushLoop
   }
 
   private async runFlushLoop(): Promise<void> {
-    while (this.flushRequested && !this.stopped) {
-      // Cleared before the pass, so a delete queued mid-drain earns another one.
-      this.flushRequested = false
-      if (await this.drainPending()) {
-        this.scheduleFlushRetry()
-      } else {
-        this.retryDelayMs = OUTBOX_RETRY_BASE_MS
+    try {
+      while (this.flushRequested && !this.stopped) {
+        // Cleared before the pass, so a delete queued mid-drain earns another one.
+        this.flushRequested = false
+        if (await this.drainPending()) {
+          this.scheduleFlushRetry()
+        } else {
+          this.retryDelayMs = OUTBOX_RETRY_BASE_MS
+        }
       }
+    } finally {
+      // Clear ownership before the runner settles, so a late request starts a new drain.
+      this.flushLoop = null
     }
   }
 
@@ -198,9 +262,8 @@ export class DesktopPushService {
     try {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
-        platform: input.platform,
         filter: input.filter,
-        registeredAt: Date.now()
+        expiresAt: Date.now() + 7 * 24 * 60 * 60_000
       })
       // False means the device was removed or left mobile scope while the gateway
       // call was in flight.
@@ -213,21 +276,23 @@ export class DesktopPushService {
 
   /** Returns true when the pass left behind an item the gateway may still accept. */
   private async drainPending(): Promise<boolean> {
-    const attempted = new Set<string>()
     let retryable = false
-    for (;;) {
-      // Re-read per item: a snapshot taken at loop entry misses anything queued
-      // while an await was in flight, and the outbox swaps arrays on every write.
-      const item = this.outbox.pending().find((candidate) => !attempted.has(candidate.reqId))
-      if (!item) {
-        return retryable
-      }
-      attempted.add(item.reqId)
+    // Every enqueue requests a flush; the outer loop owns work added during this pass.
+    for (const item of this.outbox.pending()) {
       try {
         const deleted = await runKeyedSerializedOperation(
           this.deviceOperations,
           item.deviceId,
-          () => this.deleteQueued(item.reqId, item.registrationId)
+          () => {
+            // Failed local removal must not delete a still-attached gateway registration.
+            if (
+              this.registry.getDevice(item.deviceId)?.pushRegistration?.registrationId ===
+              item.registrationId
+            ) {
+              return Promise.resolve(false)
+            }
+            return this.deleteQueued(item.reqId, item.registrationId)
+          }
         )
         if (!deleted) {
           retryable = true
@@ -238,14 +303,15 @@ export class DesktopPushService {
         retryable = true
       }
     }
+    return retryable
   }
 
   private async deleteQueued(reqId: string, registrationId: string): Promise<boolean> {
     if (!this.outbox.pending().some((item) => item.reqId === reqId)) {
       return true
     }
-    const result = await this.client.deleteDevice(registrationId)
-    if (!result.deleted) {
+    const deleted = await this.client.deleteDevice(registrationId)
+    if (!deleted) {
       return false
     }
     this.outbox.remove(reqId)

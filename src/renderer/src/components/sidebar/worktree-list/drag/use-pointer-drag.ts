@@ -57,6 +57,7 @@ export function useWorktreePointerDrag(args: {
     worktreePointerDragRef,
     suppressWorktreeClickUntilRef,
     setWorktreeDragState,
+    setPointerDefaultSwitchDropTargetId,
     setDragOverStatus,
     setPinDragOver
   } = runtime
@@ -74,7 +75,7 @@ export function useWorktreePointerDrag(args: {
       onWorkspaceBoardDragPreviewCommit,
       shouldShowWorkspaceBoardDropIndicator,
       setWorktreeDragState,
-      setPointerDefaultSwitchDropTargetId: runtime.setPointerDefaultSwitchDropTargetId,
+      setPointerDefaultSwitchDropTargetId,
       setDragOverStatus,
       setPinDragOver
     })
@@ -84,6 +85,7 @@ export function useWorktreePointerDrag(args: {
     onWorkspaceBoardDragPreviewStart,
     setDragOverStatus,
     setPinDragOver,
+    setPointerDefaultSwitchDropTargetId,
     setWorktreeDragState,
     shouldShowWorkspaceBoardDropIndicator,
     workspaceBoardOpen,
@@ -137,6 +139,7 @@ export function useWorktreePointerDrag(args: {
       setWorktreeDragState({
         draggingWorktreeId: drag.worktreeId,
         sourceGroupKey: drag.sourceGroupKey,
+        lineageDropTargetId: null,
         dropIndex: null,
         dropIndicatorY: null,
         previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
@@ -208,6 +211,7 @@ export function useWorktreePointerDrag(args: {
         previewOffsetY: 0,
         workspaceBoardDragPreviewRequested: false,
         frameId: null,
+        reorderIntent: null,
         latestBoardDropTarget: null,
         latestStatusDropTarget: null
       }

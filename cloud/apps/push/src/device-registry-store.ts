@@ -3,7 +3,6 @@ import {
   PUSH_LIMITS,
   type ApnsEnvironment,
   type PushDeviceSummary,
-  type PushNotificationFilter,
   type PushPlatform
 } from '@orca-cloud/push-contract'
 import type { PushDatabase, SqlRow } from './push-database.js'
@@ -30,7 +29,6 @@ export type PushDeviceUpsert = {
   platform: PushPlatform
   token: string
   apnsEnvironment?: ApnsEnvironment
-  filter: PushNotificationFilter
 }
 
 function toRegistration(row: SqlRow): PushDeviceRegistration {
@@ -58,7 +56,6 @@ export class PushDeviceRegistryStore {
   // phone keeps the id the desktop already persisted; only the token rotates.
   async upsert(input: PushDeviceUpsert): Promise<PushDeviceUpsertResult> {
     const now = this.now()
-    const filterJson = JSON.stringify(input.filter)
     return await this.database.transaction<PushDeviceUpsertResult>(async (transaction) => {
       // deviceId is caller-chosen, so counting and inserting must not interleave
       // or a burst of new ids would walk straight past the cap.
@@ -71,17 +68,10 @@ export class PushDeviceRegistryStore {
         const registrationId = String(existing.registration_id)
         await transaction.query(
           `UPDATE push_devices
-           SET platform = ?, token = ?, apns_environment = ?, filter_json = ?,
+           SET platform = ?, token = ?, apns_environment = ?,
                dead_at = NULL, updated_at = ?
            WHERE registration_id = ?`,
-          [
-            input.platform,
-            input.token,
-            input.apnsEnvironment ?? null,
-            filterJson,
-            now,
-            registrationId
-          ]
+          [input.platform, input.token, input.apnsEnvironment ?? null, now, registrationId]
         )
         return { ok: true, registrationId }
       }
@@ -96,8 +86,8 @@ export class PushDeviceRegistryStore {
       await transaction.query(
         `INSERT INTO push_devices
          (registration_id, host_fingerprint, device_id, platform, token, apns_environment,
-          filter_json, dead_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+          dead_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
         [
           registrationId,
           input.hostFingerprint,
@@ -105,7 +95,6 @@ export class PushDeviceRegistryStore {
           input.platform,
           input.token,
           input.apnsEnvironment ?? null,
-          filterJson,
           now,
           now
         ]
@@ -115,20 +104,23 @@ export class PushDeviceRegistryStore {
   }
 
   async deleteOwned(hostFingerprint: string, registrationId: string): Promise<boolean> {
-    const [result] = await this.database.query(
-      'DELETE FROM push_devices WHERE registration_id = ? AND host_fingerprint = ?',
-      [registrationId, hostFingerprint]
-    )
-    return Number(result?.changes ?? 0) > 0
+    return this.database.transaction(async (transaction) => {
+      await transaction.lockQuotaScope(`${DEVICE_CAP_LOCK_PREFIX}${hostFingerprint}`)
+      const [result] = await transaction.query(
+        'DELETE FROM push_devices WHERE registration_id = ? AND host_fingerprint = ?',
+        [registrationId, hostFingerprint]
+      )
+      return Number(result?.changes ?? 0) > 0
+    })
   }
 
   async list(hostFingerprint: string): Promise<PushDeviceSummary[]> {
     const rows = await this.database.query(
-      // Bounded to what PushDeviceListResponseSchema will accept, so an
+      // Bounded by the device-list response limit, so an
       // oversized table degrades to a truncated list instead of a 500.
       `SELECT registration_id, device_id, platform, dead_at
        FROM push_devices WHERE host_fingerprint = ? ORDER BY created_at ASC LIMIT ?`,
-      [hostFingerprint, PUSH_LIMITS.maxDevicesPerListResponse]
+      [hostFingerprint, PUSH_LIMITS.maxDevicesPerHost]
     )
     return rows.map((row) => ({
       registrationId: String(row.registration_id),
@@ -169,16 +161,16 @@ export class PushDeviceRegistryStore {
     return row ? toRegistration(row) : null
   }
 
-  async markDead(registrationId: string, observed?: PushDeviceRegistration): Promise<void> {
+  async markDead(observed: PushDeviceRegistration): Promise<void> {
     await this.database.query(
-      `UPDATE push_devices SET dead_at = ?, updated_at = ? WHERE registration_id = ?${
-        observed ? " AND token = ? AND platform = ? AND COALESCE(apns_environment, '') = ?" : ''
-      }`,
+      `UPDATE push_devices SET dead_at = ?, updated_at = ? WHERE registration_id = ? AND token = ? AND platform = ? AND COALESCE(apns_environment, '') = ?`,
       [
         this.now(),
         this.now(),
-        registrationId,
-        ...(observed ? [observed.token, observed.platform, observed.apnsEnvironment ?? ''] : [])
+        observed.registrationId,
+        observed.token,
+        observed.platform,
+        observed.apnsEnvironment ?? ''
       ]
     )
   }

@@ -34,7 +34,14 @@ describe('default-worktree switch entry points survive card refactors', () => {
     expect(read('use-worktree-context-menu-model.tsx')).toContain(
       'onDefaultSwitchRequest?.(worktree)'
     )
-    expect(read('WorktreeContextMenuView.tsx')).toContain('{onDefaultSwitchRequest ? (')
-    expect(read('WorktreeContextMenuView.tsx')).toContain('onSelect={handleDefaultSwitch}')
+    expect(read('WorktreeContextMenuView.tsx')).toContain(
+      '<DefaultWorktreeSwitchMenuItem model={model}'
+    )
+    expect(read('DefaultWorktreeSwitchMenuItem.tsx')).toContain(
+      'if (!model.onDefaultSwitchRequest)'
+    )
+    expect(read('DefaultWorktreeSwitchMenuItem.tsx')).toContain(
+      'onSelect={model.handleDefaultSwitch}'
+    )
   })
 })

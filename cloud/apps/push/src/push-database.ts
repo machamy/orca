@@ -2,8 +2,8 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import pg from 'pg'
+import { parseIntoClientConfig } from 'pg-connection-string'
 import { applyPostgresSchema } from '@orca-cloud/postgres-schema'
-import { ensurePushSessionIndex } from './push-session-schema.js'
 import { pushSchemaStatements } from './push-schema.js'
 
 const POSTGRES_LOCK_TIMEOUT_MS = 1_000
@@ -22,6 +22,10 @@ export interface PushDatabase {
   // Serializes every transaction that reads then writes the same identity's
   // quota rows. Must be called inside a transaction; it releases at commit.
   lockQuotaScope(key: string): Promise<void>
+  // Non-blocking variant: false means another transaction holds the scope.
+  tryLockScope(key: string): Promise<boolean>
+  // Shared try-lock: holders of one key coexist, and an exclusive holder excludes them all.
+  tryLockSharedScope(key: string): Promise<boolean>
   close(): Promise<void>
 }
 
@@ -54,6 +58,14 @@ class SqliteTransaction implements PushDatabase {
   // BEGIN IMMEDIATE already holds the single writer lock for the whole
   // transaction, so there is nothing narrower left to take.
   async lockQuotaScope(): Promise<void> {}
+
+  async tryLockScope(): Promise<boolean> {
+    return true
+  }
+
+  async tryLockSharedScope(): Promise<boolean> {
+    return true
+  }
 
   async close(): Promise<void> {}
 }
@@ -111,6 +123,21 @@ class PostgresTransaction implements PushDatabase {
   // under-quota total, so the identity is serialized for the whole transaction.
   async lockQuotaScope(key: string): Promise<void> {
     await this.query('SELECT pg_advisory_xact_lock(hashtext(?::text))', [key])
+  }
+
+  async tryLockScope(key: string): Promise<boolean> {
+    const [row] = await this.query('SELECT pg_try_advisory_xact_lock(hashtext(?::text)) AS locked', [
+      key
+    ])
+    return row?.locked === true
+  }
+
+  async tryLockSharedScope(key: string): Promise<boolean> {
+    const [row] = await this.query(
+      'SELECT pg_try_advisory_xact_lock_shared(hashtext(?::text)) AS locked',
+      [key]
+    )
+    return row?.locked === true
   }
 
   async close(): Promise<void> {}
@@ -182,6 +209,14 @@ class PostgresDatabase implements PushDatabase {
     throw new Error('lock_quota_scope_requires_transaction')
   }
 
+  async tryLockScope(): Promise<boolean> {
+    throw new Error('lock_quota_scope_requires_transaction')
+  }
+
+  async tryLockSharedScope(): Promise<boolean> {
+    throw new Error('lock_quota_scope_requires_transaction')
+  }
+
   async close(): Promise<void> {
     await this.pool.end()
   }
@@ -189,7 +224,6 @@ class PostgresDatabase implements PushDatabase {
 
 async function applySchema(database: PushDatabase): Promise<void> {
   for (const statement of pushSchemaStatements()) await database.query(statement)
-  await ensurePushSessionIndex(database)
 }
 
 // Why: DDL is not a request. A CREATE INDEX on a grown table can legitimately
@@ -214,9 +248,11 @@ async function applySchemaOnUntimedPool(
   const database = new PostgresDatabase(pool)
   try {
     await applyPostgresSchema(pushSchemaStatements(), (statement) => database.query(statement), {
-      eventPrefix: 'orca_push_postgres_schema'
+      eventPrefix: 'orca_push_postgres_schema',
+      // Push has no catalog pre-check, so a lock timeout here says nothing about whether the
+      // object already exists and the old bounded retry is still the right answer.
+      retryLockTimeout: true
     })
-    await ensurePushSessionIndex(database)
   } finally {
     await database.close().catch(() => undefined)
   }
@@ -235,12 +271,20 @@ export async function openPushDatabase(input: {
   dataDir: string
   poolMax?: number
   applicationName?: string
+  readOnly?: boolean
 }): Promise<PushDatabase> {
   let database: PushDatabase
   if (input.databaseUrl) {
-    await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
+    if (!input.readOnly) await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
+    let connection: pg.ClientConfig = { connectionString: input.databaseUrl }
+    if (input.readOnly) {
+      connection = parseIntoClientConfig(input.databaseUrl)
+      // A URL parameter must not trigger a second parse that overrides read-only options.
+      delete connection.connectionString
+      connection.options = `${connection.options ?? ''} -c default_transaction_read_only=on`.trim()
+    }
     const pool = new pg.Pool({
-      connectionString: input.databaseUrl,
+      ...connection,
       max: input.poolMax ?? 10,
       application_name: input.applicationName,
       connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
@@ -252,11 +296,13 @@ export async function openPushDatabase(input: {
     database = new PostgresDatabase(pool)
   } else {
     mkdirSync(input.dataDir, { recursive: true })
-    const sqlite = new DatabaseSync(join(input.dataDir, 'orca-push.sqlite'))
-    sqlite.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
+    const sqlite = new DatabaseSync(join(input.dataDir, 'orca-push.sqlite'), {
+      readOnly: input.readOnly ?? false
+    })
+    if (!input.readOnly) sqlite.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
     database = new SqliteDatabase(sqlite)
   }
-  if (database.dialect === 'postgres') return database
+  if (database.dialect === 'postgres' || input.readOnly) return database
   try {
     await applySchema(database)
     return database

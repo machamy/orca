@@ -28,7 +28,13 @@ import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
-  if (!store || !state.claudeUsage || !state.codexUsage || !state.openCodeUsage) {
+  if (
+    !store ||
+    !state.claudeUsage ||
+    !state.codexUsage ||
+    !state.openCodeUsage ||
+    !state.museUsage
+  ) {
     throw new Error('Usage stores must be initialized before account services')
   }
   state.rateLimits = new RateLimitService()
@@ -86,6 +92,21 @@ export function initializeMainProcessAccountServices(): void {
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
     )
+    // Why: these three pick the MiniMax host and quota bucket, so a stale snapshot from the
+    // previous endpoint would otherwise sit in the status bar until the next poll.
+    if (
+      'minimaxEndpoint' in updates ||
+      'minimaxGroupId' in updates ||
+      'minimaxUsageModels' in updates
+    ) {
+      state.rateLimits?.invalidateMiniMaxCredentialState()
+      void state.rateLimits?.refresh().catch((error: unknown) => {
+        console.warn(
+          '[rate-limits] Failed to refresh MiniMax usage after a settings change:',
+          error
+        )
+      })
+    }
   })
   state.rateLimits.setClaudeAuthPreparationResolver((target) =>
     state.claudeRuntimeAuth!.prepareForRateLimitFetch(target)
@@ -98,7 +119,8 @@ export function initializeMainProcessAccountServices(): void {
     const settings = store.getSettings()
     return {
       sessionCookie: settings.opencodeSessionCookie,
-      workspaceIdOverride: settings.opencodeWorkspaceId
+      workspaceIdOverride: settings.opencodeWorkspaceId,
+      apiKey: settings.opencodeGoApiKey
     }
   })
   state.rateLimits.setMiniMaxConfigResolver(() => {

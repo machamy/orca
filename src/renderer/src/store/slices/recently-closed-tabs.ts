@@ -151,7 +151,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
     if (snapshot.color) {
       get().setTabColor(tab.id, snapshot.color)
     }
-    get().setActiveTabType('terminal')
+    get().setActiveTabType('terminal', worktreeId)
     restoreRecentlyClosedTabPosition(get, worktreeId, tab.id, snapshot.position)
     return true
   },

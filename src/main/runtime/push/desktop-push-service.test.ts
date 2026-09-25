@@ -12,7 +12,7 @@ import { createPushHostKeypair } from './push-host-challenge-fixtures'
 const REGISTER_INPUT = {
   platform: 'android' as const,
   token: 'fcm-token',
-  filter: { sources: ['agent-task-complete'] as const, agentStates: ['finished'] as const }
+  filter: {}
 }
 
 function createService(
@@ -65,9 +65,7 @@ function createService(
     deleteDevice: vi.fn(async (registrationId: string) => {
       deletes.push(registrationId)
       options.onDelete?.(registrationId)
-      return options.deleteFails
-        ? { deleted: false, retryable: true }
-        : { deleted: true, retryable: false }
+      return !options.deleteFails
     }),
     send: vi.fn(async () => ({ ok: true, results: [] }) as const)
   }
@@ -105,7 +103,6 @@ describe('DesktopPushService', () => {
     ).toEqual({ registered: true, registrationId: 'reg-1' })
     expect(harness.registry.getDevice(harness.deviceId)?.pushRegistration).toMatchObject({
       registrationId: 'reg-1',
-      platform: 'android',
       filter: REGISTER_INPUT.filter
     })
   })
@@ -291,4 +288,65 @@ describe('DesktopPushService', () => {
       expect.objectContaining({ registrationIds: ['reg-1'] })
     )
   })
+})
+
+it('renews a seven-day mobile lease only on explicit registration', async () => {
+  const now = 1_800_000_000_000
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+  const h = createService()
+  try {
+    await h.service.register({
+      deviceId: h.deviceId,
+      ...REGISTER_INPUT
+    })
+    expect(h.registry.getDevice(h.deviceId)?.pushRegistration?.expiresAt).toBe(now + 7 * 86400_000)
+    clock.mockReturnValue(now + 86400_000)
+    h.dispatch({ type: 'notification', source: 'terminal-bell', title: 'QA', body: 'QA' })
+    expect(h.registry.getDevice(h.deviceId)?.pushRegistration?.expiresAt).toBe(now + 7 * 86400_000)
+    await h.service.register({
+      deviceId: h.deviceId,
+      ...REGISTER_INPUT
+    })
+    expect(h.registry.getDevice(h.deviceId)?.pushRegistration?.expiresAt).toBe(now + 8 * 86400_000)
+  } finally {
+    h.service.stop()
+    clock.mockRestore()
+  }
+})
+
+it('sends an explicit test only to the requesting registered phone and awaits gateway acceptance', async () => {
+  const { service, registry, deviceId, send } = createService()
+  await service.register({
+    ...REGISTER_INPUT,
+    deviceId,
+    filter: { onlyWhenDesktopAway: true, sound: false }
+  })
+  registry.addDevice('another phone', 'mobile')
+  send.mockResolvedValue({ ok: true, results: [{ registrationId: 'reg-1', status: 'queued' }] })
+  await expect(service.test(deviceId)).resolves.toEqual({ accepted: true })
+  expect(send).toHaveBeenCalledWith({
+    registrationIds: ['reg-1'],
+    notification: expect.objectContaining({
+      source: 'terminal-bell',
+      sound: false,
+      title: 'Test notification'
+    })
+  })
+})
+
+it('does not claim success for missing registrations or failed gateway sends', async () => {
+  const { service, deviceId, send } = createService()
+  await expect(service.test(deviceId)).resolves.toEqual({
+    accepted: false,
+    reason: 'not_registered'
+  })
+  expect(send).not.toHaveBeenCalled()
+  await service.register({ ...REGISTER_INPUT, deviceId })
+  send.mockResolvedValue({ ok: false, reason: 'unreachable' })
+  await expect(service.test(deviceId)).resolves.toEqual({ accepted: false, reason: 'unavailable' })
+  send.mockResolvedValue({
+    ok: true,
+    results: [{ registrationId: 'reg-1', status: 'rate_limited' }]
+  })
+  await expect(service.test(deviceId)).resolves.toEqual({ accepted: false, reason: 'rate_limited' })
 })

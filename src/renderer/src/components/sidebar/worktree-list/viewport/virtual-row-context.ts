@@ -133,6 +133,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       getActiveSurfaceVariant: primaryActive.getActiveSurfaceVariant,
       getLineageToggleHandler: args.getLineageToggleHandler,
       onSelectionGesture: props.onSelectionGesture,
+      onWorktreeCardClick: props.onWorktreeCardClick,
       onContextMenuSelect: props.onContextMenuSelect,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,

@@ -164,7 +164,7 @@ describe('openFileInBrowserTab', () => {
     })
 
     await vi.waitFor(() => expect(mocks.openFile).toHaveBeenCalled())
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('editor')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('editor', 'wt-1')
     expect(mocks.openFile).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/workspace/sample-project/docs/guide.md',

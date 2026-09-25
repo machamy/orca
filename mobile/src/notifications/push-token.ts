@@ -30,8 +30,7 @@ function toMobilePushToken(raw: { type: string; data: unknown }): MobilePushToke
 }
 
 /**
- * The device's native push token, or null when this build cannot have one —
- * a simulator, a de-Googled Android device, or a shell without the entitlement.
+ * The native push token, or null if registration is unavailable or fails.
  */
 export async function getDevicePushToken(): Promise<MobilePushToken | null> {
   try {

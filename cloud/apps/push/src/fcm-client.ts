@@ -1,6 +1,5 @@
 import { providerRetryAfter } from './provider-retry-delay.js'
-import { createHash } from 'node:crypto'
-import { PUSH_DEFAULTS, PUSH_LIMITS } from '@orca-cloud/push-contract'
+import { PUSH_DEFAULTS } from '@orca-cloud/push-contract'
 import { orcaDataStrings, type PushDelivery } from './push-delivery-message.js'
 import type { PushProviderOutcome } from './push-provider-outcome.js'
 
@@ -15,40 +14,41 @@ export type FcmClientOptions = {
   accessToken: () => Promise<string>
   transport: FcmTransport
   channelId?: string
+  now?: () => number
 }
 
 type FcmErrorBody = {
   error?: { status?: unknown; message?: unknown; details?: { errorCode?: unknown }[] }
 }
 
-// FCM collapse_key is a short opaque string, so the collapse id is hashed
-// rather than truncated: truncation would merge unrelated notifications.
-export function fcmCollapseKey(collapseId: string): string {
-  return createHash('sha256').update(collapseId).digest('hex').slice(0, 32)
-}
-
 export function fcmMessageBody(input: {
   delivery: PushDelivery
   token: string
   channelId: string
-  validateOnly?: boolean
+  now?: number
 }): string {
   const { delivery } = input
+  const now = input.now ?? Date.now()
   return JSON.stringify({
-    ...(input.validateOnly ? { validate_only: true } : {}),
     message: {
       token: input.token,
-      notification: { title: delivery.title, body: delivery.body },
       android: {
         priority: 'HIGH',
-        ttl: `${PUSH_LIMITS.notificationTtlSeconds}s`,
-        collapse_key: fcmCollapseKey(delivery.collapseId),
-        notification: {
-          channel_id: delivery.sound === false ? `${input.channelId}-silent` : input.channelId,
-          tag: delivery.collapseId
-        }
+        ttl: `${Math.max(0, Math.ceil((delivery.expiresAt - now) / 1000))}s`
       },
-      data: orcaDataStrings(delivery.orca)
+      // Notification payloads collapse offline; Expo renders these data messages natively.
+      data: {
+        ...orcaDataStrings(delivery.orca),
+        ...(delivery.orca.kind === 'dismiss'
+          ? {}
+          : {
+              title: delivery.title,
+              message: delivery.body,
+              tag: delivery.collapseId,
+              channelId: delivery.sound === false ? `${input.channelId}-silent` : input.channelId,
+              ...(delivery.sound === false ? { sound: '' } : {})
+            })
+      }
     }
   })
 }
@@ -75,21 +75,22 @@ export class FcmClient {
     this.channelId = options.channelId ?? PUSH_DEFAULTS.androidChannelId
   }
 
-  async send(
-    delivery: PushDelivery,
-    device: { token: string },
-    options: { validateOnly?: boolean } = {}
-  ): Promise<PushProviderOutcome> {
+  async send(delivery: PushDelivery, device: { token: string }): Promise<PushProviderOutcome> {
+    if (delivery.expiresAt <= (this.options.now ?? Date.now)())
+      return { status: 'error', reason: 'expired' }
     let response: FcmResponse
     try {
+      const accessToken = await this.options.accessToken()
+      const now = (this.options.now ?? Date.now)()
+      if (delivery.expiresAt <= now) return { status: 'error', reason: 'expired' }
       response = await this.options.transport({
         url: `https://fcm.googleapis.com/v1/projects/${this.options.projectId}/messages:send`,
-        accessToken: await this.options.accessToken(),
+        accessToken,
         body: fcmMessageBody({
           delivery,
           token: device.token,
           channelId: this.channelId,
-          ...(options.validateOnly === undefined ? {} : { validateOnly: options.validateOnly })
+          now
         })
       })
     } catch (error) {

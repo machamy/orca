@@ -3,12 +3,13 @@
 `orca-cloud-push` is a public Cloud Run service in `onorca-cloud` that turns a desktop
 notification into an APNs or FCM push for a paired phone. The desktop registers each phone's
 native token with it and calls `POST /v1/send` after the socket fan-out it already does; the
-phone dedupes by `notificationId#notificationSeq`. The service is the only place the Apple
+phone treats APNs/FCM as the sole ordinary OS-banner path. The notification socket is retained only
+for live dismissal and reconnect tray reconciliation; it does not create or recover banners. Desktop
+notification categories remain authoritative. The service is the only place the Apple
 `.p8` signing key is readable, which is the reason it exists as a service at all.
 
-The contract every lane builds against is `docs/reference/mobile-push-contract.md` in the
-repository root. This document covers only the deploy surface: what Terraform owns, how the
-credentials rotate, and what the other repository still has to publish.
+The request schemas live in `packages/push-contract/src/`. This document covers Terraform
+ownership, deployment, credential rotation, and recovery.
 
 **There is no staging push gateway.** That is a decision, not an omission. `push_gateway_enabled`
 is false in `environments/staging.tfvars` and true in `environments/production.tfvars`, and every
@@ -17,37 +18,29 @@ edit plus a second set of Apple credentials.
 
 ## Shape
 
-| Setting | Value | Where |
-| --- | --- | --- |
-| Cloud Run service | `orca-cloud-push` | `push_cloud_run_service_name` |
-| Region | `us-central1` | `region` |
-| Instances | min 1, max 2 | `push_min_instances`, `push_max_instances` |
-| Database pool | 2 per instance | `push_database_pool_max` |
-| Concurrency | 80 | `push_concurrency` |
-| Ingress | all | `INGRESS_TRAFFIC_ALL` |
-| Invoker | IAM disabled | `invoker_iam_disabled = true` on the service |
-| Runtime identity | `orca-cloud-push@onorca-cloud.iam.gserviceaccount.com` | `google_service_account.push_runtime` |
-| Database | `orca_push` on the shared Cloud SQL instance | `google_sql_database.push` |
-| Hostname | `push.onorca.dev` | `push_base_url` |
+| Setting           | Value                                                  | Where                                        |
+| ----------------- | ------------------------------------------------------ | -------------------------------------------- |
+| Cloud Run service | `orca-cloud-push`                                      | `push_cloud_run_service_name`                |
+| Region            | `us-central1`                                          | `region`                                     |
+| Instances         | min 1, max 2                                           | `push_min_instances`, `push_max_instances`   |
+| Database pool     | 2 per instance                                         | `push_database_pool_max`                     |
+| Concurrency       | 80                                                     | `push_concurrency`                           |
+| Ingress           | all                                                    | `INGRESS_TRAFFIC_ALL`                        |
+| Invoker           | IAM disabled                                           | `invoker_iam_disabled = true` on the service |
+| Runtime identity  | `orca-cloud-push@onorca-cloud.iam.gserviceaccount.com` | `google_service_account.push_runtime`        |
+| Database          | `orca_push` on dedicated HA PostgreSQL 17           | `google_sql_database.push_dedicated`                   |
+| Hostname          | `push.onorca.dev`                                      | `push_base_url`                              |
 
 The minimum of one instance is deliberate and did not move when the ceiling came down to two. A
-cold start delays a notification past the point where it is worth showing, and the three-second
-coalescing window lives in instance memory, so the floor is what keeps a notification prompt. The
+cold start delays a notification past the point where it is worth showing, so the floor is what
+keeps a notification prompt. The
 ceiling is a different question, answered below.
 
-The maximum and the pool are set by the connection budget, not by the gateway's own appetite. Two
-instances times a two-connection pool is a draw of 4, and a rollout doubles it to 8, because the
-tagged candidate is directly addressable and sits outside the service-wide cap. The shared Cloud
-SQL instance's 400 connections were already spoken for by the relay cells, the directors, auth,
-and the API, which left five. Four is the whole of the room there was, and the gateway fits in
-it.
-
-Two connections per instance is enough for the work. A send runs two or three short queries, so
-at concurrency 80 requests queue against the pool for microseconds rather than holding it. A
-`lifecycle` precondition refuses a plan whose instances times pool exceeds 4, because a fifth
-connection puts the checked budget over its ceiling and blocks `Deploy Relay Asia Topology`,
-which gates on it. `dev/scripts/relay-cloud-sql-connection-budget.mjs` counts the gateway and
-prints the whole picture.
+Push uses its approved dedicated two-vCPU HA database. Two instances with a two-connection
+pool draw four connections; three simultaneous revision resources draw twelve. Tagged
+candidates can run outside the service-wide cap, so Terraform bounds instances × pool × 3
+at 64 connections, leaving dedicated capacity for maintenance and operators. Increase pool
+sizes only after measuring contention. The shared Relay budget excludes push entirely.
 
 Authentication is the host proof in `POST /v1/host/challenge`, not Cloud Run IAM, so the service
 opts out of invoker IAM with `invoker_iam_disabled = true`, exactly as the relay director does.
@@ -58,20 +51,20 @@ the only way to reach an open service here.
 
 Set on the container by Terraform:
 
-| Variable | Source |
-| --- | --- |
-| `PORT` | Cloud Run, container port 8080 |
-| `ORCA_PUSH_PUBLIC_URL` | `push_base_url` |
-| `ORCA_PUSH_FCM_PROJECT_ID` | `push_fcm_project_id`, empty means `project_id` |
-| `ORCA_PUSH_DATABASE_URL` | Secret `orca-cloud-push-database-url`, version `latest` |
-| `ORCA_PUSH_DATABASE_POOL_MAX` | `push_database_pool_max`, 2 per instance |
-| `ORCA_PUSH_APNS_KEY` | Secret `orca-cloud-push-apns-key`, version `latest` |
-| `ORCA_PUSH_APNS_KEY_ID` | Secret `orca-cloud-push-apns-key-id`, version `latest` |
-| `ORCA_PUSH_APPLE_TEAM_ID` | Secret `orca-cloud-push-apple-team-id`, version `latest` |
+| Variable                      | Source                                                   |
+| ----------------------------- | -------------------------------------------------------- |
+| `PORT`                        | Cloud Run, container port 8080                           |
+| `ORCA_PUSH_PUBLIC_URL`        | `push_base_url`                                          |
+| `ORCA_PUSH_FCM_PROJECT_ID`    | `project_id` (required for standalone runtime)          |
+| `ORCA_PUSH_DATABASE_URL`      | Secret `orca-cloud-push-dedicated-database-url`, pinned version  |
+| `ORCA_PUSH_DATABASE_POOL_MAX` | `push_database_pool_max`, 2 per instance                 |
+| `ORCA_PUSH_APNS_KEY`          | Secret `orca-cloud-push-apns-key`, version `latest`      |
+| `ORCA_PUSH_APNS_KEY_ID`       | Secret `orca-cloud-push-apns-key-id`, version `latest`   |
+| `ORCA_PUSH_APPLE_TEAM_ID`     | Secret `orca-cloud-push-apple-team-id`, version `latest` |
 
-`ORCA_PUSH_APNS_TOPIC` and `ORCA_PUSH_COALESCE_MS` are left to their application defaults
-(`com.stably.orca.mobile` and `3000`). Add them here only when one of them has to differ from
-the code default, so that a code-side change stays visible rather than silently overridden.
+`ORCA_PUSH_APNS_TOPIC` is left to its application default (`com.stably.orca.mobile`). Add it here
+only when it has to differ from the code default, so that a code-side change stays visible rather
+than silently overridden.
 
 Terraform owns the three Apple secret **names, labels, and replication, and never a version.**
 The `.p8` is issued by the Apple developer portal, so a Terraform-managed version would put the
@@ -127,11 +120,9 @@ terraform -chdir=infra/terraform import -var-file=environments/production.tfvars
   'projects/onorca-cloud/secrets/orca-cloud-push-apple-team-id roles/secretmanager.secretAccessor serviceAccount:orca-cloud-push@onorca-cloud.iam.gserviceaccount.com'
 ```
 
-Everything else in `push-gateway.tf` is new and is created by the apply: the `orca_push`
-database and user, the database-URL secret and its accessor, the `roles/cloudsql.client` binding
-on the runtime account, the Cloud Run service, the domain mapping, and the
-three deploy-identity bindings. Save that plan and review it before applying; this root carries
-unrelated standing drift, so an untargeted apply is never automatic.
+The push resources already exist in production. Preserve their addresses, dedicated database
+and identities; review the [database cleanup runbook](./push-database-cutover.md) before applying
+changes. This root has unrelated standing drift, so an untargeted apply is never automatic.
 
 Two things this root does **not** declare, because the carve assigns them elsewhere. Neither
 affects whether this root's plan is clean, since an undeclared resource is invisible to it.
@@ -148,67 +139,116 @@ affects whether this root's plan is clean, since an undeclared resource is invis
 supported path. Like every `cloud-*` workflow it does nothing until `ORCA_CLOUD_OPERATIONS_ENABLED`
 is `true`, it runs only on `main`, and it needs the confirmation string `DEPLOY_PUSH_GATEWAY`.
 
-It authenticates as the shared production deploy identity through
-`PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER` and
-`PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT`, which are already published. No new GitHub
-variable is required. That account was chosen because the Cloud SQL rollout lease grant is
-foundation-owned and names only that account; a dedicated identity could not take that lease from
-this root, and the gateway's schema rollout has to serialize against the relay's.
+It authenticates as the dedicated `orca-cloud-gha-push` identity through
+`PRODUCTION_GCP_PUSH_DEPLOY_WORKLOAD_IDENTITY_PROVIDER` and
+`PRODUCTION_GCP_PUSH_DEPLOY_SERVICE_ACCOUNT`. `push-deploy-identity.tf` restricts Workload Identity
+to this exact dispatch workflow on main in the production environment. Its distinct principal
+attribute cannot assume the shared Relay deploy identity.
 
-**That choice widens what this workflow can reach, and the widening is deliberate.** Adding
-`push-deploy.yml` to the provider allowlist gives the run the account's whole existing authority,
-not only the push bindings: Artifact Registry writer on `orca-cloud`, `roles/run.developer` on
-the relay director and the fence broker, accessor and version-adder on the relay
-regional-placement secret, and service-account user on the relay runtime identities. It was
-accepted as the price of the lease. What `push-gateway.tf` adds on top is three bindings scoped
-to the gateway alone: Cloud Run developer on this one service, and service-account user plus
-token creator on the runtime account. The bound on the rest is the provider condition, which
-admits this exact workflow file on `main` in the `production` environment only, and the workflow
-itself, which is dispatch-only behind a typed confirmation.
+The account can write images to Artifact Registry, deploy the push service, impersonate only
+the push runtime account, and manage exactly `terraform/state/push-rollout/production.lock`
+in the production state bucket. The relay root owns that conditional lease grant. It grants
+no Terraform-state object access. Publish `github_push_workload_identity_provider` and
+`github_push_deploy_service_account` as the production-environment variables above.
 
-The run, in order:
+The workflow uses the `production-push-rollout` concurrency group with cancellation disabled
+and the existing durable lease action on the push-specific object. Push and Relay deploy
+independently; two push deploys cannot race traffic changes. Finish every old shared-lock push
+run before enabling the new workflow and lease grant. See the cleanup runbook for the bounded
+IAM transition and removal of any obsolete foundation-owned push membership.
 
-1. Builds `apps/push/Dockerfile` with the `cloud/` build context and pushes to the existing
-   `orca-cloud` Artifact Registry repository as `push:sha-<commit>`, then resolves the digest.
-   This happens **before** the lease is taken. Artifact Registry is not the Cloud SQL instance,
-   and a multi-minute build inside the lease would block every relay deploy and rehome for its
-   duration.
-2. Takes the production Cloud SQL rollout lease and holds it from here to the end. The gateway
-   applies its schema while the new revision starts, so the revision **is** the schema step
-   (on a one-connection pool with no statement timeout, closed before the serving pool opens,
-   exactly as the relay does since #18722);
-   there is no separate migration command to wrap. The lease therefore covers exactly the
-   connection-budget window: deploy, probe, shift.
-3. Records the currently serving revision as the rollback target, and requires it to still hold
-   the Terraform-owned floor and ceiling. The candidate inherits that scaling, so a drifted
-   serving revision would be latched rather than corrected.
-4. `gcloud run deploy --no-traffic` with a per-run traffic tag, so the candidate boots and
-   applies schema while every phone still reaches the previous revision. The deploy passes no
-   scaling flag: the shape is Terraform's, and the candidate's inherited ceiling is asserted
-   instead.
-5. Probes the tagged candidate's own `/ready`, up to 30 times at five-second intervals.
-6. Sends a validate-only FCM message as the runtime identity, by impersonation. See below.
-7. Shifts 100% of traffic to the candidate and verifies it is the only revision serving.
-8. Writes the run summary, including the rollback command, before checking the public origin, so
-   the summary exists even when the check that follows does not pass.
-9. Checks `https://push.onorca.dev/ready`, up to 30 times at five-second intervals, since the
-   origin can lag the traffic move by a few seconds.
-10. Always removes the traffic tag, so tags do not accumulate across runs.
+The run builds the reviewed `source_sha` while the workflow stays on `main`. Buildx returns
+its own pushed digest (no mutable-tag lookup); every subsequent check and deployment uses that
+same digest. Before any production boot, a network-isolated container checks that the image
+recognizes `ORCA_PUSH_MODE=validation` and rejects invalid modes. Older images that lack this
+capability are refused before they can connect to production.
 
-**Failure after the shift rolls itself back.** Everything from step 8 on runs with production
-already on the candidate, so a failure there is not a failed deploy, it is a live gateway that
-has to go back. The run returns traffic to the recorded rollback revision, verifies the move, and
-reports it in the summary. A failure *before* the shift leaves production untouched and deletes
-the candidate revision, which otherwise sits holding a warm instance and a Cloud SQL pool for
-nothing.
+Under the production push rollout lease, it records the serving rollback revision and
+asserts Terraform-owned scaling. It deploys a tagged, zero-traffic validation revision:
 
-To move traffic by hand, from the revision named in the run summary:
+- Validation opens PostgreSQL with `default_transaction_read_only=on` and skips schema setup.
+- No delivery worker or challenge, session, or delivery pruner starts.
+- Only `/health` and `/ready` are available; all application routes return 503.
+- `/health` attests `mode: validation`; `/ready` checks database connectivity only. It does not
+  prove schema compatibility, provider delivery, or active-worker readiness. Container probes
+  can still use `/health` without treating an inert process as unhealthy.
+
+The build explicitly targets `linux/amd64` with provenance disabled so build metadata records a
+single manifest digest, rather than an OCI index that Cloud Run resolves to a different digest.
+The workflow verifies the exact image and scaling, probes readiness and mode, and checks the
+runtime identity with a validate-only FCM request. Cloud Run rejects deletion of the latest
+created revision even when it has no tag or traffic. Activation therefore creates a successor
+before removing the validation tag and deleting validation. The dedicated 64-connection budget
+reserves three simultaneous revision pools: serving, validation/rejected,
+and active/recovery successor (12 configured pool connections at the current two-by-two shape).
+Revision deletion is not proof of physical SQL session drain; verify termination and SQL sessions
+in controlled rollout acceptance. There is no shutdown sleep used as a drain gate.
+
+**Activation deliberately starts production effects.** The distinct active revision uses the exact
+validated digest with the validation override removed. Schema setup runs on its existing
+one-connection untimed pool, followed by workers and pruners, before HTTP promotion. The workflow
+checks digest, full runtime spec and secret-reference shape, scaling, readiness and active mode,
+then moves HTTP traffic and checks the public origin. Those checks commit the new serving revision;
+subsequent retirement failures do not trigger rollback to a possibly deleted previous revision.
+The previous consumer is retired and all tags are cleared. Retain the previous immutable image
+from the summary: later recovery redeploys that digest, because the previous revision is deleted.
+
+Before any candidate creation, the workflow requires exactly one revision resource, the sole HTTP
+serving revision. Existing historical revisions or leftovers from interrupted runs require explicit
+operator review and cleanup under the lease first; the workflow does not blindly delete them.
+This gate and retirement after every successful rollout prevent repeated runs accumulating workers.
+Terraform still owns configuration and scaling; removing validation mode adds no ignored field.
+
+On failure before public checks pass, any attempted traffic shift is first rolled back and verified.
+If partial activation created a successor, recovery retires non-latest validation first; deletion
+failure stops recovery before a fourth resource can be created. Recovery then deploys the captured
+known-good digest as a tagged, zero-traffic successor with normal mode. It verifies template shape,
+secret references and scaling, probes tagged readiness and active mode, promotes the recovery
+revision, verifies traffic and public health, and only then deletes rejected and previous revisions.
+The latest recovery revision remains serving. Known-good recovery schema and workers can execute
+before promotion; neither recovery nor traffic rollback undoes schema changes or sent notifications.
+
+Partial creates record deterministic names before mutation. Failed recovery or deletion requires
+operator cleanup under the lease; the next automated run refuses leftover resources. A canceled
+runner can require the same intervention. Traffic restoration alone does not stop queue consumers.
+
+Manual recovery must preserve the three-resource bound and keep the successor serving:
 
 ```sh
+# Hold the rollout lease; inspect latest, traffic, tags and existing revisions first.
+# If three resources remain after partial activation, retire non-latest inert validation first.
+# Restore previous traffic if its revision still exists and a failed candidate took traffic.
+gcloud run deploy orca-cloud-push \
+  --project onorca-cloud --region us-central1 --image <known-good-image-at-digest> \
+  --remove-env-vars ORCA_PUSH_MODE --no-traffic \
+  --tag <unique-recovery-tag> --revision-suffix <unique-recovery-suffix>
+# Verify exact digest, template spec/secret references/scaling, tagged /ready and active /health.
 gcloud run services update-traffic orca-cloud-push \
-  --project onorca-cloud --region us-central1 \
-  --to-revisions <previous-revision>=100
+  --project onorca-cloud --region us-central1 --to-revisions <recovery-revision>=100
+# Verify traffic and public /ready and /health before retiring old consumers.
+gcloud run services update-traffic orca-cloud-push \
+  --project onorca-cloud --region us-central1 --clear-tags
+gcloud run revisions delete <rejected-or-previous-revision> \
+  --project onorca-cloud --region us-central1
+# Repeat only for reviewed obsolete revisions; retain the latest serving recovery revision.
 ```
+
+Never merely remove validation mode while the template still holds a rejected image. Terraform
+owns environment configuration but ignores the image, so that would activate rejected code.
+Remove a tag only if it remains present. Verify the recovery revision is serving, the template is safe,
+and obsolete revision deletion and connection drain completed;
+already accepted provider sends cannot be undone. Activation-time schema changes must be additive
+and compatible with the rollback image: rollback does not reverse migrations or queue mutations.
+The inert phase intentionally cannot validate a new schema by applying it to production. Review
+migrations and validate them against isolated PostgreSQL before dispatch. No actual Cloud Run
+rollout, provider delivery or physical-device acceptance is implied by local contract tests.
+
+### Incompatible queue rollout prerequisite
+
+The queue stores one notification object per delivery. Before deploying a revision that changes this
+format, stop every older push gateway revision and clear only unpublished push delivery fixtures from
+the push database. This is an unpublished feature, so do not preserve or migrate queued fixtures; no
+production mutation is implied by this prerequisite.
 
 ### Why the FCM probe impersonates the runtime account
 
@@ -242,6 +282,7 @@ the window between.
    ```
 
    The team ID does not change, so `orca-cloud-push-apple-team-id` is untouched.
+
 3. Dispatch `Deploy Push Gateway Production`. The container reads `latest` at start, so only a
    new revision picks the key up; there is no in-place reload.
 4. Verify from a real device that an iOS notification still arrives. The workflow's FCM probe
@@ -263,38 +304,54 @@ Delete the downloaded `.p8` from disk when you are done. It is the whole credent
 A push token stops working when the app is uninstalled, when the user restores to a new device,
 or when iOS reissues it. Both providers report this, and the shapes differ:
 
-- APNs: HTTP 410, or 400 with `BadDeviceToken`, `Unregistered`, or `DeviceTokenNotForTopic`.
-  `DeviceTokenNotForTopic` also fires when a sandbox token is sent to the production host, which
-  is a configuration bug rather than a dead token; check `apns_environment` on the registration
-  before concluding the device is gone.
+- APNs: HTTP 410, or 400 with `BadDeviceToken` or `Unregistered`.
+  `DeviceTokenNotForTopic` is a provider configuration error and leaves the registration live.
+  Check the APNs topic and environment; future notifications can resume after correction without
+  phone re-registration. The failed notification is not retried for this non-transient error.
 - FCM: `UNREGISTERED`, or `INVALID_ARGUMENT` whose message names the token.
 
 The gateway marks the registration `dead_at` and returns `status: "dead"` for it, and the
 desktop drops the registration when it sees that. Nothing here retries a dead token. A phone
-that comes back registers again and gets a fresh `registrationId`, so a rising dead count is
-normal churn; a dead count that spikes across many hosts at once is a credential or topic
-problem, not device churn.
+that comes back re-registers the same host/device pair, retaining its `registrationId` and
+clearing `dead_at`. The per-minute `delivery_dead` counter measures delivery outcomes, not
+currently dead registrations. A spike across many hosts warrants checking credentials and topics.
 
 ## Quotas
 
 Two independent limits, both enforced in the gateway and both returning HTTP 200 with
 `status: "rate_limited"` per result rather than failing the request:
 
-| Limit | Scope |
-| --- | --- |
-| 60 sends per rolling hour | per `hostFingerprint` |
-| 200 sends per rolling day | per `registrationId` |
-| 20 `registrationIds` | per request, hard cap, HTTP 400 over it |
+| Limit                                         | Scope                                   |
+| --------------------------------------------- | --------------------------------------- |
+| 300 logical alerts per rolling 15 minutes     | per `hostFingerprint`                   |
+| 300 logical dismissals per rolling 15 minutes | per `hostFingerprint`, separate budget  |
+| 20 `registrationIds`                          | per request, hard cap, HTTP 400 over it |
 
-Ahead of all three sit two per-client-IP token buckets that answer HTTP 429: 30 requests per
-minute on the two unauthenticated handshake routes, and 240 per minute on every other `/v1`
-route, applied before the bearer is looked up so that a flood of forged bearers cannot spend
-the two-connection pool on session lookups. Both are per instance and in memory.
+Fanout to several phones counts one logical event; there is no per-phone daily allowance.
+Unauthenticated handshakes and invalid bearer attempts have separate 30/minute IP buckets.
+Authenticated routes use a 600/minute host bucket and a shared 6,000/minute client-IP bucket
+per instance. The IP budget cannot be reset by generating another host key. It is shared by
+clients behind one NAT and is an abuse safeguard, not a global provider-spending cap. Auth database lookup concurrency
+and waiting work are bounded independently of HTTP concurrency.
 
-`push_send_log` backs the two rolling counts and is pruned after 25 hours. Upstream of all
-three, FCM V1 bills project quota against `ORCA_PUSH_FCM_PROJECT_ID`, which is why the runtime
-account holds `roles/serviceusage.serviceUsageConsumer`; a project-level FCM quota exhaustion
-surfaces as `RESOURCE_EXHAUSTED` and is not something the per-host limits can prevent.
+`push_events` backs quota accounting. `push_event_recipients` deduplicates fanout and
+`push_delivery_batches` retains its historical name and persists individual pending deliveries,
+worker leases and retries. A delivery row is deleted when it is sent, dead, dismissed or expired, so
+the table holds only live work. Event and recipient identity metadata is retained for 24 hours.
+Payloads expire within five minutes. Minute-level cleanup deletes in bounded batches, so a backlog
+drains over successive runs instead of in one long statement. FCM project-level provider quotas
+remain independent of host limits.
+
+A worker claims one device's oldest due delivery with a row lock that other claimers skip, and a
+non-blocking per-device lock keeps at most one delivery per phone in flight. Each claim also takes
+the previous revision's global claim lock in shared mode, so during a deploy overlap an old worker's
+claim waits for new leases to commit instead of re-leasing them. That shared lock can be removed one
+release after every worker runs this revision. The claim scan only
+reads rows due within the notification TTL, so an unpruned backlog does not slow it. Boot adds one
+queue index, a partial index of pending rows per device for the head check; it indexes no lease
+column, so lease and renew writes stay heap-only updates. Claim, finish and cleanup traffic may
+hold at most one fewer connection than the pool size, so request authentication always has a
+connection. Lease renewals skip that cap so they never queue behind claims.
 
 Logging is aggregate counters only. Never log a token, a title, a body, or a full fingerprint;
 the first four characters of a fingerprint are the most that may appear.
@@ -314,24 +371,35 @@ push.onorca.dev.  CNAME  ghs.googlehosted.com.   (DNS only, not proxied)
 record is ever lost, recreate it exactly like that; Cloudflare proxying blocks certificate
 issuance and breaks Cloud Run host routing.
 
-
 ### Recovery and delivery guarantees
 
 Candidate tags and deterministic revision names are recorded before deployment. Promotion intent is
 recorded before changing traffic, so a failed verification or ambiguous mutation result still triggers
-rollback. Failed candidates are deleted only before attempted promotion or after verified rollback.
+rollback. A known-good successor must exist before the rejected latest revision can be deleted.
+After verified recovery promotion and public checks, rejected and previous consumers are retired;
+the recovery revision remains serving. Failed cleanup blocks subsequent rollout admission.
 The summary runs even if candidate discovery or traffic verification fails.
 
 Push uses the relay's schema-startup retry implementation through `@orca-cloud/postgres-schema`.
 Session replacement is serialized per host and a unique host index upgrades older databases by
 retaining their newest session. Cloud Verify runs push concurrency tests against PostgreSQL.
 
-Accepted sends deduplicate by host, registration, epoch, and sequence for the quota ledger's 25-hour
-retention period. Provider failures retry at most three times within two minutes, respecting provider
-retry delays. Queues remain in memory; a crash or the nine-second shutdown deadline can still lose work.
-Graceful shutdown first refuses new requests, waits for admitted handlers, and drains pending and active
-deliveries before closing transports and SQL. `delivery_retry` counters accompany existing outcomes.
+Accepted sends commit quota and pending work together before returning `queued`. Workers resume
+unfinished deliveries after restarts without relying on desktop retries. The durable queue and
+expiring leases coordinate replicas. All provider attempts retain the original five-minute deadline
+and respect provider backoff; no retry extends alert life. Silent dismissal messages have their own
+quota and cancel matching unsent alerts. Mobile OS delivery/execution is not guaranteed.
 
-Notification and worktree IDs allow 2048 characters each, subject to a combined notification JSON
-budget of 3000 UTF-8 bytes. This preserves normal long and Unicode paths without exceeding provider
-envelope space. No identity is truncated to meet this budget.
+Shutdown stops admission and new claims; unfinished leases remain recoverable. Provider acceptance
+and SQL completion cannot be atomic, so repeated transport delivery remains possible after a crash.
+Stable per-event replacement identities reduce duplicates without promising exactly-once visible
+delivery. FCM notification messages are inherently collapsible while offline and support only a
+small number of concurrent collapse keys per device, so excess pending messages may be discarded and
+every offline alert is not guaranteed to appear. Socket reconnect reconciles dismissals against the
+current native tray; it has no stored replay watermark and never recovers a missed OS banner.
+
+### Dedicated database operations
+
+Push has one dedicated database attachment, with stable Terraform addresses and deletion
+protection. There is no switch to shared storage. Follow the [database operations runbook](./push-database-cutover.md)
+for deployment prerequisites, legacy resource ownership, capacity and recovery.

@@ -1,5 +1,6 @@
+import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
+import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
-import { loadNotificationDeliveryPreferences } from '../src/notifications/notification-delivery-preferences'
 import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
 import { useCallback, useEffect, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
@@ -16,7 +17,7 @@ import { useOpenNotificationRoute } from '../src/notifications/use-open-notifica
 import {
   isRemotePushTrigger,
   pushNotificationRouteData,
-  shouldSuppressForegroundPush
+  foregroundNotificationBehavior
 } from '../src/notifications/push-receive'
 import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
@@ -32,27 +33,12 @@ SplashScreen.preventAutoHideAsync()
 // Why at boot and not only on subscribe: the gateway's FCM payload targets the
 // 'orca-desktop' channel, and a background push can land before any socket has
 // connected. Android drops a notification whose channel does not exist yet.
-ensureDesktopNotificationChannel()
+void ensureDesktopNotificationChannel().catch(() => {})
+void registerPushDismissalTask().catch(() => {})
 
-// Why: without this, expo-notifications silently drops notifications when
-// the app is in the foreground. Setting all three to true makes iOS/Android
-// display the banner, play the sound, and show the badge even while the
-// app is active. This runs once at module load time before any notification
-// is scheduled.
+// Register before scheduling so foreground delivery uses the same suppression policy.
 Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    // Why the check: a gateway push can arrive for an event the socket already
-    // delivered, and only the handler can stop the OS drawing a second banner.
-    const suppressed = await shouldSuppressForegroundPush(
-      readNativeNotificationData(notification.request)
-    ).catch(() => false)
-    return {
-      shouldShowBanner: !suppressed,
-      shouldShowList: !suppressed,
-      shouldPlaySound: !suppressed && (await loadNotificationDeliveryPreferences()).sound,
-      shouldSetBadge: false
-    }
-  }
+  handleNotification: foregroundNotificationBehavior
 })
 
 export default function RootLayout() {
@@ -79,6 +65,7 @@ export default function RootLayout() {
   // Why: a rolled APNs/FCM token stops delivering silently, so every paired host
   // has to be re-registered with the new one as soon as the provider hands it over.
   useEffect(() => startPushTokenSync(), [])
+  useEffect(() => startAndroidForegroundPushPresentation(), [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,

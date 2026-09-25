@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ApnsEnvironmentSchema,
-  PushDeviceListResponseSchema,
-  PushDeviceRegistrationRequestSchema,
-  PushDeviceRegistrationResponseSchema,
-  PushNotificationFilterSchema
+  PushDeviceRegistrationRequestSchema
 } from './device-registration-messages.js'
 import {
-  PushErrorResponseSchema,
   PushHostChallengeRequestSchema,
   PushHostChallengeResponseSchema,
   PushHostSessionRequestSchema,
@@ -42,22 +38,17 @@ describe('push contract limits', () => {
       bodyMaxChars: 180,
       maxRegistrationIdsPerSend: 20,
       maxDevicesPerHost: 64,
-      maxDevicesPerListResponse: 1_024,
-      hostSendsPerRollingHour: 60,
-      registrationSendsPerRollingDay: 200,
-      coalesceWindowMs: 3_000,
+      hostEventsPerWindow: 300,
+      eventQuotaWindowMs: 900_000,
       challengeTtlMs: 10_000,
       clockSkewToleranceMs: 30_000,
       sessionTtlMs: 86_400_000,
-      sendLogRetentionMs: 90_000_000,
-      notificationTtlSeconds: 14_400,
-      apnsCollapseIdMaxBytes: 64,
-      hostRetentionMs: 3_600_000,
+      notificationTtlSeconds: 300,
       unauthenticatedRequestsPerMinutePerIp: 30,
-      authenticatedRequestsPerMinutePerIp: 240
+      authenticatedRequestsPerMinutePerIp: 6_000,
+      authenticatedRequestsPerMinutePerHost: 600
     })
     expect(PUSH_DEFAULTS.apnsTopic).toBe('com.stably.orca.mobile')
-    expect(PUSH_DEFAULTS.fcmProjectId).toBe('onorca-cloud')
     expect(PUSH_DEFAULTS.androidChannelId).toBe('orca-desktop')
   })
 })
@@ -100,8 +91,9 @@ describe('host authentication schemas', () => {
         extra: true
       }).success
     ).toBe(false)
-    expect(PushHostChallengeRequestSchema.safeParse({ v: 2, hostPublicKeyB64: KEY_B64 }).success)
-      .toBe(false)
+    expect(
+      PushHostChallengeRequestSchema.safeParse({ v: 2, hostPublicKeyB64: KEY_B64 }).success
+    ).toBe(false)
     expect(
       PushHostChallengeRequestSchema.safeParse({
         v: 1,
@@ -116,13 +108,6 @@ describe('host authentication schemas', () => {
       }).success
     ).toBe(false)
   })
-
-  it('names only the error codes the gateway may return', () => {
-    expect(PushErrorResponseSchema.safeParse({ error: 'session_expired' }).success).toBe(true)
-    expect(PushErrorResponseSchema.safeParse({ error: 'too_many_devices' }).success).toBe(true)
-    expect(PushErrorResponseSchema.safeParse({ error: 'rate_limited' }).success).toBe(true)
-    expect(PushErrorResponseSchema.safeParse({ error: 'teapot' }).success).toBe(false)
-  })
 })
 
 describe('device registration schemas', () => {
@@ -133,8 +118,7 @@ describe('device registration schemas', () => {
         deviceId: 'device-1',
         platform: 'ios',
         token: APNS_TOKEN,
-        apnsEnvironment: 'sandbox',
-        filter: { sources: ['agent-task-complete'], agentStates: ['needs-input'] }
+        apnsEnvironment: 'sandbox'
       }).success
     ).toBe(true)
     expect(
@@ -142,8 +126,7 @@ describe('device registration schemas', () => {
         v: 1,
         deviceId: 'device-1',
         platform: 'ios',
-        token: APNS_TOKEN,
-        filter: { sources: [], agentStates: [] }
+        token: APNS_TOKEN
       }).success
     ).toBe(false)
     expect(
@@ -152,8 +135,7 @@ describe('device registration schemas', () => {
         deviceId: 'device-1',
         platform: 'ios',
         token: 'not-hex',
-        apnsEnvironment: 'production',
-        filter: { sources: [], agentStates: [] }
+        apnsEnvironment: 'production'
       }).success
     ).toBe(false)
   })
@@ -164,8 +146,7 @@ describe('device registration schemas', () => {
         v: 1,
         deviceId: 'device-2',
         platform: 'android',
-        token: FCM_TOKEN,
-        filter: { sources: ['plugin', 'terminal-bell'], agentStates: [] }
+        token: FCM_TOKEN
       }).success
     ).toBe(true)
     expect(
@@ -174,42 +155,7 @@ describe('device registration schemas', () => {
         deviceId: 'device-2',
         platform: 'android',
         token: FCM_TOKEN,
-        apnsEnvironment: 'sandbox',
-        filter: { sources: [], agentStates: [] }
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects duplicate filter entries and unknown filter keys', () => {
-    expect(
-      PushNotificationFilterSchema.safeParse({
-        sources: ['plugin', 'plugin'],
-        agentStates: []
-      }).success
-    ).toBe(false)
-    expect(
-      PushNotificationFilterSchema.safeParse({
-        sources: [],
-        agentStates: ['finished'],
-        worktrees: []
-      }).success
-    ).toBe(false)
-    expect(ApnsEnvironmentSchema.safeParse('adhoc').success).toBe(false)
-  })
-
-  it('shapes the registration and list responses', () => {
-    expect(PushDeviceRegistrationResponseSchema.safeParse({ registrationId: 'reg-1' }).success)
-      .toBe(true)
-    expect(
-      PushDeviceListResponseSchema.safeParse({
-        devices: [
-          { registrationId: 'reg-1', deviceId: 'device-1', platform: 'ios', dead: false }
-        ]
-      }).success
-    ).toBe(true)
-    expect(
-      PushDeviceListResponseSchema.safeParse({
-        devices: [{ registrationId: 'reg-1', deviceId: 'device-1', platform: 'ios' }]
+        apnsEnvironment: 'sandbox'
       }).success
     ).toBe(false)
   })

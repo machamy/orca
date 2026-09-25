@@ -35,25 +35,7 @@ export const PushHostSessionResponseSchema = z
   })
   .strict()
 
-export const PUSH_ERROR_CODES = [
-  'invalid_request',
-  'invalid_challenge',
-  'invalid_proof',
-  'invalid_token',
-  'session_expired',
-  'not_found',
-  'too_many_devices',
-  'request_too_large',
-  'rate_limited',
-  'dependency_unavailable'
-] as const
-
-export const PushErrorResponseSchema = z
-  .object({ error: z.enum(PUSH_ERROR_CODES) })
-  .strict()
-
 export type PushHostChallengeRequest = z.infer<typeof PushHostChallengeRequestSchema>
 export type PushHostChallengeResponse = z.infer<typeof PushHostChallengeResponseSchema>
 export type PushHostSessionRequest = z.infer<typeof PushHostSessionRequestSchema>
 export type PushHostSessionResponse = z.infer<typeof PushHostSessionResponseSchema>
-export type PushErrorCode = (typeof PUSH_ERROR_CODES)[number]

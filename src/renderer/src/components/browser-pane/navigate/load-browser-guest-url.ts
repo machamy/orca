@@ -219,7 +219,7 @@ async function probeBrowserPathHandoff(
       const current = useAppStore.getState()
       // Why: Chromium renders file:// notebooks as raw JSON and markdown as raw source; edit mode
       // defaults both to the editor's rich view.
-      current.setActiveTabType('editor')
+      current.setActiveTabType('editor', worktreeId)
       const targetGroupId = current.ensureWorktreeRootGroup(worktreeId)
       current.openFile(
         {

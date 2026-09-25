@@ -27,6 +27,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
+  | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
   | 'visibleTaskProviders'
@@ -40,10 +41,12 @@ export type RuntimeClientSettings = Pick<
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
+  | 'minimaxEndpoint'
   | 'prBotAuthorOverrides'
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
   | 'agentSkillSharingEnabled'
+  | 'machineName'
 > & {
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
 }
@@ -70,8 +73,10 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
+  | 'minimaxEndpoint'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
+  | 'machineName'
 >
 
 export class RuntimeClientSettingsController {
@@ -79,7 +84,7 @@ export class RuntimeClientSettingsController {
   private reconciliationTail: Promise<void> = Promise.resolve()
 
   constructor(
-    private readonly store: RuntimeStore | null,
+    private readonly store: Pick<RuntimeStore, 'getSettings' | 'updateSettings'> | null,
     private readonly notifyReposChanged: (() => void) | undefined = undefined
   ) {}
 
@@ -95,6 +100,9 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: settings.agentDefaultArgs ?? {},
       agentDefaultEnv: settings.agentDefaultEnv ?? {},
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+      // Why projected: mobile's terminal Copy honours this, and a host predating
+      // the setting sends no key, which the client reads as on (#19770).
+      terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
@@ -110,10 +118,12 @@ export class RuntimeClientSettingsController {
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
+      minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
+      machineName: settings.machineName ?? '',
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })

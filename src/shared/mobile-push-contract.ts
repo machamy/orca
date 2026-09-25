@@ -1,5 +1,5 @@
 // Why: the desktop host, the push gateway, and the phone must agree on these
-// exact strings. See docs/reference/mobile-push-contract.md.
+// exact strings. See cloud/packages/push-contract/src.
 
 export const MOBILE_PUSH_SOURCES = ['agent-task-complete', 'terminal-bell', 'plugin'] as const
 export type MobilePushSource = (typeof MOBILE_PUSH_SOURCES)[number]
@@ -16,18 +16,15 @@ export const MOBILE_PUSH_APNS_ENVIRONMENTS = ['sandbox', 'production'] as const
 export type MobilePushApnsEnvironment = (typeof MOBILE_PUSH_APNS_ENVIRONMENTS)[number]
 
 export type MobilePushFilter = {
-  followDesktop?: boolean
+  onlyWhenDesktopAway?: boolean
   sound?: boolean
-  sources: readonly MobilePushSource[]
-  agentStates: readonly MobilePushAgentState[]
 }
 
 /** Persisted on the paired DeviceEntry so a host restart can push without the phone re-registering. */
 export type MobilePushRegistration = {
   registrationId: string
-  platform: MobilePushPlatform
   filter: MobilePushFilter
-  registeredAt: number
+  expiresAt: number
 }
 
 export type MobilePushRegisterInput = {
@@ -42,10 +39,7 @@ export type MobilePushRegisterResult =
   | { registered: true; registrationId: string }
   | {
       registered: false
-      // `registration_storage_failed`: the gateway accepted the token but the host
-      // could not persist it, so the phone must register again rather than believe
-      // a push route that does not exist. `throttled`: this device registered too
-      // often in the last minute; whatever it registered before still stands.
+      // Storage failures require registration to be retried; throttling leaves the prior route intact.
       reason:
         | 'gateway_unreachable'
         | 'gateway_rejected'
@@ -54,35 +48,32 @@ export type MobilePushRegisterResult =
         | 'throttled'
     }
 
-function isStringMember<T extends string>(value: unknown, members: readonly T[]): value is T {
-  return typeof value === 'string' && (members as readonly string[]).includes(value)
-}
-
 function parseFilter(value: unknown): MobilePushFilter | null {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
   const filter = value as Partial<MobilePushFilter>
-  if (!Array.isArray(filter.sources) || !Array.isArray(filter.agentStates)) {
+  if (
+    (filter.onlyWhenDesktopAway !== undefined && typeof filter.onlyWhenDesktopAway !== 'boolean') ||
+    (filter.sound !== undefined && typeof filter.sound !== 'boolean')
+  ) {
     return null
   }
   return {
-    ...(typeof filter.sound === 'boolean' ? { sound: filter.sound } : {}),
-    ...(typeof filter.followDesktop === 'boolean' ? { followDesktop: filter.followDesktop } : {}),
-    sources: filter.sources.filter((entry) => isStringMember(entry, MOBILE_PUSH_SOURCES)),
-    agentStates: filter.agentStates.filter((entry) =>
-      isStringMember(entry, MOBILE_PUSH_AGENT_STATES)
-    )
+    ...(typeof filter.onlyWhenDesktopAway === 'boolean'
+      ? { onlyWhenDesktopAway: filter.onlyWhenDesktopAway }
+      : {}),
+    ...(typeof filter.sound === 'boolean' ? { sound: filter.sound } : {})
   }
 }
 
 /**
- * Reads a persisted registration back. Returns undefined for anything an older or
- * corrupted registry may hold, so a bad row degrades to "this device has no push"
+ * Reads a persisted registration back. Returns undefined for invalid data,
+ * so a bad row degrades to "this device has no push"
  * instead of failing the whole registry load.
  */
 export function parseMobilePushRegistration(value: unknown): MobilePushRegistration | undefined {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
   const registration = value as Partial<MobilePushRegistration>
@@ -90,17 +81,19 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   if (
     typeof registration.registrationId !== 'string' ||
     registration.registrationId.length === 0 ||
-    !isStringMember(registration.platform, MOBILE_PUSH_PLATFORMS) ||
     !filter ||
-    typeof registration.registeredAt !== 'number' ||
-    !Number.isFinite(registration.registeredAt)
+    typeof registration.expiresAt !== 'number' ||
+    !Number.isFinite(registration.expiresAt)
   ) {
     return undefined
   }
   return {
     registrationId: registration.registrationId,
-    platform: registration.platform,
     filter,
-    registeredAt: registration.registeredAt
+    expiresAt: registration.expiresAt
   }
 }
+
+export type MobilePushTestResult =
+  | { accepted: true }
+  | { accepted: false; reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected' }

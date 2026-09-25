@@ -1,3 +1,4 @@
+import { PushNotificationSchema } from '@orca-cloud/push-contract'
 import { PUSH_LIMITS } from '@orca-cloud/push-contract'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createPushHostKeypair } from './host-challenge-answering.test-fixture.js'
@@ -5,7 +6,6 @@ import {
   APNS_TOKEN,
   createPushServerHarness,
   FCM_TOKEN,
-  FILTER,
   notification
 } from './push-server-harness.test-fixture.js'
 
@@ -53,10 +53,10 @@ describe('push gateway send route', () => {
       status: 404,
       body: JSON.stringify({ error: { status: 'UNREGISTERED', message: 'gone' } })
     })
-    await harness.server.coalescer.flushAll()
+    await harness.flushDeliveries()
     expect(harness.fcmRequests).toHaveLength(1)
     expect(JSON.parse(harness.fcmRequests[0]!.body)).toMatchObject({
-      message: { token: FCM_TOKEN, notification: { title: 'Agent needs input' } }
+      message: { token: FCM_TOKEN, data: { title: 'Agent needs input' } }
     })
 
     const afterDeath = await harness.post(
@@ -84,11 +84,38 @@ describe('push gateway send route', () => {
       status: 503,
       body: JSON.stringify({ error: { status: 'UNAVAILABLE', message: 'backend busy' } })
     })
-    await harness.server.coalescer.flushAll()
+    await harness.flushDeliveries()
     expect(await harness.server.devices.findById(registrationId)).toMatchObject({ dead: false })
   })
 
-  it('coalesces a burst into one apns summary under the host collapse id', async () => {
+  it('reports retries from the durable worker after the provider delay', async () => {
+    const token = await harness.signIn(createPushHostKeypair(26))
+    const registrationId = await harness.registerAndroid(token)
+    await harness.post(
+      '/v1/send',
+      {
+        v: 1,
+        registrationIds: [registrationId],
+        notification: notification()
+      },
+      token
+    )
+    harness.setFcmResponse({ status: 503, body: '{}' })
+    await harness.flushDeliveries()
+    expect(harness.server.observability.consume()).toMatchObject({
+      delivery_error: 1,
+      delivery_retry: 0
+    })
+    harness.advanceClock(10_000)
+    harness.setFcmResponse({ status: 200, body: '{}' })
+    await harness.server.worker.runDue()
+    expect(harness.server.observability.consume()).toMatchObject({
+      delivery_sent: 1,
+      delivery_retry: 1
+    })
+  })
+
+  it('sends a burst as individual APNs alerts grouped by the host thread', async () => {
     const sessionToken = await harness.signIn(createPushHostKeypair(18))
     const registration = await harness.post(
       '/v1/devices',
@@ -97,8 +124,7 @@ describe('push gateway send route', () => {
         deviceId: 'iphone-1',
         platform: 'ios',
         token: APNS_TOKEN,
-        apnsEnvironment: 'sandbox',
-        filter: FILTER
+        apnsEnvironment: 'sandbox'
       },
       sessionToken
     )
@@ -114,18 +140,31 @@ describe('push gateway send route', () => {
         sessionToken
       )
     }
-    await harness.server.coalescer.flushAll()
-    expect(harness.apnsRequests).toHaveLength(1)
-    const request = harness.apnsRequests[0]!
-    expect(request.host).toBe('api.sandbox.push.apple.com')
-    const body = JSON.parse(request.body) as {
-      aps: { alert: { title: string; body: string } }
-      orca: { coalescedCount: number; notificationSeq: number }
-    }
-    expect(body.aps.alert).toEqual({ title: 'Orca', body: '3 agents need attention' })
-    expect(body.orca.coalescedCount).toBe(3)
-    expect(body.orca.notificationSeq).toBe(3)
-    expect(request.headers['apns-collapse-id']).toMatch(/^host:/)
+    await harness.flushDeliveries()
+    expect(harness.apnsRequests).toHaveLength(3)
+    const bodies = harness.apnsRequests.map(
+      (request) =>
+        JSON.parse(request.body) as {
+          aps: { alert: { title: string; body: string }; 'thread-id': string }
+          orca: Record<string, unknown> & { notificationSeq: number }
+        }
+    )
+    expect(
+      harness.apnsRequests.every((request) => request.host === 'api.sandbox.push.apple.com')
+    ).toBe(true)
+    expect(bodies.map((body) => body.aps.alert)).toEqual(
+      Array.from({ length: 3 }, () => ({
+        title: 'Agent needs input',
+        body: 'Waiting on your answer'
+      }))
+    )
+    expect(new Set(bodies.map((body) => body.aps['thread-id'])).size).toBe(1)
+    expect(bodies.map((body) => body.orca.notificationSeq).sort((a, b) => a - b)).toEqual([1, 2, 3])
+    expect(bodies.every((body) => !('coalescedCount' in body.orca))).toBe(true)
+    expect(bodies.every((body) => !('summaryMembers' in body.orca))).toBe(true)
+    expect(
+      new Set(harness.apnsRequests.map((request) => request.headers['apns-collapse-id'])).size
+    ).toBe(3)
   })
 
   it('sends a lone event through unchanged with its own collapse id', async () => {
@@ -136,12 +175,12 @@ describe('push gateway send route', () => {
       { v: 1, registrationIds: [registrationId], notification: notification() },
       sessionToken
     )
-    await harness.server.coalescer.flushAll()
+    await harness.flushDeliveries()
     const message = JSON.parse(harness.fcmRequests[0]!.body) as {
       message: { android: { notification: { tag: string } }; data: Record<string, string> }
     }
-    expect(message.message.android.notification.tag).toBe('note-1')
-    expect(message.message.data.coalescedCount).toBe('1')
+    expect(message.message.data.tag).toMatch(/^[a-f0-9]{64}$/)
+    expect(message.message.data.coalescedCount).toBeUndefined()
   })
 
   it('reports an error for a registration the host does not own', async () => {
@@ -160,15 +199,23 @@ describe('push gateway send route', () => {
         { registrationId: 'made-up', status: 'error' }
       ]
     })
-    expect(harness.server.coalescer.pendingCount(registrationId)).toBe(0)
+    expect(await harness.server.deliveryStore.pendingCount(registrationId)).toBe(0)
   })
 
-  it('rate limits a host that exhausted its hourly allowance', async () => {
+  it('rate limits a host that exhausted its 15-minute allowance', async () => {
     const sessionToken = await harness.signIn(createPushHostKeypair(21))
     const registrationId = await harness.registerAndroid(sessionToken)
     const hostFingerprint = (await harness.server.devices.findById(registrationId))!.hostFingerprint
-    for (let index = 0; index < PUSH_LIMITS.hostSendsPerRollingHour; index++) {
-      expect(await harness.server.quota.reserve(hostFingerprint, registrationId)).toBe('allowed')
+    for (let index = 0; index < PUSH_LIMITS.hostEventsPerWindow; index++) {
+      expect(
+        await harness.server.deliveryStore.accept(
+          hostFingerprint,
+          registrationId,
+          PushNotificationSchema.parse(
+            notification({ notificationId: `note-${index + 1000}`, notificationSeq: index + 1000 })
+          )
+        )
+      ).toBe('queued')
     }
     const limited = await harness.post(
       '/v1/send',
@@ -177,6 +224,6 @@ describe('push gateway send route', () => {
     )
     expect(limited.status).toBe(200)
     expect(await limited.json()).toEqual({ results: [{ registrationId, status: 'rate_limited' }] })
-    expect(harness.server.coalescer.pendingCount(registrationId)).toBe(0)
+    expect(await harness.server.deliveryStore.pendingCount(registrationId)).toBe(300)
   })
 })

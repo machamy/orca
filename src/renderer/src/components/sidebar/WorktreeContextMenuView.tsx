@@ -24,8 +24,7 @@ import {
   Workflow,
   FolderInput,
   FolderPlus,
-  FolderTree,
-  MonitorUp
+  FolderTree
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
@@ -37,6 +36,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { DefaultWorktreeSwitchMenuItem } from './DefaultWorktreeSwitchMenuItem'
 import {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
@@ -65,10 +65,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
+    handleCopyName,
     handleCopyPath,
     handleCreateGroupFromRepo,
-    handleDefaultSwitch,
-    onDefaultSwitchRequest,
     handleDelete,
     handleMoveProjectToGroup,
     handleOpenParent,
@@ -180,19 +179,18 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
-              {onDefaultSwitchRequest ? (
-                <DropdownMenuItem onSelect={handleDefaultSwitch} disabled={isDeleting}>
-                  <MonitorUp className="size-3.5" />
-                  {translate(
-                    'auto.components.sidebar.WorktreeContextMenu.defaultSwitch',
-                    'Make Default Worktree…'
-                  )}
-                </DropdownMenuItem>
-              ) : null}
+              <DefaultWorktreeSwitchMenuItem model={model} disabled={isDeleting} />
               {model.unityMenu.menuItems}
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
                 {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleCopyName} disabled={isDeleting}>
+                <Copy className="size-3.5" />
+                {translate(
+                  'auto.components.sidebar.WorktreeContextMenu.copyWorktreeName',
+                  'Copy Worktree Name'
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>

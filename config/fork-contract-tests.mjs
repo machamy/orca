@@ -109,7 +109,6 @@ export const FORK_ADDED_TESTS = [
 
 /** Upstream test files carrying fork-added cases or fork-adjusted expectations. */
 export const FORK_CARRYING_TESTS = [
-  'src/renderer/src/components/dashboard-popout/AgentMapWorkspaceContextMenu.test.tsx',
   'src/main/browser/browser-guest-shortcut-forwarding.test.ts',
   'src/main/browser/browser-guest-context-menu.test.ts',
   'src/main/codex/codex-trust-grant-host.test.ts',

@@ -15,17 +15,19 @@ it('carries a silent preference through validation to APNs and Android payloads'
     sound: false
   })
   const delivery = buildPushDelivery({
+    expiresAt: Date.now() + 300_000,
     registrationId: 'reg',
     hostFingerprint: 'host',
-    notification,
-    title: 'Bell',
-    body: '',
-    coalescedCount: 1
+    notification
   })
   expect(JSON.parse(apnsBody(delivery)).aps).not.toHaveProperty('sound')
   expect(
     JSON.parse(fcmMessageBody({ delivery, token: 'test-token', channelId: 'orca-desktop' })).message
-      .android.notification.channel_id
+      .data.channelId
   ).toBe('orca-desktop-silent')
+  expect(
+    JSON.parse(fcmMessageBody({ delivery, token: 'test-token', channelId: 'orca-desktop' })).message
+      .data.sound
+  ).toBe('')
   expect(JSON.parse(apnsBody({ ...delivery, sound: undefined })).aps.sound).toBe('default')
 })

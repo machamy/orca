@@ -5,15 +5,21 @@
 // not exist rather than receiving the journal or mutation surface. Session-tab
 // inventory may expose only a metadata placeholder for an incapable mobile client.
 
-import {
-  agentSessionFingerprintConflict,
-  computeAgentSessionPayloadFingerprint
-} from '../../../../shared/agent-session-mutation-envelope'
+import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
 import type { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import {
+  projectBackgroundTaskEvent,
+  projectBackgroundTaskHistory
+} from './structured-agent-session-background-task-capability'
+import {
+  projectTurnItemEvent,
+  projectTurnItemHistory
+} from './structured-agent-session-turn-item-capability'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireStructuredCapability,
+  requireStructuredCleanupHost,
   requireStructuredHost as requireHost,
   structuredCallerFor as callerFor,
   supportsStructuredSessions
@@ -21,10 +27,12 @@ import {
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
   commitStructuredAgentSessionCreate,
-  prepareStructuredAgentSessionCreateForWorktree
+  prepareStructuredAgentSessionCreateForWorktree,
+  structuredAgentSessionCreateIntentFingerprint
 } from './structured-agent-session-create'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './structured-agent-session-restart-resume'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import {
   bindStructuredAgentSessionStream,
@@ -34,9 +42,14 @@ import {
   structuredAgentSessionSubscriptionBase as subscriptionBaseFor,
   structuredAgentSessionSubscriptionId as subscriptionIdFor
 } from './structured-agent-session-subscription-id'
+import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './structured-agent-session-turn-completion-stream'
+import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './structured-agent-session-thread-goal'
+import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './structured-agent-session-conversation-outline'
+import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './structured-agent-session-options-read'
 import {
   AttachParams,
   CancelParams,
+  ConversationCommandParams,
   CreateParams,
   CreateSupportParams,
   HistoryParams,
@@ -44,11 +57,13 @@ import {
   HandoffStatusParams,
   OptionsParams,
   RespondParams,
+  RewindParams,
   SendParams,
   SetOptionParams,
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
+import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
 
 /**
  * The attach-shaped entries take the location from the client instead of resolving it from a
@@ -79,7 +94,37 @@ async function attachClientSuppliedLocation(
   return host.attach(callerFor(ctx), attachParams)
 }
 
-export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_METHODS = [
+  defineMethod({
+    name: 'agentSession.rewind',
+    params: RewindParams,
+    handler: async (params, ctx) => {
+      requireStructuredCapability(ctx)
+      await ensureHostInstalled(ctx)
+      return requireHost(ctx).rewind(callerFor(ctx), params)
+    }
+  }),
+  defineMethod({
+    name: 'agentSession.conversationCommand',
+    params: ConversationCommandParams,
+    handler: async (params, ctx) => {
+      requireStructuredCapability(ctx)
+      await ensureHostInstalled(ctx)
+      const host = requireHost(ctx)
+      await host.revealSession(params.envelope.sessionId)
+      const result = await host.conversationCommand(callerFor(ctx), params)
+      if (result.ok && result.value.command === 'clear' && result.value.replacementSessionId) {
+        const replacement = host
+          .conversationReplacements()
+          .find((entry) => entry.sourceSessionId === params.envelope.sessionId)
+        if (replacement) {
+          await ctx.runtime.replaceStructuredAgentSessionTab(replacement)
+        }
+        await host.close(params.envelope.sessionId)
+      }
+      return result
+    }
+  }),
   defineMethod({
     name: 'agentSession.createSupport',
     params: CreateSupportParams,
@@ -102,12 +147,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       // a client can tell "nothing was created" from "the outcome is unknown".
       const prepared = await resolveUncommittedStructuredCreate(async () => {
         if ('worktree' in params) {
-          const intentFingerprint = computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.create',
-            sessionId: params.envelope.sessionId,
-            fields: { worktree: params.worktree, agent: params.agent }
-          })
-          const conflict = agentSessionFingerprintConflict(params.envelope, intentFingerprint)
+          const conflict = agentSessionFingerprintConflict(
+            params.envelope,
+            structuredAgentSessionCreateIntentFingerprint(params)
+          )
           if (conflict) {
             return { refusal: conflict }
           }
@@ -119,7 +162,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
             },
             envelope: params.envelope,
             worktree: params.worktree,
-            agent: params.agent as 'claude' | 'codex'
+            agent: params.agent as 'claude' | 'codex',
+            caller: callerFor(ctx),
+            ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+            ...(params.tabId ? { tabId: params.tabId } : {})
           })
         }
         const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
@@ -144,12 +190,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'agentSession.send',
     params: SendParams,
-    handler: async (params, ctx) => requireHost(ctx).send(callerFor(ctx), params)
+    handler: sendStructuredAgentSessionForClient
   }),
   defineMethod({
+    // Stopping a turn, so it stays available after admission is revoked: see the gate's rule.
     name: 'agentSession.cancel',
     params: CancelParams,
-    handler: async (params, ctx) => requireHost(ctx).cancel(callerFor(ctx), params)
+    handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
   }),
   defineMethod({
     // Releasing a chat view, not ending a conversation: the record and journal stay on disk so the
@@ -157,7 +204,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.close',
     params: OptionsParams,
     handler: async (params, ctx) => {
-      const host = requireHost(ctx)
+      // Cleanup gate: turning the host setting off must not strand an open chat whose owner can
+      // then never close it. See the rule on `requireStructuredCleanupHost`.
+      const host = requireStructuredCleanupHost(ctx)
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)
@@ -194,11 +243,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     handler: async (params, ctx) => requireHost(ctx).handoffStatus(params.sessionId)
   }),
   defineMethod({
-    name: 'agentSession.options',
-    params: OptionsParams,
-    handler: async (params, ctx) => requireHost(ctx).readOptions(params.sessionId)
-  }),
-  defineMethod({
     name: 'agentSession.commands',
     params: OptionsParams,
     handler: async (params, ctx) => requireHost(ctx).readCommands(params.sessionId)
@@ -206,7 +250,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'agentSession.history',
     params: HistoryParams,
-    handler: async (params, ctx) => requireHost(ctx).history(params)
+    handler: async (params, ctx) =>
+      projectTurnItemHistory(
+        projectBackgroundTaskHistory(requireHost(ctx).history(params), ctx),
+        ctx
+      )
   }),
   defineStreamingMethod({
     name: 'agentSession.subscribe',
@@ -233,7 +281,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       dispose = host.subscribe({
         id: subscriptionId,
         sessionId: params.sessionId,
-        emit,
+        emit: (event) => emit(projectTurnItemEvent(projectBackgroundTaskEvent(event, ctx), ctx)),
         ...(params.cursor ? { cursor: params.cursor } : {})
       })
       if (stream.isClosed()) {
@@ -253,7 +301,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.unsubscribe',
     params: UnsubscribeParams,
     handler: async (params, ctx) => {
-      requireHost(ctx)
+      // Why: cleanup must stay available after the setting is disabled, so an admitted caller can
+      // retire resources it already owns; the base still comes from main's shared helper.
+      requireStructuredCleanupHost(ctx)
       const base = subscriptionBaseFor(ctx, params.sessionId)
       if (params.subscriptionId) {
         ctx.runtime.cleanupSubscription(`${base}:${params.subscriptionId}`)
@@ -266,5 +316,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   }),
   ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
   ...STRUCTURED_AGENT_SESSION_REVEAL_METHODS,
-  ...STRUCTURED_AGENT_SESSION_STATUS_METHODS
+  ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
+  ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,
+  ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS,
+  ...STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS,
+  ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS
 ]

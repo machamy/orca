@@ -8,14 +8,30 @@ import { resolveWorktreeCreateRoute } from '../worktree-create-execution-host-ro
 import { ExecutionHostNotDispatchableError } from '../providers/execution-host-provider-dispatch'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
+import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
-import { autoSeedUnityAfterLocalWorktreeCreate } from './runtime-local-worktree-unity-seed'
+import { scheduleUnitySeedAfterLocalWorktreeCreate } from './runtime-local-worktree-unity-seed'
 
 export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
+  ): Promise<CreateWorktreeResult> {
+    // Why a holder fired in `finally`: consuming a prepared checkout empties a pool slot, so a
+    // create that fails anywhere after that — include copy, push target, terminal startup — must
+    // still arm the replacement. On success it fires last, once the startup terminals are up.
+    const rearm: PreparationRearmHolder = { fire: () => {} }
+    try {
+      return await this.performManagedWorktreeCreate(args, rearm)
+    } finally {
+      rearm.fire()
+    }
+  }
+
+  private async performManagedWorktreeCreate(
+    args: RuntimeManagedWorktreeCreateArgs,
+    rearm: PreparationRearmHolder
   ): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -44,7 +60,11 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
             repo,
             args.startupAgent,
             args.startupPrompt,
-            args.startupLaunchPreferences
+            args.startupLaunchPreferences,
+            {
+              ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+              ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {})
+            }
           )
         : null
     const draftStartup =
@@ -159,7 +179,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         fetchRemote: (path, remote, ...options) =>
           this.fetchRemoteWithCache(path, remote, ...options),
         onWorktreeMetadataPersisted: (persistedWorktree) =>
-          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
+          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution),
+        rearm
       })
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
@@ -189,18 +210,12 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     this.invalidateWorktreeScanCacheForRepo(repo.id)
     // Fork: a Unity repo's fresh worktree is seeded from the default checkout in
     // the background, so the first editor open skips the full reimport.
-    void this.listResolvedWorktrees()
-      .then((worktrees) =>
-        autoSeedUnityAfterLocalWorktreeCreate({
-          repo,
-          worktreePath: created.path,
-          repoWorktreePaths: worktrees
-            .filter((entry) => entry.repoId === repo.id)
-            .map((entry) => entry.path),
-          offer: () => this.notifier?.unityAutoSeedOffer?.(repo.id, created.path)
-        })
-      )
-      .catch((error) => console.warn('[unity] auto-seed after worktree create failed:', error))
+    scheduleUnitySeedAfterLocalWorktreeCreate({
+      repo,
+      worktreePath: created.path,
+      listWorktrees: () => this.listResolvedWorktrees(),
+      offer: () => this.notifier?.unityAutoSeedOffer?.(repo.id, created.path)
+    })
     // Why: the filesystem-auth layer maintains a separate cache of registered
     // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
     // to authorize paths. Without invalidating it here, CLI-created worktrees

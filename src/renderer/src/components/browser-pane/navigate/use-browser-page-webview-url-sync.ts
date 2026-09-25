@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -15,11 +16,16 @@ import { isChromiumErrorPage } from '../describe-page/browser-page-url-display'
 import { loadBrowserGuestUrl } from './load-browser-guest-url'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
+// Fork: read at load time so browser-page-pane.tsx (at its line cap) need not thread worktreeId.
+function findBrowserPageWorktreeId(browserPageId: string): string | null {
+  const pages = Object.values(useAppStore.getState().browserPagesByWorkspace).flat()
+  return pages.find((page) => page.id === browserPageId)?.worktreeId ?? null
+}
+
 export function useBrowserPageWebviewUrlSync({
   browserTabId,
   browserTabUrl,
   browserTabLoading,
-  worktreeId,
   isActive,
   isPaintable,
   slotViewport,
@@ -37,7 +43,6 @@ export function useBrowserPageWebviewUrlSync({
   browserTabId: string
   browserTabUrl: string
   browserTabLoading: boolean
-  worktreeId: string
   isActive: boolean
   isPaintable: boolean
   slotViewport: HTMLDivElement | null
@@ -101,23 +106,29 @@ export function useBrowserPageWebviewUrlSync({
       webview.src !== normalizedUrl &&
       declaredSrc !== normalizedUrl
     ) {
-      loadBrowserGuestUrl({
-        url: normalizedUrl,
-        worktreeId,
-        browserPageId: browserTabId,
-        loadInGuest: (targetUrl) => {
-          // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
-          trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
-          lastKnownWebviewUrlRef.current = targetUrl
-          webview.src = targetUrl
-          if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
-            keepAddressBarFocusRef.current = false
-            if (document.activeElement === addressBarInputRef.current) {
-              focusWebviewNow()
-            }
+      const loadInGuest = (targetUrl: string): void => {
+        // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
+        trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
+        lastKnownWebviewUrlRef.current = targetUrl
+        webview.src = targetUrl
+        if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
+          keepAddressBarFocusRef.current = false
+          if (document.activeElement === addressBarInputRef.current) {
+            focusWebviewNow()
           }
         }
-      })
+      }
+      const worktreeId = findBrowserPageWorktreeId(browserTabId)
+      if (worktreeId) {
+        loadBrowserGuestUrl({
+          url: normalizedUrl,
+          worktreeId,
+          browserPageId: browserTabId,
+          loadInGuest
+        })
+      } else {
+        loadInGuest(normalizedUrl)
+      }
     }
   }, [
     addressBarInputRef,
@@ -127,8 +138,7 @@ export function useBrowserPageWebviewUrlSync({
     keepAddressBarFocusRef,
     lastKnownWebviewUrlRef,
     trackNextLoadingEventRef,
-    webviewRef,
-    worktreeId
+    webviewRef
   ])
 
   useEffect(() => {

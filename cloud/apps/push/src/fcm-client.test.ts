@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { fcmCollapseKey, FcmClient, type FcmRequest, type FcmResponse } from './fcm-client.js'
+import { FcmClient, type FcmRequest, type FcmResponse } from './fcm-client.js'
 import { buildPushDelivery } from './push-delivery-message.js'
 
+const NOW = 1_700_000_000_000
 const HOST = 'abcdefghijklmnop'
 const TOKEN = 'cQ1abcDEF_gh:APA91bZZ-zz0123456789abcdefghijklmnopqrstuvwxyz'
 
-function delivery(coalescedCount = 1, agentState: 'needs-input' | null = 'needs-input') {
+function delivery(agentState: 'needs-input' | null = 'needs-input') {
   return buildPushDelivery({
+    expiresAt: NOW + 300_000,
     registrationId: 'reg-1',
     hostFingerprint: HOST,
     notification: {
@@ -18,11 +20,9 @@ function delivery(coalescedCount = 1, agentState: 'needs-input' | null = 'needs-
       agentState,
       title: 'Agent needs input',
       body: 'Waiting on your answer',
+      paneKey: 'tab-b:pane-1',
       worktreeId: 'wt-1'
-    },
-    title: coalescedCount > 1 ? 'Orca' : 'Agent needs input',
-    body: coalescedCount > 1 ? '3 agents need attention' : 'Waiting on your answer',
-    coalescedCount
+    }
   })
 }
 
@@ -43,6 +43,7 @@ function client(response: FcmResponse) {
     fake,
     client: new FcmClient({
       projectId: 'onorca-cloud',
+      now: () => NOW,
       accessToken: async () => 'access-token',
       transport: fake.transport
     })
@@ -59,22 +60,20 @@ describe('fcm client', () => {
     expect(JSON.parse(request.body)).toEqual({
       message: {
         token: TOKEN,
-        notification: { title: 'Agent needs input', body: 'Waiting on your answer' },
-        android: {
-          priority: 'HIGH',
-          ttl: '14400s',
-          collapse_key: createHash('sha256').update('note-1').digest('hex').slice(0, 32),
-          notification: { channel_id: 'orca-desktop', tag: 'note-1' }
-        },
+        android: { priority: 'HIGH', ttl: '300s' },
         data: {
+          title: 'Agent needs input',
+          message: 'Waiting on your answer',
+          tag: delivery().collapseId,
+          channelId: 'orca-desktop',
           hostFingerprint: HOST,
+          paneKey: 'tab-b:pane-1',
           worktreeId: 'wt-1',
           notificationId: 'note-1',
           notificationSeq: '7',
           notificationEpoch: 'epoch-1',
           source: 'agent-task-complete',
-          agentState: 'needs-input',
-          coalescedCount: '1'
+          agentState: 'needs-input'
         }
       }
     })
@@ -82,10 +81,10 @@ describe('fcm client', () => {
 
   it('carries every data value as a string and omits a null agent state', async () => {
     const { fake, client: fcm } = client({ status: 200, body: '{}' })
-    await fcm.send(delivery(3, null), { token: TOKEN })
+    await fcm.send(delivery(null), { token: TOKEN })
     const message = JSON.parse(fake.requests[0]!.body) as {
       message: {
-        android: { collapse_key: string; notification: { tag: string } }
+        android: Record<string, unknown>
         data: Record<string, string>
       }
     }
@@ -93,16 +92,14 @@ describe('fcm client', () => {
       true
     )
     expect(message.message.data.agentState).toBeUndefined()
-    expect(message.message.data.coalescedCount).toBe('3')
-    expect(message.message.android.notification.tag).toBe(`host:${HOST}`)
-    expect(message.message.android.collapse_key).toBe(fcmCollapseKey(`host:${HOST}`))
-    expect(message.message.android.collapse_key).toHaveLength(32)
-  })
-
-  it('passes validate_only through for the deploy probe', async () => {
-    const { fake, client: fcm } = client({ status: 200, body: '{}' })
-    await fcm.send(delivery(), { token: TOKEN }, { validateOnly: true })
-    expect(JSON.parse(fake.requests[0]!.body)).toMatchObject({ validate_only: true })
+    const tag = createHash('sha256')
+      .update(JSON.stringify([HOST, 'note-1']))
+      .digest('hex')
+    expect(message.message.data.coalescedCount).toBeUndefined()
+    expect(message.message.data.tag).toBe(tag)
+    expect(message.message.android).not.toHaveProperty('collapse_key')
+    expect(message.message).not.toHaveProperty('notification')
+    expect(message.message.data).not.toHaveProperty('body')
   })
 
   it('marks an unregistered token dead from the status or the error detail', async () => {
@@ -168,6 +165,7 @@ describe('fcm client', () => {
     })
     const broken = new FcmClient({
       projectId: 'onorca-cloud',
+      now: () => NOW,
       accessToken: async () => 'access-token',
       transport: async () => {
         throw new Error('ECONNRESET')
@@ -179,4 +177,53 @@ describe('fcm client', () => {
       retryable: true
     })
   })
+})
+
+it('does not send when credential refresh crosses the absolute expiry', async () => {
+  let now = 1000
+  const fake = fakeTransport({ status: 200, body: '{}' })
+  const fcm = new FcmClient({
+    projectId: 'test',
+    now: () => now,
+    accessToken: async () => {
+      now = 3000
+      return 'test-token'
+    },
+    transport: fake.transport
+  })
+  await expect(fcm.send({ ...delivery(), expiresAt: 2000 }, { token: TOKEN })).resolves.toEqual({
+    status: 'error',
+    reason: 'expired'
+  })
+  expect(fake.requests).toHaveLength(0)
+})
+
+it('decreases retry TTL and refuses expired delivery before refreshing credentials', async () => {
+  let now = NOW
+  let refreshes = 0
+  const fake = fakeTransport({ status: 503, body: '{}' })
+  const fcm = new FcmClient({
+    projectId: 'test',
+    now: () => now,
+    accessToken: async () => {
+      refreshes++
+      return 'test-token'
+    },
+    transport: fake.transport
+  })
+  const pending = delivery()
+  await fcm.send(pending, { token: TOKEN })
+  now += 60_000
+  await fcm.send(pending, { token: TOKEN })
+  expect(fake.requests.map((request) => JSON.parse(request.body).message.android.ttl)).toEqual([
+    '300s',
+    '240s'
+  ])
+  now = pending.expiresAt
+  await expect(fcm.send(pending, { token: TOKEN })).resolves.toEqual({
+    status: 'error',
+    reason: 'expired'
+  })
+  expect(fake.requests).toHaveLength(2)
+  expect(refreshes).toBe(2)
 })

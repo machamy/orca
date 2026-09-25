@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { PUSH_LIMITS } from './push-limits.js'
 import {
   PushSendRequestSchema,
-  PushSendResponseSchema,
   PushSendStatusSchema
 } from './send-messages.js'
 
@@ -112,15 +111,5 @@ describe('send schemas', () => {
 
   it('locks the send result statuses', () => {
     expect(PushSendStatusSchema.options).toEqual(['queued', 'dead', 'rate_limited', 'error'])
-    expect(
-      PushSendResponseSchema.safeParse({
-        results: [{ registrationId: 'reg-1', status: 'queued' }]
-      }).success
-    ).toBe(true)
-    expect(
-      PushSendResponseSchema.safeParse({
-        results: [{ registrationId: 'reg-1', status: 'sent' }]
-      }).success
-    ).toBe(false)
   })
 })

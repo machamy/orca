@@ -35,18 +35,26 @@ the repository's root [MIT license](../LICENSE).
 Orca credential for it: the desktop host authenticates with the same X25519
 key it uses for the relay, answering an encrypted challenge to mint a 24 hour
 session, then registers each paired phone's native push token and asks the
-gateway to push. The gateway coalesces a burst per registration into one
-notification, enforces per-host and per-registration quotas, and retires a
+gateway to push. The gateway queues each event as its own notification,
+enforces per-host quotas and request limits, and retires a
 registration as soon as Apple or Google reports the token unregistered.
+Provider push is the only ordinary mobile OS-banner path. The notification
+socket is retained only for live dismissal and reconnect tray reconciliation;
+it never creates or recovers banners. Desktop notification categories remain
+authoritative.
+Each delivery is persisted as one notification event. Before deploying an
+incompatible queue format, stop all older push gateway revisions and clear only
+unpublished push delivery fixtures; no queue preservation or migration is required.
+FCM notification messages are inherently collapsible while offline and have a
+small concurrent collapse-key budget, so every pending alert is not guaranteed.
 
 Storage follows the relay pattern: PostgreSQL in production, SQLite for tests
-and local development. Configure it with `ORCA_PUSH_PUBLIC_URL`,
+and local development. Configure it with `ORCA_PUSH_PUBLIC_URL`, `ORCA_PUSH_FCM_PROJECT_ID`,
 `ORCA_PUSH_DATABASE_URL`, the three APNs variables (`ORCA_PUSH_APNS_KEY`,
 `ORCA_PUSH_APNS_KEY_ID`, `ORCA_PUSH_APPLE_TEAM_ID`, all three or none), and
-optionally `ORCA_PUSH_APNS_TOPIC`, `ORCA_PUSH_FCM_PROJECT_ID`, and
-`ORCA_PUSH_COALESCE_MS`. The FCM credential comes from the runtime service
-account, so no key material is configured for Android. The full contract lives
-in `docs/reference/mobile-push-contract.md` at the repository root.
+optionally `ORCA_PUSH_APNS_TOPIC`. The FCM credential comes from
+the runtime service account, so no key material is configured for Android. See
+[push gateway operations](docs/push-gateway.md) for deployment and recovery.
 
 Logging is aggregate counters only. Tokens, notification titles, notification
 bodies, and full host fingerprints never reach a log line.
@@ -74,8 +82,8 @@ surface: publish and deploy the director, roll GCE cell capacity, operate Asia
 admission and regional rehoming, prove staging capacity, monitor production,
 power staging up and down, and deploy the mobile push gateway.
 `.github/actions/cloud-sql-rollout-lease` is the compare-and-swap lease that
-serializes every rollout against the shared Cloud SQL instance, the push
-gateway deploy included.
+serializes rollouts against the shared Cloud SQL instance. Push reuses that
+action with its own lease object and deployment concurrency group.
 
 Every one of them is inert. Each top-level job is gated on
 `vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true'`, a repository variable that is

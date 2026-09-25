@@ -35,6 +35,7 @@ export type WorktreeItemRowContext = {
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
   worktreeDragState: WorktreeRowDragState
+  // Fork: default-switch drop is single-worktree only.
   worktreePointerDragRef: React.MutableRefObject<WorktreePointerDrag | null>
   nativeLineageDropTargetId: string | null
   // Fork: default-worktree switch entry points (context menu + drag target ring).
@@ -51,6 +52,7 @@ export type WorktreeItemRowContext = {
   getActiveSurfaceVariant: (row: WorktreeItemRow) => ActiveSurfaceVariant
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
+  onWorktreeCardClick?: () => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -151,8 +153,7 @@ export function renderWorktreeItemRow(
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
-    (ctx.worktreePointerDragRef.current?.latestStatusDropTarget?.target.lineageParentId ===
-      itemRow.worktree.id ||
+    (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
   const isActiveWorktree =
     ctx.activeWorktreeId === itemRow.worktree.id &&
@@ -247,6 +248,7 @@ export function renderWorktreeItemRow(
         activationRowKey={itemRow.rowKey}
         onImmediateActivate={ctx.onImmediateActivate}
         onSelectionGesture={ctx.onSelectionGesture}
+        onWorktreeCardClick={ctx.onWorktreeCardClick}
         onContextMenuSelect={ctx.onContextMenuSelect}
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}

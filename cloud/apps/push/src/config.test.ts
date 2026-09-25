@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto'
-import { PUSH_DEFAULTS, PUSH_LIMITS } from '@orca-cloud/push-contract'
+import { PUSH_DEFAULTS } from '@orca-cloud/push-contract'
 import { describe, expect, it } from 'vitest'
 import { loadPushConfig, PUSH_DATABASE_POOL_MAX } from './config.js'
 
@@ -11,11 +11,15 @@ function apnsKeyPem(): string {
   }).privateKey
 }
 
-const MINIMAL = { ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev' }
+const MINIMAL = {
+  ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev',
+  ORCA_PUSH_FCM_PROJECT_ID: 'onorca-cloud'
+}
 
 describe('push gateway config', () => {
   it('applies the documented defaults', () => {
     expect(loadPushConfig(MINIMAL)).toEqual({
+      mode: 'active',
       port: 8080,
       publicUrl: 'https://push.onorca.dev',
       databaseUrl: undefined,
@@ -23,8 +27,7 @@ describe('push gateway config', () => {
       databasePoolMax: PUSH_DATABASE_POOL_MAX,
       apns: undefined,
       apnsTopic: PUSH_DEFAULTS.apnsTopic,
-      fcmProjectId: PUSH_DEFAULTS.fcmProjectId,
-      coalesceMs: PUSH_LIMITS.coalesceWindowMs,
+      fcmProjectId: 'onorca-cloud',
       trustedProxyHops: 0
     })
   })
@@ -41,7 +44,6 @@ describe('push gateway config', () => {
       ORCA_PUSH_APPLE_TEAM_ID: 'TEAM123456',
       ORCA_PUSH_APNS_TOPIC: 'com.stably.orca.mobile.dev',
       ORCA_PUSH_FCM_PROJECT_ID: 'onorca-staging',
-      ORCA_PUSH_COALESCE_MS: '1500',
       ORCA_PUSH_TRUSTED_PROXY_HOPS: '1'
     })
     expect(config).toMatchObject({
@@ -51,15 +53,19 @@ describe('push gateway config', () => {
       apns: { keyPem, keyId: 'ABCDE12345', teamId: 'TEAM123456' },
       apnsTopic: 'com.stably.orca.mobile.dev',
       trustedProxyHops: 1,
-      fcmProjectId: 'onorca-staging',
-      coalesceMs: 1500
+      fcmProjectId: 'onorca-staging'
     })
   })
 
+  it('requires an explicit FCM project instead of silently targeting production', () => {
+    expect(() => loadPushConfig({ ...MINIMAL, ORCA_PUSH_FCM_PROJECT_ID: undefined })).toThrow()
+    expect(() => loadPushConfig({ ...MINIMAL, ORCA_PUSH_FCM_PROJECT_ID: ' ' })).toThrow()
+  })
+
   it('refuses a partial APNs credential', () => {
-    expect(() =>
-      loadPushConfig({ ...MINIMAL, ORCA_PUSH_APNS_KEY: apnsKeyPem() })
-    ).toThrow('configured together')
+    expect(() => loadPushConfig({ ...MINIMAL, ORCA_PUSH_APNS_KEY: apnsKeyPem() })).toThrow(
+      'configured together'
+    )
     expect(() =>
       loadPushConfig({
         ...MINIMAL,
@@ -71,15 +77,15 @@ describe('push gateway config', () => {
   })
 
   it('requires a canonical HTTPS origin outside loopback', () => {
-    expect(() => loadPushConfig({ ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev/v1' })).toThrow(
-      'must be an origin'
-    )
-    expect(() => loadPushConfig({ ORCA_PUSH_PUBLIC_URL: 'http://push.onorca.dev' })).toThrow(
-      'must use HTTPS'
-    )
-    expect(loadPushConfig({ ORCA_PUSH_PUBLIC_URL: 'http://localhost:8080' }).publicUrl).toBe(
-      'http://localhost:8080'
-    )
+    expect(() =>
+      loadPushConfig({ ...MINIMAL, ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev/v1' })
+    ).toThrow('must be an origin')
+    expect(() =>
+      loadPushConfig({ ...MINIMAL, ORCA_PUSH_PUBLIC_URL: 'http://push.onorca.dev' })
+    ).toThrow('must use HTTPS')
+    expect(
+      loadPushConfig({ ...MINIMAL, ORCA_PUSH_PUBLIC_URL: 'http://localhost:8080' }).publicUrl
+    ).toBe('http://localhost:8080')
   })
 
   it('treats an empty optional variable as unset', () => {
@@ -87,4 +93,17 @@ describe('push gateway config', () => {
       loadPushConfig({ ...MINIMAL, ORCA_PUSH_DATABASE_URL: '', ORCA_PUSH_APNS_KEY_ID: '' })
     ).toMatchObject({ databaseUrl: undefined, apns: undefined })
   })
+})
+
+it('treats blank defaulted environment settings as absent', () => {
+  const blanks = Object.fromEntries(
+    [
+      'PORT',
+      'ORCA_PUSH_DATA_DIR',
+      'ORCA_PUSH_APNS_TOPIC',
+      'ORCA_PUSH_DATABASE_POOL_MAX',
+      'ORCA_PUSH_TRUSTED_PROXY_HOPS'
+    ].map((key) => [key, ' '])
+  )
+  expect(loadPushConfig({ ...MINIMAL, ...blanks })).toEqual(loadPushConfig(MINIMAL))
 })

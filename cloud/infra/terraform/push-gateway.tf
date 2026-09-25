@@ -1,8 +1,7 @@
 # Orca mobile push gateway (`cloud/apps/push`).
 #
 # One public Cloud Run service that holds the APNs key and sends through APNs and FCM V1 on
-# behalf of paired phones. Contract: `docs/reference/mobile-push-contract.md`, "Infra" and
-# "Gateway env". Operations: `docs/push-gateway.md`.
+# behalf of paired phones. Operations: `docs/push-gateway.md`.
 #
 # There is no staging push gateway by decision, so every resource here is behind
 # `var.push_gateway_enabled`, which only `environments/production.tfvars` sets true. The file
@@ -36,17 +35,9 @@ locals {
     "${var.name_prefix}-push-apple-team-id" = "ORCA_PUSH_APPLE_TEAM_ID"
   }
 
-  push_fcm_project_id = var.push_fcm_project_id == "" ? var.project_id : var.push_fcm_project_id
-
   push_fqdn = replace(replace(var.push_base_url, "https://", ""), "http://", "")
 
-  # The shared production deploy identity runs `cloud-push-deploy.yml`. The grants this file adds
-  # are scoped to this service and its runtime account alone, but the workflow inherits every
-  # other grant that account already holds for the relay; see the deploy-identity section below.
-  # The account itself is declared in relay-github-actions.tf and is production-only.
-  push_gateway_deploy_count = (
-    var.push_gateway_enabled && local.relay_create_production_ops_identity ? 1 : 0
-  )
+
 }
 
 # --- Runtime identity ---------------------------------------------------------------------
@@ -84,74 +75,6 @@ resource "google_project_iam_member" "push_runtime_cloudsql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
   member  = google_service_account.push_runtime[0].member
-}
-
-# --- Database -----------------------------------------------------------------------------
-# Gateway state shares the foundation-owned Cloud SQL instance with auth and the relay, and uses
-# an isolated database and principal, exactly as relay-database.tf does. The application applies
-# its own schema at startup.
-
-resource "google_sql_database" "push" {
-  count = local.push_gateway_count
-
-  project  = var.project_id
-  name     = "orca_push"
-  instance = local.relay_database_instance_name
-
-  # Why: this database holds every live device token. Disabling the gateway must not drop it.
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "random_password" "push_database" {
-  count = local.push_gateway_count
-
-  length  = 32
-  special = false
-}
-
-resource "google_sql_user" "push" {
-  count = local.push_gateway_count
-
-  project  = var.project_id
-  name     = "orca_push"
-  instance = local.relay_database_instance_name
-  password = random_password.push_database[0].result
-}
-
-resource "google_secret_manager_secret" "push_database_url" {
-  count = local.push_gateway_count
-
-  project   = var.project_id
-  secret_id = "${var.name_prefix}-push-database-url"
-  labels    = local.relay_shared_labels
-
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "push_database_url" {
-  count = local.push_gateway_count
-
-  secret = google_secret_manager_secret.push_database_url[0].id
-  secret_data = format(
-    "postgresql://%s:%s@/%s?host=/cloudsql/%s",
-    google_sql_user.push[0].name,
-    random_password.push_database[0].result,
-    google_sql_database.push[0].name,
-    local.relay_database_connection_name
-  )
-}
-
-resource "google_secret_manager_secret_iam_member" "push_database_url_runtime_accessor" {
-  count = local.push_gateway_count
-
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.push_database_url[0].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = google_service_account.push_runtime[0].member
 }
 
 # --- Apple credentials ----------------------------------------------------------------------
@@ -213,7 +136,7 @@ resource "google_cloud_run_v2_service" "push" {
       name = "cloudsql"
 
       cloud_sql_instance {
-        instances = [local.relay_database_connection_name]
+        instances = [google_sql_database_instance.push_dedicated[0].connection_name]
       }
     }
 
@@ -236,12 +159,10 @@ resource "google_cloud_run_v2_service" "push" {
 
       env {
         name  = "ORCA_PUSH_FCM_PROJECT_ID"
-        value = local.push_fcm_project_id
+        value = var.project_id
       }
 
-      # Declared rather than left to the application default, so the gateway's share of the
-      # shared Cloud SQL connection budget is a value this root states and the precondition
-      # below can bound.
+      # Bound the declared pool against the dedicated database rollout budget.
       env {
         name  = "ORCA_PUSH_DATABASE_POOL_MAX"
         value = tostring(var.push_database_pool_max)
@@ -252,8 +173,8 @@ resource "google_cloud_run_v2_service" "push" {
 
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.push_database_url[0].secret_id
-            version = "latest"
+            secret  = google_secret_manager_secret.push_dedicated_database_url[0].secret_id
+            version = google_secret_manager_secret_version.push_dedicated_database_url[0].version
           }
         }
       }
@@ -304,17 +225,9 @@ resource "google_cloud_run_v2_service" "push" {
   # 100% LATEST would silently undo either, and this root carries unrelated standing drift, so
   # that apply need not be a push change at all.
   lifecycle {
-    # Why: the gateway draws instances x pool from the shared Cloud SQL instance, and a rollout
-    # doubles it, because the tagged candidate is directly addressable and sits outside the
-    # service-wide cap. The instance's 400 connections were already spoken for by the relay
-    # cells, directors, auth, and API, which left five: 4 is the whole of the gateway's share and
-    # it fits, with the doubled 8 still under the API candidate's rollout overlap, the term
-    # dev/scripts/relay-cloud-sql-connection-budget.mjs maximizes over. A fifth connection here
-    # puts the checked budget over its ceiling and blocks Deploy Relay Asia Topology, which gates
-    # on it, so catch a raise at plan time rather than in someone else's rollout.
     precondition {
-      condition     = var.push_max_instances * var.push_database_pool_max <= 4
-      error_message = "Push gateway instances x database pool must stay within its 4-connection share of the shared Cloud SQL instance."
+      condition     = var.push_max_instances * var.push_database_pool_max * 3 <= 64
+      error_message = "Dedicated push serving, validation/rejected and successor pools must fit the 64-connection rollout budget."
     }
 
     ignore_changes = [
@@ -328,9 +241,9 @@ resource "google_cloud_run_v2_service" "push" {
   depends_on = [
     data.google_artifact_registry_repository.relay_images,
     google_project_iam_member.push_runtime_cloudsql_client,
-    google_secret_manager_secret_iam_member.push_database_url_runtime_accessor,
     google_secret_manager_secret_iam_member.push_provider_runtime_accessor,
-    google_secret_manager_secret_version.push_database_url
+    google_secret_manager_secret_version.push_dedicated_database_url,
+    google_secret_manager_secret_iam_member.push_dedicated_database_url_accessor
   ]
 }
 
@@ -359,20 +272,7 @@ resource "google_cloud_run_domain_mapping" "push" {
 }
 
 # --- Deploy identity grants -------------------------------------------------------------------
-# `cloud-push-deploy.yml` authenticates as the shared production deploy account, because that
-# account is the one the foundation root grants the Cloud SQL rollout lease to; the grant names
-# that account and nothing else, so a dedicated push identity could not take the lease from this
-# root and the gateway's schema rollout could not be serialized against the relay's.
-#
-# The three bindings below are the whole of that account's authority over the *push gateway*, but
-# they are not the whole of what the workflow can do. Adding `push-deploy.yml` to the provider's
-# allowlist in relay-github-actions.tf gives the run the account's entire existing authority:
-# Artifact Registry writer on `orca-cloud`, `roles/run.developer` on the relay director and the
-# fence broker, accessor and version-adder on the relay regional-placement secret, and
-# service-account user on the relay runtime identities. That widening was accepted deliberately
-# as the price of the lease. It is bounded by the provider condition, which admits this exact
-# workflow file on `main` in the `production` environment only, and by the workflow itself, which
-# is dispatch-only behind a typed confirmation.
+# Push deploy authority is isolated from Relay; foundation grants its rollout-lock access.
 
 resource "google_cloud_run_v2_service_iam_member" "github_production_push_developer" {
   count = local.push_gateway_deploy_count
@@ -381,7 +281,7 @@ resource "google_cloud_run_v2_service_iam_member" "github_production_push_develo
   location = var.region
   name     = google_cloud_run_v2_service.push[0].name
   role     = "roles/run.developer"
-  member   = local.relay_github_deploy_service_account_member
+  member   = local.push_deploy_member
 }
 
 resource "google_service_account_iam_member" "github_production_push_runtime_user" {
@@ -389,7 +289,7 @@ resource "google_service_account_iam_member" "github_production_push_runtime_use
 
   service_account_id = google_service_account.push_runtime[0].name
   role               = "roles/iam.serviceAccountUser"
-  member             = local.relay_github_deploy_service_account_member
+  member             = local.push_deploy_member
 }
 
 # Why: the deploy workflow's validate-only FCM send has to exercise the credential the gateway
@@ -401,5 +301,5 @@ resource "google_service_account_iam_member" "github_production_push_runtime_tok
 
   service_account_id = google_service_account.push_runtime[0].name
   role               = "roles/iam.serviceAccountTokenCreator"
-  member             = local.relay_github_deploy_service_account_member
+  member             = local.push_deploy_member
 }

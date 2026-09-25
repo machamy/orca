@@ -25,7 +25,6 @@ function renderUrlSync(guestUrl: () => string): {
       browserTabId: 'tab-1',
       browserTabUrl: 'https://example.test/slow',
       browserTabLoading: true,
-      worktreeId: 'wt-1',
       isActive: true,
       isPaintable: true,
       slotViewport: null,

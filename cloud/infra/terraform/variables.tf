@@ -245,7 +245,7 @@ variable "relay_regional_placement_enabled" {
 
 variable "relay_region_rehome_source_cell_ids" {
   type        = set(string)
-  description = "Reviewed US Relay cells allowed to advertise and accept the regional rehome source protocol."
+  description = "Reviewed Relay cells, in any configured region, allowed to advertise and accept the regional rehome source protocol."
   default     = []
 }
 
@@ -529,8 +529,7 @@ variable "push_cloud_run_memory" {
   default     = "512Mi"
 }
 
-# Why: a cold start would delay a notification past the point where it is worth showing, and the
-# 3 s coalescing window lives in instance memory, so the floor is one warm instance.
+# Keep a warm instance to run durable delivery retries without incoming requests.
 variable "push_min_instances" {
   type        = number
   description = "Minimum instances for the push gateway."
@@ -548,13 +547,7 @@ variable "push_max_instances" {
   }
 }
 
-# Why: the gateway's draw on the shared Cloud SQL instance is instances x pool, and the rollout
-# lease is taken for twice that, because a tagged candidate is directly addressable and sits
-# outside the service-wide cap. Leaving the pool at its application default made that draw
-# invisible to this root, so it is declared here and set on the container.
-#
-# Two is sized to the work, not to the default: a send runs two or three short queries, and at
-# concurrency 80 those queue against the pool for microseconds rather than holding it.
+# The dedicated database budget counts pools across all three rollout revision resources.
 variable "push_database_pool_max" {
   type        = number
   description = "Push gateway database pool size per instance; instances x pool is its Cloud SQL draw."
@@ -576,12 +569,6 @@ variable "push_request_timeout_seconds" {
   type        = number
   description = "Cloud Run timeout for push gateway requests; every route is short-lived."
   default     = 30
-}
-
-variable "push_fcm_project_id" {
-  type        = string
-  description = "Firebase project for FCM V1 sends; empty uses project_id."
-  default     = ""
 }
 
 variable "manage_push_domain_mapping" {

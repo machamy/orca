@@ -10,7 +10,10 @@
 
 import { basename } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
-import { autoSeedUnityCacheAfterWorktreeCreate } from '../unity/unity-project-worktree'
+import {
+  autoSeedUnityCacheAfterWorktreeCreate,
+  readUnityEditorVersion
+} from '../unity/unity-project-worktree'
 
 export function autoSeedUnityAfterLocalWorktreeCreate(args: {
   repo: Repo
@@ -42,4 +45,34 @@ export function autoSeedUnityAfterLocalWorktreeCreate(args: {
       console.warn(`[unity] auto-seed skipped for ${worktreePath}: ${outcome.reason}${detail}`)
     }
   })
+}
+
+/** Runs the seed once the repo's worktree paths are known; never blocks or fails the create. */
+export function scheduleUnitySeedAfterLocalWorktreeCreate(args: {
+  repo: Repo
+  worktreePath: string
+  listWorktrees: () => Promise<readonly { repoId: string; path: string }[]>
+  offer: () => void
+}): void {
+  // Why check first: listing starts a worktree scan that can race the create path's own
+  // metadata write, so non-Unity repos (and declined ones) must never trigger it.
+  if (args.repo.unityAutoSeedCache === false) {
+    return
+  }
+  void readUnityEditorVersion(args.worktreePath)
+    .then(async (editorVersion) => {
+      if (editorVersion === null) {
+        return
+      }
+      const worktrees = await args.listWorktrees()
+      autoSeedUnityAfterLocalWorktreeCreate({
+        repo: args.repo,
+        worktreePath: args.worktreePath,
+        repoWorktreePaths: worktrees
+          .filter((entry) => entry.repoId === args.repo.id)
+          .map((entry) => entry.path),
+        offer: args.offer
+      })
+    })
+    .catch((error) => console.warn('[unity] auto-seed after worktree create failed:', error))
 }

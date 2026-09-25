@@ -1,15 +1,18 @@
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: vi.fn(async () => null) }
+}))
+vi.mock('./desktop-notification-channel', () => ({
+  ensureDesktopNotificationChannel: vi.fn(async () => {})
+}))
+import { AppState } from 'react-native'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
-  loadRemotePushAgentStates,
-  loadRemotePushEnabled,
-  loadRemotePushFilter,
+  loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
-  saveRemotePushAgentStates,
-  saveRemotePushEnabled,
+  savePushNotificationsEnabled,
   saveRemotePushHostRegistrations,
-  type RemotePushAgentState,
   type RemotePushHostRegistrations
 } from '../storage/preferences'
 import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from './push-token'
@@ -17,20 +20,20 @@ import {
   NOTIFICATIONS_REMOTE_PUSH_CAPABILITY,
   attachPushRegistration,
   resetPushRegistrationForTests,
-  setRemotePushAgentStates,
   setRemotePushEnabled,
   startPushTokenSync,
   unregisterPushForRemovedHost
 } from './push-registration'
 
 vi.mock('../storage/preferences', () => ({
-  loadRemotePushEnabled: vi.fn(),
-  saveRemotePushEnabled: vi.fn(),
-  loadRemotePushAgentStates: vi.fn(),
-  saveRemotePushAgentStates: vi.fn(),
-  loadRemotePushFilter: vi.fn(),
+  loadPushNotificationsEnabled: vi.fn(),
+  savePushNotificationsEnabled: vi.fn(),
   loadRemotePushHostRegistrations: vi.fn(),
   saveRemotePushHostRegistrations: vi.fn()
+}))
+
+vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: vi.fn(() => ({ remove: vi.fn() })) }
 }))
 
 vi.mock('./push-token', () => ({
@@ -84,28 +87,19 @@ function methodsIn(sent: SentRequest[]): string[] {
 }
 
 let enabled = false
-let agentStates: readonly RemotePushAgentState[] = ['needs-input', 'finished']
 let stored: RemotePushHostRegistrations
 
 beforeEach(() => {
   vi.clearAllMocks()
+  AppState.currentState = 'active'
   resetPushRegistrationForTests()
   enabled = false
-  agentStates = ['needs-input', 'finished']
   stored = { registeredHostIds: [], pendingUnregisterHostIds: [] }
 
-  vi.mocked(loadRemotePushEnabled).mockImplementation(async () => enabled)
-  vi.mocked(saveRemotePushEnabled).mockImplementation(async (value) => {
+  vi.mocked(loadPushNotificationsEnabled).mockImplementation(async () => enabled)
+  vi.mocked(savePushNotificationsEnabled).mockImplementation(async (value) => {
     enabled = value
   })
-  vi.mocked(loadRemotePushAgentStates).mockImplementation(async () => agentStates)
-  vi.mocked(saveRemotePushAgentStates).mockImplementation(async (value) => {
-    agentStates = value
-  })
-  vi.mocked(loadRemotePushFilter).mockImplementation(async () => ({
-    sources: ['agent-task-complete', 'terminal-bell', 'plugin'],
-    agentStates
-  }))
   vi.mocked(loadRemotePushHostRegistrations).mockImplementation(async () => stored)
   vi.mocked(saveRemotePushHostRegistrations).mockImplementation(async (value) => {
     stored = value
@@ -126,10 +120,7 @@ describe('push registration capability gating', () => {
       platform: 'ios',
       token: IOS_TOKEN.token,
       apnsEnvironment: 'production',
-      filter: {
-        sources: ['agent-task-complete', 'terminal-bell', 'plugin'],
-        agentStates: ['needs-input', 'finished']
-      }
+      filter: { onlyWhenDesktopAway: true, sound: true }
     })
     expect(stored.registeredHostIds).toEqual(['host-1'])
   })
@@ -145,13 +136,13 @@ describe('push registration capability gating', () => {
     expect(stored.registeredHostIds).toEqual([])
   })
 
-  it('leaves a capable host alone while the switch is off', async () => {
+  it('reconciles disabled consent even without registration records', async () => {
     const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
 
     attachPushRegistration('host-1', client)
     await flush()
 
-    expect(methodsIn(sent)).toEqual(['status.get'])
+    expect(methodsIn(sent)).toEqual(['status.get', 'notifications.unregisterPush'])
   })
 
   it('omits apnsEnvironment for an Android token', async () => {
@@ -184,13 +175,14 @@ describe('push registration capability gating', () => {
     attachPushRegistration('host-legacy', client)
     await flush()
 
-    await setRemotePushAgentStates(['needs-input'])
+    await setRemotePushEnabled(true)
     await flush()
 
     expect(methodsIn(sent)).toEqual(['status.get'])
   })
 
   it('re-probes a host whose first status.get never answered', async () => {
+    vi.useFakeTimers()
     const sent: string[] = []
     let probeFails = true
     const client = {
@@ -207,15 +199,17 @@ describe('push registration capability gating', () => {
     }
     await setRemotePushEnabled(true)
     attachPushRegistration('host-1', client)
-    await flush()
+    await vi.advanceTimersByTimeAsync(0)
     expect(sent).toEqual(['status.get'])
 
-    // A latched `false` would keep this host unregistered for the connection's life.
+    // A failed probe retries while the same connection remains active.
     probeFails = false
-    await setRemotePushAgentStates(['needs-input'])
-    await flush()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
 
     expect(sent).toEqual(['status.get', 'status.get', 'notifications.registerPush'])
+    vi.useRealTimers()
   })
 
   it('retries the device token on the next reconcile after the device had none', async () => {
@@ -227,14 +221,14 @@ describe('push registration capability gating', () => {
     expect(methodsIn(sent)).toEqual(['status.get'])
 
     // A token can be missing only for now — APNs registration still in flight.
-    await setRemotePushAgentStates(['needs-input'])
+    await setRemotePushEnabled(true)
     await flush()
 
     expect(methodsIn(sent)).toContain('notifications.registerPush')
   })
 })
 
-describe('push registration token and filter changes', () => {
+describe('push registration token changes', () => {
   it('re-registers every connected host when the provider rolls the token', async () => {
     let onTokenChange: ((token: MobilePushToken) => void) | null = null
     vi.mocked(addPushTokenListener).mockImplementation((listener) => {
@@ -245,7 +239,7 @@ describe('push registration token and filter changes', () => {
     await setRemotePushEnabled(true)
     attachPushRegistration('host-1', client)
     await flush()
-    startPushTokenSync()
+    const stop = startPushTokenSync()
 
     onTokenChange?.({ platform: 'ios', token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
     await flush()
@@ -256,25 +250,7 @@ describe('push registration token and filter changes', () => {
       token: 'b'.repeat(64),
       apnsEnvironment: 'sandbox'
     })
-  })
-
-  it('re-registers with the narrowed filter when a sub-switch is turned off', async () => {
-    const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
-    await setRemotePushEnabled(true)
-    attachPushRegistration('host-1', client)
-    await flush()
-
-    await setRemotePushAgentStates(['needs-input'])
-    await flush()
-
-    const registers = sent.filter((request) => request.method === 'notifications.registerPush')
-    expect(registers).toHaveLength(2)
-    expect(registers[1]?.params).toMatchObject({
-      filter: {
-        sources: ['agent-task-complete', 'terminal-bell', 'plugin'],
-        agentStates: ['needs-input']
-      }
-    })
+    stop()
   })
 })
 
@@ -306,6 +282,7 @@ describe('push unregistration', () => {
     expect(stored.pendingUnregisterHostIds).toEqual(['host-1'])
 
     // A fresh process: only the persisted intent survives the restart.
+    AppState.currentState = 'active'
     resetPushRegistrationForTests()
     const reconnected = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
     attachPushRegistration('host-1', reconnected.client)
@@ -315,6 +292,27 @@ describe('push unregistration', () => {
     // it must not wait on a status.get that may never answer.
     expect(methodsIn(reconnected.sent)).toEqual(['notifications.unregisterPush'])
     expect(stored.pendingUnregisterHostIds).toEqual([])
+  })
+
+  it('recovers an offline disable after its cleanup write fails and mobile restarts', async () => {
+    const first = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
+    await setRemotePushEnabled(true)
+    const detach = attachPushRegistration('host-1', first.client)
+    await flush()
+    detach()
+    vi.mocked(saveRemotePushHostRegistrations).mockRejectedValueOnce(new Error('disk full'))
+
+    await expect(setRemotePushEnabled(false)).rejects.toThrow('disk full')
+    expect(enabled).toBe(false)
+    expect(stored.pendingUnregisterHostIds).toEqual([])
+
+    resetPushRegistrationForTests()
+    const reconnected = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
+    attachPushRegistration('host-1', reconnected.client)
+    await flush()
+
+    expect(methodsIn(reconnected.sent)).toEqual(['status.get', 'notifications.unregisterPush'])
+    expect(stored).toEqual({ registeredHostIds: [], pendingUnregisterHostIds: [] })
   })
 
   it('keeps the pending intent when the retry itself fails', async () => {
@@ -409,4 +407,17 @@ describe('push unregistration', () => {
     expect(sent).toContain('notifications.unregisterPush')
     expect(stored).toEqual({ registeredHostIds: [], pendingUnregisterHostIds: [] })
   })
+})
+
+it('does not register or renew when a connected phone is in the background', async () => {
+  AppState.currentState = 'background'
+  const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
+  await setRemotePushEnabled(true)
+  attachPushRegistration('background-phone', client)
+  await flush()
+  expect(methodsIn(sent)).not.toContain('notifications.registerPush')
+  AppState.currentState = 'active'
+  attachPushRegistration('background-phone', client)
+  await flush()
+  expect(methodsIn(sent)).toContain('notifications.registerPush')
 })

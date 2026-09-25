@@ -1,5 +1,4 @@
 import { generateKeyPairSync } from 'node:crypto'
-import { PUSH_LIMITS } from '@orca-cloud/push-contract'
 import { expect } from 'vitest'
 import type { ApnsRequest, ApnsResponse } from './apns-http2-transport.js'
 import type { PushConfig } from './config.js'
@@ -15,7 +14,6 @@ import { createPushServer } from './push-server.js'
 export const GATEWAY_ORIGIN = 'https://push.onorca.dev'
 export const APNS_TOKEN = 'a'.repeat(64)
 export const FCM_TOKEN = 'cQ1abcDEF_gh:APA91bZZ-zz0123456789abcdefghijklmnopqrstuvwxyz'
-export const FILTER = { sources: ['agent-task-complete'], agentStates: ['needs-input'] }
 
 export function notification(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -38,6 +36,7 @@ export function testPushConfig(): PushConfig {
     publicKeyEncoding: { type: 'spki', format: 'pem' }
   })
   return {
+    mode: 'active',
     port: 0,
     publicUrl: GATEWAY_ORIGIN,
     dataDir: './data/push-test',
@@ -45,7 +44,6 @@ export function testPushConfig(): PushConfig {
     apns: { keyPem: privateKey, keyId: 'ABCDE12345', teamId: 'TEAM123456' },
     apnsTopic: 'com.stably.orca.mobile',
     fcmProjectId: 'onorca-cloud',
-    coalesceMs: PUSH_LIMITS.coalesceWindowMs,
     trustedProxyHops: 0
   }
 }
@@ -67,7 +65,6 @@ export async function createPushServerHarness() {
   let fcmResponse: FcmResponse = { status: 200, body: '{}' }
   const server = createPushServer(testPushConfig(), database, {
     now: () => clock,
-    providerRetryWait: async () => undefined,
     apnsTransport: async (request) => {
       apnsRequests.push(request)
       return apnsResponse
@@ -76,10 +73,7 @@ export async function createPushServerHarness() {
       fcmRequests.push(request)
       return fcmResponse
     },
-    fcmAccessToken: async () => 'access-token',
-    // Windows are flushed explicitly so the 3s timer never gates a test.
-    setTimer: () => ({ handle: null }),
-    clearTimer: () => undefined
+    fcmAccessToken: async () => 'access-token'
   })
 
   const post = async (path: string, body: unknown, token?: string): Promise<Response> =>
@@ -120,6 +114,9 @@ export async function createPushServerHarness() {
     issueChallenge,
     answer,
     now: () => clock,
+    flushDeliveries: async (): Promise<void> => {
+      await server.worker.runDue()
+    },
     advanceClock: (deltaMs: number): void => {
       clock += deltaMs
     },
@@ -150,14 +147,14 @@ export async function createPushServerHarness() {
     registerAndroid: async (token: string, deviceId = 'device-1'): Promise<string> => {
       const response = await post(
         '/v1/devices',
-        { v: 1, deviceId, platform: 'android', token: FCM_TOKEN, filter: FILTER },
+        { v: 1, deviceId, platform: 'android', token: FCM_TOKEN },
         token
       )
       expect(response.status).toBe(200)
       return ((await response.json()) as { registrationId: string }).registrationId
     },
     close: async (): Promise<void> => {
-      server.coalescer.stop()
+      await server.worker.stop()
       // A test may close the database itself to provoke a route failure.
       await database.close().catch(() => undefined)
     }

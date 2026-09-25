@@ -8,9 +8,8 @@ import type { MobilePushRegistration } from '../../../shared/mobile-push-contrac
 
 const REGISTRATION: MobilePushRegistration = {
   registrationId: 'reg-1',
-  platform: 'ios',
-  filter: { sources: ['agent-task-complete'], agentStates: ['needs-input', 'finished'] },
-  registeredAt: 1_770_000_000_000
+  filter: {},
+  expiresAt: Date.now() + 7 * 86400_000
 }
 
 function userDataDir(): string {
@@ -45,6 +44,23 @@ describe('DeviceRegistry push registrations', () => {
     expect(new DeviceRegistry(dir).getDevice(device.deviceId)?.pushRegistration).toBeUndefined()
   })
 
+  it.each([1_770_000_000_000, 'unused'])(
+    'ignores the obsolete registeredAt field (%s)',
+    (registeredAt) => {
+      const dir = userDataDir()
+      const device = new DeviceRegistry(dir).addDevice('phone', 'mobile')
+      rewriteRegistry(dir, (devices) => {
+        for (const entry of devices) {
+          entry.pushRegistration = { ...REGISTRATION, registeredAt }
+        }
+      })
+
+      expect(new DeviceRegistry(dir).getDevice(device.deviceId)?.pushRegistration).toEqual(
+        REGISTRATION
+      )
+    }
+  )
+
   it('refuses to register a runtime-scoped device', () => {
     const dir = userDataDir()
     const registry = new DeviceRegistry(dir)
@@ -69,7 +85,9 @@ describe('DeviceRegistry push registrations', () => {
 
   it.each([
     ['a malformed registration', { registrationId: 'reg-1' }],
-    ['an unknown platform', { ...REGISTRATION, platform: 'windows-phone' }],
+    ['a missing expiry', { ...REGISTRATION, expiresAt: undefined }],
+    ['a non-finite expiry', { ...REGISTRATION, expiresAt: Infinity }],
+    ['an array filter', { ...REGISTRATION, filter: [] }],
     ['a missing filter', { ...REGISTRATION, filter: undefined }],
     ['a non-object', 'nonsense']
   ])('keeps the device but drops %s', (_name, pushRegistration) => {
@@ -93,14 +111,13 @@ describe('DeviceRegistry push registrations', () => {
       for (const entry of devices) {
         entry.pushRegistration = {
           ...REGISTRATION,
-          filter: { sources: ['agent-task-complete', 'smoke-signal'], agentStates: ['finished'] }
+          filter: { sound: false, unknownSetting: true }
         }
       }
     })
 
     expect(new DeviceRegistry(dir).getDevice(device.deviceId)?.pushRegistration?.filter).toEqual({
-      sources: ['agent-task-complete'],
-      agentStates: ['finished']
+      sound: false
     })
   })
 })

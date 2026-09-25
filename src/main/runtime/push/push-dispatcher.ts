@@ -3,11 +3,14 @@ import { reserveNotificationCooldown } from '../../../shared/notification-burst-
 // already went to connected sockets is offered to the push gateway so a phone
 // with Orca closed still hears about it. Fire-and-forget by construction: the
 // socket fan-out must never wait on, or fail because of, a push.
-import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
-import { PushOutcomeCounters } from './push-outcome-counters'
-import { MOBILE_PUSH_SOURCES } from '../../../shared/mobile-push-contract'
+import {
+  MOBILE_PUSH_SOURCES,
+  type MobilePushAgentState,
+  type MobilePushRegistration
+} from '../../../shared/mobile-push-contract'
 import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
+import { PushOutcomeCounters } from './push-outcome-counters'
 
 const PUSH_RETRY_DELAY_MS = 2_000
 // The gateway rejects a whole request above this, so a host with more paired
@@ -28,18 +31,36 @@ type PushDispatcherOptions = {
   scheduleRetry?: (run: () => void, delayMs: number) => void
 }
 
-type PushTarget = { deviceId: string; registrationId: string; registration: MobilePushRegistration }
+type PushTarget = { deviceId: string; registration: MobilePushRegistration }
 
 function clip(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
   return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`
 }
 
-export { mapPushAgentState } from '../../../shared/mobile-notification-policy'
-import {
-  allowsMobileNotification,
-  mapPushAgentState
-} from '../../../shared/mobile-notification-policy'
+export function mapPushAgentState(
+  source: string,
+  state: string | undefined
+): MobilePushAgentState | null | undefined {
+  if (source !== 'agent-task-complete') {
+    return null
+  }
+  if (state === 'blocked' || state === 'waiting' || state === 'needs-input') {
+    return 'needs-input'
+  }
+  return state === undefined || state === 'done' || state === 'finished' ? 'finished' : undefined
+}
+
+function allowsPushDelivery(
+  registration: MobilePushRegistration,
+  event: MobileNotificationEvent
+): boolean {
+  return (
+    event.type === 'notification' &&
+    event.desktopAllowed !== false &&
+    (!registration.filter.onlyWhenDesktopAway || event.desktopAway !== false)
+  )
+}
 
 export class PushDispatcher {
   private readonly recentNotifications = new Map<string, number>()
@@ -98,9 +119,30 @@ export class PushDispatcher {
   private planSend(
     event: MobileNotificationEvent
   ): { targets: PushTarget[]; notification: PushSendNotification } | null {
-    // Dismissals are a socket-only concern; the phone clears its own banner.
-    if (event.type !== 'notification') {
-      return null
+    if (event.type === 'dismiss') {
+      if (event.notificationSeq === undefined || !event.notificationEpoch) {
+        return null
+      }
+      const targets = this.registry
+        .listDevices()
+        .flatMap(({ deviceId, pushRegistration: registration }) =>
+          registration && registration.expiresAt > Date.now() ? [{ deviceId, registration }] : []
+        )
+      return {
+        targets,
+        notification: {
+          kind: 'dismiss',
+          expiresAt: Date.now() + 300_000,
+          notificationId: event.notificationId,
+          notificationSeq: event.notificationSeq,
+          notificationEpoch: event.notificationEpoch,
+          source: 'agent-task-complete',
+          agentState: null,
+          title: 'Orca',
+          body: '',
+          sound: false
+        }
+      }
     }
     const source = MOBILE_PUSH_SOURCES.find((candidate) => candidate === event.source)
     if (!source || event.notificationSeq === undefined || event.notificationEpoch === undefined) {
@@ -112,7 +154,11 @@ export class PushDispatcher {
     }
     const targets = this.registry.listDevices().flatMap((device) => {
       const registration = device.pushRegistration
-      if (!registration || !allowsMobileNotification(registration.filter, event)) {
+      if (
+        !registration ||
+        registration.expiresAt <= Date.now() ||
+        !allowsPushDelivery(registration, event)
+      ) {
         return []
       }
       if (
@@ -125,9 +171,7 @@ export class PushDispatcher {
       ) {
         return []
       }
-      return [
-        { deviceId: device.deviceId, registrationId: registration.registrationId, registration }
-      ]
+      return [{ deviceId: device.deviceId, registration }]
     })
     if (targets.length === 0) {
       return null
@@ -135,6 +179,7 @@ export class PushDispatcher {
     return {
       targets,
       notification: {
+        expiresAt: Date.now() + 300_000,
         ...(event.notificationId ? { notificationId: event.notificationId } : {}),
         notificationSeq: event.notificationSeq,
         notificationEpoch: event.notificationEpoch,
@@ -160,7 +205,9 @@ export class PushDispatcher {
         .listDevices()
         .some(
           (device) =>
-            device.deviceId === target.deviceId && device.pushRegistration === target.registration
+            device.deviceId === target.deviceId &&
+            device.pushRegistration === target.registration &&
+            target.registration.expiresAt > Date.now()
         )
     )
     if (!currentTargets.length) {
@@ -168,7 +215,7 @@ export class PushDispatcher {
     }
     try {
       const result = await this.client.send({
-        registrationIds: currentTargets.map((target) => target.registrationId),
+        registrationIds: currentTargets.map((target) => target.registration.registrationId),
         notification
       })
       if (this.stopped) {
@@ -204,7 +251,9 @@ export class PushDispatcher {
       if (result.status !== 'dead') {
         continue
       }
-      const target = targets.find((entry) => entry.registrationId === result.registrationId)
+      const target = targets.find(
+        (entry) => entry.registration.registrationId === result.registrationId
+      )
       if (
         !target ||
         this.registry.listDevices().find((device) => device.deviceId === target.deviceId)

@@ -1,3 +1,6 @@
+/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the close-routing
+   ipc-events specs, not shipped code, and it falls outside the *.test / *.spec / tests glob set.
+   Fork: split out of ipc-events-close-routing-test-harness to keep that file under its line cap. */
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 
@@ -13,6 +16,9 @@ export function mockCloseRoutingModules({
   getState: () => Record<string, unknown>
   persistWorkspaceSession: ReturnType<typeof vi.fn>
 }): void {
+  if (typeof HTMLElement === 'undefined') {
+    vi.stubGlobal('HTMLElement', class {})
+  }
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
     return {
@@ -27,6 +33,9 @@ export function mockCloseRoutingModules({
     useAppStore: {
       subscribe: vi.fn(() => () => {}),
       getState: () => ({
+        getActiveTab: () => null,
+        closeUnifiedTab: vi.fn(),
+        reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
         setUpdateStatus: vi.fn(),
         fetchRepos: vi.fn(),
         fetchWorktrees: vi.fn(),

@@ -1,76 +1,22 @@
-import { z } from 'zod'
 import { createNotificationStreamFilter } from './notification-stream-policy'
+import { defineStreamingMethod, defineMethod } from '../core'
 import {
-  MOBILE_PUSH_AGENT_STATES,
-  MOBILE_PUSH_APNS_ENVIRONMENTS,
-  MOBILE_PUSH_PLATFORMS,
-  MOBILE_PUSH_SOURCES
-} from '../../../../shared/mobile-push-contract'
-import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
+  NotificationGetMissedSinceParams,
+  NotificationRegisterPushParams,
+  NotificationUnsubscribeParams,
+  NotificationsSubscribeParams
+} from '../../../../shared/rpc-contract/notifications-params'
 
 // Why: monotonically increasing per-process counter eliminates the
 // Date.now() collision that could fire when two near-simultaneous
 // notifications.subscribe calls landed on the same millisecond.
 let notificationsSubscriptionSeq = 0
 
-const NotificationUnsubscribeParams = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
-
-// Why: notifications.getMissedSince is the catch-up RPC for mobile reconnect
-// (#8129). The client passes the highest seq it has already delivered; the
-// runtime returns only notifications dispatched after that seq. Because the
-// desktop assigns a monotonic seq to every dispatched notification, the cut is
-// exact and idempotent — re-requesting with the same watermark can never
-// return an already-delivered event, so reconnects never duplicate local
-// pushes (the adversarial-review gate for #8129).
-// `epoch` names the counter lifetime lastSeenSeq came from (#8591). The desktop's
-// seq restarts at 0 on every launch while the client's watermark is persisted, so
-// without it a post-restart watermark silently cuts away everything. Optional: a
-// client that predates the field keeps the seq-only cut.
-const NotificationGetMissedSinceParams = z.object({
-  lastSeenSeq: z.number().int().min(0, 'lastSeenSeq must be a non-negative integer'),
-  epoch: z.string().optional(),
-  includeDesktopSuppressed: z.boolean().optional()
-})
-
-// Why: the phone owns which alerts are worth waking it for; the host stores the
-// filter per device and applies it before it ever calls the gateway. Native push
-// tokens are long (FCM registration strings), so the bound is generous.
-const NotificationPushFilterParams = z.object({
-  followDesktop: z.boolean().optional(),
-  sound: z.boolean().optional(),
-  sources: z.array(z.enum(MOBILE_PUSH_SOURCES)).max(MOBILE_PUSH_SOURCES.length),
-  agentStates: z.array(z.enum(MOBILE_PUSH_AGENT_STATES)).max(MOBILE_PUSH_AGENT_STATES.length)
-})
-
-const NotificationRegisterPushParams = z
-  .object({
-    platform: z.enum(MOBILE_PUSH_PLATFORMS),
-    token: z.string().min(1).max(4096),
-    apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),
-    filter: NotificationPushFilterParams
-  })
-  // Why strict: the device identity is added by the handler, so a caller-supplied
-  // `deviceId` must be an error, not a key silently dropped.
-  .strict()
-  // Why: an APNs token is only routable against the environment it was minted in,
-  // so a missing environment must fail loudly rather than default to production.
-  .refine((params) => params.platform !== 'ios' || params.apnsEnvironment !== undefined, {
-    message: 'apnsEnvironment is required for ios'
-  })
-
-// Why: notifications.subscribe streams desktop notification events to mobile
-// clients over WebSocket. The mobile client shows a local push notification
-// for each event. This avoids requiring Firebase/APNs — the existing
-// persistent WebSocket connection doubles as the push channel.
-export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
+// Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
+export const NOTIFICATION_METHODS = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
-    params: z.object({ includeDesktopSuppressed: z.boolean().optional() }).optional(),
+    params: NotificationsSubscribeParams,
     handler: async (params, { runtime, connectionId }, emit) => {
       const shouldEmit = createNotificationStreamFilter(params?.includeDesktopSuppressed)
       await new Promise<void>((resolve) => {
@@ -120,7 +66,10 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
         notifications: missed.filter(
           createNotificationStreamFilter(params.includeDesktopSuppressed)
         ),
-        epoch: runtime.getMobileNotificationEpoch()
+        epoch: runtime.getMobileNotificationEpoch(),
+        ...(params.deliveredPushes
+          ? { dismissedPushes: runtime.reconcileDismissedPushes(params.deliveredPushes) }
+          : {})
       }
     }
   }),
@@ -136,6 +85,16 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
       }
       // The paired identity is spread last so no parameter can ever override it.
       return await runtime.registerMobilePushDevice({ ...params, deviceId: pairedDeviceId })
+    }
+  }),
+  defineMethod({
+    name: 'notifications.testPush',
+    params: null,
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { accepted: false, reason: 'not_registered' }
+      }
+      return await runtime.testMobilePushDevice(pairedDeviceId)
     }
   }),
   defineMethod({

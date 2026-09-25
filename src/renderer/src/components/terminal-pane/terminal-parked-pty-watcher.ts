@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
 import { subscribeToPtyExit } from './pty-dispatcher'
+import { isPtyExitReplacedByRestart } from './pty-exit-delivery'
 import {
   consumePreHandlerPtyState,
   discardPreHandlerPtyState,
@@ -62,6 +63,12 @@ export function startParkedPtyWatcher(args: {
     return
   }
   const handlePtyExit = (code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
+    if (isPtyExitReplacedByRestart(ptyId)) {
+      // Why: the pane lives on under its replacement PTY; only this watcher's subscription ends.
+      entry.disposersByPtyId.get(ptyId)?.()
+      entry.disposersByPtyId.delete(ptyId)
+      return
+    }
     useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
     // Why this comes first: the sidecar runs for UNMOUNTED panes and, unlike the
     // mounted exit handler, is never filtered through the suppressed-exit set —

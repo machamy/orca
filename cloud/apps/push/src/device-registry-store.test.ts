@@ -1,14 +1,10 @@
-import { PUSH_LIMITS, type PushNotificationFilter } from '@orca-cloud/push-contract'
+import { PUSH_LIMITS } from '@orca-cloud/push-contract'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PushDeviceRegistryStore, type PushDeviceUpsert } from './device-registry-store.js'
 import { openInMemoryPushDatabase, type PushDatabase } from './push-database.js'
 
 const OWNER = 'abcdefghijklmnop'
 const OTHER = 'ponmlkjihgfedcba'
-const FILTER: PushNotificationFilter = {
-  sources: ['agent-task-complete'],
-  agentStates: ['needs-input']
-}
 
 describe('push device registry store', () => {
   let database: PushDatabase
@@ -36,8 +32,7 @@ describe('push device registry store', () => {
       hostFingerprint: OWNER,
       deviceId,
       platform: 'android',
-      token: `token-${deviceId}`,
-      filter: FILTER
+      token: `token-${deviceId}`
     }
   }
 
@@ -47,8 +42,7 @@ describe('push device registry store', () => {
       deviceId: 'device-1',
       platform: 'ios',
       token: 'a'.repeat(64),
-      apnsEnvironment: 'sandbox',
-      filter: FILTER
+      apnsEnvironment: 'sandbox'
     })
     clock += 1_000
     const second = await upsertOk({
@@ -56,8 +50,7 @@ describe('push device registry store', () => {
       deviceId: 'device-1',
       platform: 'ios',
       token: 'b'.repeat(64),
-      apnsEnvironment: 'production',
-      filter: FILTER
+      apnsEnvironment: 'production'
     })
     expect(second).toBe(first)
     const registration = await devices.findById(first)
@@ -74,17 +67,15 @@ describe('push device registry store', () => {
       hostFingerprint: OWNER,
       deviceId: 'device-1',
       platform: 'android',
-      token: 'token-one',
-      filter: FILTER
+      token: 'token-one'
     })
-    await devices.markDead(registrationId)
+    await devices.markDead((await devices.findById(registrationId))!)
     expect((await devices.findById(registrationId))?.dead).toBe(true)
     await upsertOk({
       hostFingerprint: OWNER,
       deviceId: 'device-1',
       platform: 'android',
-      token: 'token-two',
-      filter: FILTER
+      token: 'token-two'
     })
     expect(await devices.findById(registrationId)).toMatchObject({
       token: 'token-two',
@@ -97,8 +88,7 @@ describe('push device registry store', () => {
       hostFingerprint: OWNER,
       deviceId: 'device-1',
       platform: 'android',
-      token: 'token-one',
-      filter: FILTER
+      token: 'token-one'
     })
     expect(await devices.deleteOwned(OTHER, registrationId)).toBe(false)
     expect(await devices.findById(registrationId)).not.toBeNull()
@@ -111,15 +101,13 @@ describe('push device registry store', () => {
       hostFingerprint: OWNER,
       deviceId: 'device-1',
       platform: 'android',
-      token: 'token-one',
-      filter: FILTER
+      token: 'token-one'
     })
     const foreign = await upsertOk({
       hostFingerprint: OTHER,
       deviceId: 'device-2',
       platform: 'android',
-      token: 'token-two',
-      filter: FILTER
+      token: 'token-two'
     })
     const found = await devices.findOwned(OWNER, [owned, foreign])
     expect([...found.keys()]).toEqual([owned])
@@ -169,18 +157,18 @@ describe('push device registry store', () => {
     ).toBe(true)
   })
 
-  it('never returns more devices than the list response schema accepts', async () => {
+  it('bounds list reads to the host device allowance', async () => {
     // Straight past the per-host cap, so only the query LIMIT can bound this.
-    const rows = PUSH_LIMITS.maxDevicesPerListResponse + 5
+    const rows = PUSH_LIMITS.maxDevicesPerHost + 5
     for (let index = 0; index < rows; index++) {
       await database.query(
         `INSERT INTO push_devices (registration_id, host_fingerprint, device_id, platform, token,
-         filter_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [`reg-${index}`, OWNER, `device-${index}`, 'android', 'token', '{}', clock + index, clock]
+         created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [`reg-${index}`, OWNER, `device-${index}`, 'android', 'token', clock + index, clock]
       )
     }
-    expect(await devices.list(OWNER)).toHaveLength(PUSH_LIMITS.maxDevicesPerListResponse)
+    expect(await devices.list(OWNER)).toHaveLength(PUSH_LIMITS.maxDevicesPerHost)
   })
 
   it('separates the same device id registered against two hosts', async () => {
@@ -189,16 +177,14 @@ describe('push device registry store', () => {
       deviceId: 'shared-device',
       platform: 'ios',
       token: 'a'.repeat(64),
-      apnsEnvironment: 'sandbox',
-      filter: FILTER
+      apnsEnvironment: 'sandbox'
     })
     const second = await upsertOk({
       hostFingerprint: OTHER,
       deviceId: 'shared-device',
       platform: 'ios',
       token: 'c'.repeat(64),
-      apnsEnvironment: 'sandbox',
-      filter: FILTER
+      apnsEnvironment: 'sandbox'
     })
     expect(first).not.toBe(second)
   })

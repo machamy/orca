@@ -248,7 +248,6 @@ export function BrowserPagePane({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
     browserTabLoading: browserTab.loading,
-    worktreeId,
     isActive,
     isPaintable,
     slotViewport,
@@ -279,7 +278,9 @@ export function BrowserPagePane({
   })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,
+    workspaceId,
     isActive,
+    chromeShortcutScope,
     isActiveRef,
     markupIsActive: markup.isActive,
     webviewRef,

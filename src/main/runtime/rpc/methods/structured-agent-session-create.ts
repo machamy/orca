@@ -24,6 +24,7 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
+import type { StructuredAgentSessionResumeSource } from '../../../../shared/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   resolveUncommittedStructuredCreate,
@@ -37,6 +38,32 @@ export type PreparedStructuredAgentSessionCreate = {
   tab: { workspaceId: string; agent: 'claude' | 'codex' } | null
 }
 
+/**
+ * What a client's create intent fingerprints, recomputed host-side. `resumeFrom` is part of the
+ * intent, not a detail of it: without it a retry of "adopt this conversation" would replay as, or
+ * conflict with, a blank create. `tabId` is covered so the declared digest spans the payload, but
+ * replay keys on the attach fingerprint, so a retry naming another tab is answered with the one the
+ * record holds. The canonicalizer drops `undefined`, so plain creates keep the digest they had.
+ */
+export function structuredAgentSessionCreateIntentFingerprint(params: {
+  envelope: AgentSessionMutationEnvelope
+  worktree: string
+  agent: string
+  resumeFrom?: StructuredAgentSessionResumeSource
+  tabId?: string
+}): string {
+  return computeAgentSessionPayloadFingerprint({
+    method: 'agentSession.create',
+    sessionId: params.envelope.sessionId,
+    fields: {
+      worktree: params.worktree,
+      agent: params.agent,
+      resumeFrom: params.resumeFrom,
+      tabId: params.tabId
+    }
+  })
+}
+
 /** The pre-commit half. Throws; the caller is expected to run it inside
  *  `resolveUncommittedStructuredCreate` so a failure reaches the client as a refusal. */
 export async function prepareStructuredAgentSessionCreateForWorktree(args: {
@@ -46,23 +73,41 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: 'claude' | 'codex'
+  caller: StructuredAgentSessionCaller
+  resumeFrom?: StructuredAgentSessionResumeSource
+  /** Replaces the seed options the host resolves from settings. Orchestration passes the
+   *  `--model`/`--effort` the dispatch asked for; a chat the user opened passes nothing and keeps
+   *  the saved selection. Narrowed by the caller, so `{}` never reaches the reservation. */
+  options?: Readonly<Record<string, string>>
+  /** The tab id the caller reserved for this chat, so its placement is recorded before the reply;
+   *  absent records the id clients derive. Beside `options`, after the fingerprint, likewise. */
+  tabId?: string
 }): Promise<PreparedStructuredAgentSessionCreate> {
+  // Adoption replay may need the record loaded from disk before source discovery can be skipped.
+  let host = args.resumeFrom ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
     envelope: args.envelope,
     worktree: args.worktree,
-    agent: args.agent
+    agent: args.agent,
+    callerKey: args.caller.callerKey,
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
     fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
-  const host = await args.ensureHost()
+  host ??= await args.ensureHost()
   const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
   return {
     host,
     attachParams: {
       ...resolvedAttach,
+      // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
+      // they are the session's initial state, not its identity, so a retry that re-resolves them
+      // must replay rather than conflict.
+      ...(args.options ? { options: args.options } : {}),
+      ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider as 'claude' | 'codex',
       agent: resolved.agent as 'claude' | 'codex',
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
@@ -114,6 +159,8 @@ export async function createStructuredAgentSessionForWorktree(args: {
   worktree: string
   agent: 'claude' | 'codex'
   activate: boolean
+  options?: Readonly<Record<string, string>>
+  tabId?: string
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const prepared: PreparedStructuredAgentSessionCreate | StructuredCreateRefused =
     await resolveUncommittedStructuredCreate(() =>

@@ -17,15 +17,21 @@ import {
   isDetachedHeadWorkspace,
   isSleepingSweepExemptWorkspace
 } from './visible-worktree-kinds'
-export {
-  setVisibleWorktreeIds,
-  setVisibleWorktreeShortcutTargets,
-  type VisibleWorktreeShortcutTarget
-} from './visible-worktree-publication'
+import {
+  getVisibleWorkspaceHostIdSet,
+  worktreeMatchesVisibleHost
+} from './visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
-import type { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
+import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+export {
+  EMPTY_STRUCTURED_CHAT_WORKTREE_IDS,
+  getWorktreeIdsWithStructuredChat
+} from './visible-worktree-activity-inputs'
+// Runtime edge only one way: the builder imports VisibleWorktreeOptions as a type, which erases.
+import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
+import { useAppStore } from '@/store'
+import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getSettingsFocusedExecutionHostId,
@@ -38,10 +44,10 @@ import {
   getLineageRenderInfo
 } from './worktree-lineage-projection'
 import {
-  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-  getPairedDeviceIdsByEnvironment,
-  isWorkspaceFromOtherDevice
-} from './workspace-creator-visibility'
+  computeRenderedSidebarWorktreeOrder,
+  computeRenderedSidebarWorktrees
+} from './rendered-sidebar-worktree-order'
+import { isWorkspaceFromOtherDevice } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -58,13 +64,14 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
  * Why shared: the sidebar pipeline and the jump palette both apply this, and a
  * second copy is how the two surfaces drift.
  */
-type VisibleWorktreeOptions = {
+export type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
   showSleepingWorkspaces: boolean
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
   worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithStructuredChat?: ReadonlySet<string>
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
@@ -153,7 +160,8 @@ export function computeVisibleWorktrees(
           opts.tabsByWorktree,
           opts.ptyIdsByTabId,
           opts.browserTabsByWorktree,
-          opts.worktreeIdsWithLiveAgent
+          opts.worktreeIdsWithLiveAgent,
+          opts.worktreeIdsWithStructuredChat
         )
     )
   }
@@ -240,52 +248,97 @@ export function computeVisibleWorktreeIds(
  * Why null vs []: [] is a real rendered order (everything collapsed/filtered);
  * null means WorktreeList is unmounted.
  */
+let _publishedVisibleIds: string[] | null = null
+export type VisibleWorktreeShortcutTarget = {
+  id: string
+  executionHostId?: Worktree['hostId']
+}
+let _publishedVisibleShortcutTargets: VisibleWorktreeShortcutTarget[] | null = null
 
-/**
- * Compute the visible worktree IDs on-demand from the current Zustand store
- * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
- * store snapshot at call time).
- *
- * If WorktreeList is mounted, returns the exact IDs it rendered. Otherwise
- * recomputes the order the sidebar *would* render from the same row pipeline,
- * so a closed sidebar numbers workspaces the same way an open one does (#9497).
- */
-export function buildVisibleWorktreeOptionsFromState(
-  state: ReturnType<typeof useAppStore.getState>,
-  repoMap: Map<string, Repo>
-): VisibleWorktreeOptions {
-  return {
-    filterRepoIds: state.filterRepoIds,
-    showSleepingWorkspaces: state.showSleepingWorkspaces,
-    tabsByWorktree: state.tabsByWorktree,
-    ptyIdsByTabId: state.ptyIdsByTabId,
-    browserTabsByWorktree: state.browserTabsByWorktree,
-    worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
-      state.agentStatusByPaneKey,
-      state.tabsByWorktree,
-      Date.now()
-    ),
-    hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
-    hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
-    hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
-    hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
-    hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
-    pairedDeviceIdsByEnvironment: state.hideWorkspacesFromOtherDevices
-      ? getPairedDeviceIdsByEnvironment(
-          state.runtimeEnvironments,
-          state.runtimeStatusByEnvironmentId
-        )
-      : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
-    repoMap,
-    workspaceHostScope: state.workspaceHostScope,
-    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
-    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-    worktreeLineageById: state.worktreeLineageById
-  }
+export function setVisibleWorktreeIds(ids: string[] | null): void {
+  _publishedVisibleIds = ids
 }
 
-export {
-  getVisibleWorktreeIds,
-  getVisibleWorktreeShortcutTargets
-} from './visible-worktree-runtime-lookups'
+export function setVisibleWorktreeShortcutTargets(
+  targets: VisibleWorktreeShortcutTarget[] | null
+): void {
+  _publishedVisibleShortcutTargets = targets
+}
+
+export function getVisibleWorktreeIds(): string[] {
+  // Prefer the published IDs that mirror the rendered sidebar order.
+  if (_publishedVisibleIds) {
+    return _publishedVisibleIds
+  }
+
+  const state = useAppStore.getState()
+  const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
+
+  // Hoist repoMap so it's built once and reused across all branches below.
+  const repoMap = getRepoMapFromState(state)
+
+  let sortedIds: string[]
+
+  if (state.sortBy === 'smart') {
+    sortedIds = sortWorktreesSmart(
+      allWorktrees,
+      state.tabsByWorktree,
+      repoMap,
+      state.agentStatusByPaneKey,
+      state.runtimePaneTitlesByTabId,
+      state.ptyIdsByTabId,
+      state.migrationUnsupportedByPtyId,
+      state.terminalLayoutsByTabId
+    ).map((w) => w.id)
+  } else {
+    // Why empty map: non-smart branches don't read attentionByWorktree, but
+    // the param is required to keep smart-mode callers honest at the type level.
+    const sorted = [...allWorktrees].sort(
+      buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map())
+    )
+    sortedIds = sorted.map((w) => w.id)
+  }
+
+  const visibleIds = computeVisibleWorktreeIds(
+    state.worktreesByRepo,
+    sortedIds,
+    buildVisibleWorktreeOptionsFromState(state, repoMap)
+  )
+
+  const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
+  const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+  const visibleWorktrees = allWorktrees
+    .filter(
+      (worktree) =>
+        visibleIdRank.has(worktree.id) &&
+        worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
+    )
+    .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
+  // Why the row pipeline: grouping, pinning and main-worktree hoisting reorder cards, so a flat sort numbers the wrong workspace.
+  return computeRenderedSidebarWorktreeOrder(state, visibleWorktrees)
+}
+
+export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarget[] {
+  if (_publishedVisibleShortcutTargets) {
+    return _publishedVisibleShortcutTargets
+  }
+  const state = useAppStore.getState()
+  const visibleIds = getVisibleWorktreeIds()
+  const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
+  const repoMap = getRepoMapFromState(state)
+  const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+  const worktrees = getAllWorktreesFromState(state)
+    .filter(
+      (worktree) =>
+        !worktree.isArchived &&
+        visibleIdRank.has(worktree.id) &&
+        worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
+    )
+    .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
+  return computeRenderedSidebarWorktrees(state, worktrees).map((worktree) => ({
+    id: worktree.id,
+    ...(worktree.hostId ? { executionHostId: worktree.hostId } : {})
+  }))
+}

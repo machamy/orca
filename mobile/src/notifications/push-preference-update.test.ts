@@ -1,3 +1,7 @@
+vi.mock('./desktop-notification-channel', () => ({
+  ensureDesktopNotificationChannel: vi.fn(async () => {})
+}))
+import { AppState } from 'react-native'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   attachPushRegistration,
@@ -16,6 +20,10 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     })
   }
 }))
+vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: vi.fn(() => ({ remove: vi.fn() })) }
+}))
+
 vi.mock('./push-token', () => ({
   getDevicePushToken: vi.fn(async () => ({
     platform: 'ios',
@@ -26,12 +34,13 @@ vi.mock('./push-token', () => ({
 }))
 
 beforeEach(() => {
+  AppState.currentState = 'active'
   resetPushRegistrationForTests()
   storage.clear()
-  storage.set('orca:remotePushEnabled', 'true')
+  storage.set('orca:pushServiceNotificationsEnabled', 'true')
 })
 
-it('replaces an in-flight old registration with the latest event and sound preferences', async () => {
+it('replaces an in-flight registration with the latest away and sound preferences', async () => {
   const calls: { method: string; params: unknown }[] = []
   let finishFirst: ((value: unknown) => void) | undefined
   const client = {
@@ -55,8 +64,7 @@ it('replaces an in-flight old registration with the latest event and sound prefe
   await vi.waitFor(() => expect(finishFirst).toBeDefined())
   const update = setNotificationDeliveryPreferences({
     ...DEFAULT_NOTIFICATION_DELIVERY,
-    followDesktop: false,
-    terminalBell: false,
+    onlyWhenDesktopAway: false,
     sound: false
   })
   finishFirst!({ ok: true, result: { registered: true, registrationId: 'old' } })
@@ -68,7 +76,10 @@ it('replaces an in-flight old registration with the latest event and sound prefe
   )
   const latest = calls.findLast((call) => call.method === 'notifications.registerPush')
   expect(latest?.params).toMatchObject({
-    filter: { followDesktop: false, sound: false, sources: ['agent-task-complete', 'plugin'] }
+    filter: {
+      onlyWhenDesktopAway: false,
+      sound: false
+    }
   })
   expect(calls.some((call) => call.method === 'notifications.unregisterPush')).toBe(true)
   detach()

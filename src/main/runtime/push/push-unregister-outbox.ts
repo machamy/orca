@@ -4,13 +4,16 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/secure-file'
+import {
+  hardenExistingSecureFile,
+  isUnreadableError,
+  writeSecureJsonFile
+} from '../../../shared/secure-file'
 
 export type PushUnregisterOutboxItem = {
   reqId: string
   registrationId: string
   deviceId: string
-  createdAt: number
 }
 
 const OUTBOX_FILENAME = 'mobile-push-unregister-outbox.json'
@@ -24,14 +27,13 @@ function isItem(value: unknown): value is PushUnregisterOutboxItem {
     typeof item.reqId === 'string' &&
     typeof item.registrationId === 'string' &&
     item.registrationId.length > 0 &&
-    typeof item.deviceId === 'string' &&
-    typeof item.createdAt === 'number' &&
-    Number.isFinite(item.createdAt)
+    typeof item.deviceId === 'string'
   )
 }
 
 export class PushUnregisterOutbox {
   private readonly path: string
+  private outboxUnreadable = false
   private items: PushUnregisterOutboxItem[]
 
   constructor(userDataPath: string) {
@@ -44,11 +46,15 @@ export class PushUnregisterOutbox {
     if (existing) {
       return existing
     }
-    const item = { ...entry, reqId: randomUUID(), createdAt: Date.now() }
+    const item = { ...entry, reqId: randomUUID() }
     const next = [...this.items, item]
     this.save(next)
     this.items = next
     return item
+  }
+
+  isUnreadable(): boolean {
+    return this.outboxUnreadable
   }
 
   pending(): readonly PushUnregisterOutboxItem[] {
@@ -72,12 +78,16 @@ export class PushUnregisterOutbox {
       hardenExistingSecureFile(this.path)
       const parsed: unknown = JSON.parse(readFileSync(this.path, 'utf-8'))
       return Array.isArray(parsed) ? parsed.filter(isItem) : []
-    } catch {
+    } catch (error) {
+      this.outboxUnreadable = isUnreadableError(error)
       return []
     }
   }
 
   private save(items: readonly PushUnregisterOutboxItem[]): void {
+    if (this.outboxUnreadable) {
+      throw new Error('Cannot overwrite unreadable push unregister outbox')
+    }
     writeSecureJsonFile(this.path, items)
   }
 }

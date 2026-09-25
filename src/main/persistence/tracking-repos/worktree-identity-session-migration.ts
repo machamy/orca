@@ -9,6 +9,56 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
 
+type WorktreeNamingRow = { worktreeId: string }
+
+/**
+ * A session map keyed by pane, tab or environment whose VALUE names the worktree it belongs to.
+ * Returns the repointed record, or null when no row named the old id — so the caller assigns to
+ * the concrete field and the row type is never widened.
+ */
+function repointRowRecord<Row extends WorktreeNamingRow>(
+  record: Record<string, Row> | undefined,
+  oldWorktreeId: string,
+  newWorktreeId: string
+): Record<string, Row> | null {
+  if (!record) {
+    return null
+  }
+  let changed = false
+  const next: Record<string, Row> = { ...record }
+  for (const [key, row] of Object.entries(record)) {
+    if (row?.worktreeId !== oldWorktreeId) {
+      continue
+    }
+    next[key] = { ...row, worktreeId: newWorktreeId }
+    changed = true
+  }
+  return changed ? next : null
+}
+
+/** Same, but each value is an array of such rows. */
+function repointRowArrays<Row extends WorktreeNamingRow>(
+  record: Record<string, Row[]> | undefined,
+  oldWorktreeId: string,
+  newWorktreeId: string
+): Record<string, Row[]> | null {
+  if (!record) {
+    return null
+  }
+  let changed = false
+  const next: Record<string, Row[]> = { ...record }
+  for (const [key, rows] of Object.entries(record)) {
+    if (!Array.isArray(rows) || !rows.some((row) => row?.worktreeId === oldWorktreeId)) {
+      continue
+    }
+    next[key] = rows.map((row) =>
+      row?.worktreeId === oldWorktreeId ? { ...row, worktreeId: newWorktreeId } : row
+    )
+    changed = true
+  }
+  return changed ? next : null
+}
+
 /** The worktree rename, as everything inside one persisted workspace session needs it. */
 export type WorktreeIdentityReKey = {
   oldWorktreeId: string
@@ -115,6 +165,14 @@ export function migrateWorkspaceSessionIdentity(
       sessionChanged = true
     }
   }
+  // Why the row too: rehydration only republishes a row whose `workspaceId` still equals the key
+  // it is filed under, so re-keying the map alone would strand every page under the new id.
+  sessionChanged =
+    moveSessionKey(session.clientHostedBrowserPagesByWorktree, (rows) =>
+      rows.map((row) =>
+        row.workspaceId === oldWorktreeId ? { ...row, workspaceId: newWorktreeId } : row
+      )
+    ) || sessionChanged
   sessionChanged = moveSessionKey(session.activeBrowserTabIdByWorktree) || sessionChanged
   sessionChanged = moveSessionKey(session.activeTabTypeByWorktree) || sessionChanged
   sessionChanged = moveSessionKey(session.activeTabIdByWorktree) || sessionChanged
@@ -162,35 +220,46 @@ export function migrateWorkspaceSessionIdentity(
     session.activeWorkspaceKey = newWorkspaceKey
     sessionChanged = true
   }
-  if (session.sleepingAgentSessionsByPaneKey) {
-    let sleepingChanged = false
-    const nextSleeping = { ...session.sleepingAgentSessionsByPaneKey }
-    for (const [paneKey, record] of Object.entries(nextSleeping)) {
-      if (record.worktreeId !== oldWorktreeId) {
-        continue
-      }
-      nextSleeping[paneKey] = { ...record, worktreeId: newWorktreeId }
-      sleepingChanged = true
-    }
-    if (sleepingChanged) {
-      session.sleepingAgentSessionsByPaneKey = nextSleeping
-      sessionChanged = true
-    }
+  // Why every row-valued map: a record keyed by pane or tab id still names its worktree in the
+  // value, and a stale one silently stops matching. A `closedTerminalTabTombstonesByTabId` row left
+  // on the old id never suppresses the tab it was minted for, so the remote merge re-adds a tab the
+  // user closed. The census test (`worktree-identity-migration-field-coverage.test.ts`) keeps a
+  // fourth field of this class from joining silently.
+  const nextSleeping = repointRowRecord(
+    session.sleepingAgentSessionsByPaneKey,
+    oldWorktreeId,
+    newWorktreeId
+  )
+  if (nextSleeping) {
+    session.sleepingAgentSessionsByPaneKey = nextSleeping
+    sessionChanged = true
   }
-  if (session.terminalSurfaceTombstonesByPaneKey) {
-    let tombstonesChanged = false
-    const nextTombstones = { ...session.terminalSurfaceTombstonesByPaneKey }
-    for (const [paneKey, tombstone] of Object.entries(nextTombstones)) {
-      if (tombstone.worktreeId !== oldWorktreeId) {
-        continue
-      }
-      nextTombstones[paneKey] = { ...tombstone, worktreeId: newWorktreeId }
-      tombstonesChanged = true
-    }
-    if (tombstonesChanged) {
-      session.terminalSurfaceTombstonesByPaneKey = nextTombstones
-      sessionChanged = true
-    }
+  const nextSurfaceTombstones = repointRowRecord(
+    session.terminalSurfaceTombstonesByPaneKey,
+    oldWorktreeId,
+    newWorktreeId
+  )
+  if (nextSurfaceTombstones) {
+    session.terminalSurfaceTombstonesByPaneKey = nextSurfaceTombstones
+    sessionChanged = true
+  }
+  const nextClosedTombstones = repointRowRecord(
+    session.closedTerminalTabTombstonesByTabId,
+    oldWorktreeId,
+    newWorktreeId
+  )
+  if (nextClosedTombstones) {
+    session.closedTerminalTabTombstonesByTabId = nextClosedTombstones
+    sessionChanged = true
+  }
+  const nextCloseIntents = repointRowArrays(
+    session.clientHostedBrowserCloseIntentsByEnvironment,
+    oldWorktreeId,
+    newWorktreeId
+  )
+  if (nextCloseIntents) {
+    session.clientHostedBrowserCloseIntentsByEnvironment = nextCloseIntents
+    sessionChanged = true
   }
   return sessionChanged
 }

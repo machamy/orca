@@ -2,14 +2,14 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcContext, RpcMethod } from '../rpc/core'
+import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../rpc/core'
 import { NOTIFICATION_METHODS } from '../rpc/methods/notifications'
 import { DeviceRegistry } from '../device-registry'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { OrcaRuntimeService } from '../orca-runtime'
 
 function method(name: string): RpcMethod {
-  const found = NOTIFICATION_METHODS.find((candidate) => candidate.name === name)
+  const found = eraseRpcMethods(NOTIFICATION_METHODS).find((candidate) => candidate.name === name)
   if (!found || 'stream' in found) {
     throw new Error(`${name} is not a one-shot RPC method`)
   }
@@ -20,7 +20,7 @@ const REGISTER_PARAMS = {
   platform: 'ios',
   token: 'a'.repeat(64),
   apnsEnvironment: 'sandbox',
-  filter: { sources: ['agent-task-complete'], agentStates: ['finished'] }
+  filter: {}
 }
 
 function contextFor(overrides: Partial<RpcContext>): RpcContext {
@@ -30,6 +30,7 @@ function contextFor(overrides: Partial<RpcContext>): RpcContext {
         registered: true,
         registrationId: 'reg-1'
       })),
+      testMobilePushDevice: vi.fn(async () => ({ accepted: true })),
       unregisterMobilePushDevice: vi.fn(async () => ({ unregistered: true }))
     },
     ...overrides
@@ -89,12 +90,12 @@ describe('notifications.registerPush', () => {
     ).toBe(false)
   })
 
-  it('rejects a source the contract does not define', () => {
+  it('rejects a malformed phone preference', () => {
     const registerPush = method('notifications.registerPush')
     expect(
       registerPush.params!.safeParse({
         ...REGISTER_PARAMS,
-        filter: { sources: ['smoke-signal'], agentStates: [] }
+        filter: { sound: 'yes' }
       }).success
     ).toBe(false)
   })
@@ -130,9 +131,8 @@ describe('revokeMobileDevice', () => {
     const device = server['deviceRegistry']!.addDevice('phone', 'mobile')
     server['deviceRegistry']!.setPushRegistration(device.deviceId, {
       registrationId: 'reg-1',
-      platform: 'android',
-      filter: { sources: ['agent-task-complete'], agentStates: ['finished'] },
-      registeredAt: 1
+      filter: {},
+      expiresAt: Date.now() + 7 * 86400_000
     })
 
     expect(await server.revokeMobileDevice(device.deviceId)).toBe(true)
@@ -153,5 +153,27 @@ describe('revokeMobileDevice', () => {
 
     expect(await server.revokeMobileDevice(device.deviceId)).toBe(true)
     expect(server.getPushUnregisterOutbox().pending()).toEqual([])
+  })
+})
+
+describe('notifications.testPush', () => {
+  it('targets the authenticated phone and returns the service result', async () => {
+    const ctx = contextFor({ clientKind: 'mobile', pairedDeviceId: 'device-1' })
+    expect(await method('notifications.testPush').handler(null, ctx)).toEqual({ accepted: true })
+    expect(ctx.runtime.testMobilePushDevice).toHaveBeenCalledWith('device-1')
+  })
+  it('refuses callers without an authenticated mobile identity', async () => {
+    for (const overrides of [
+      {},
+      { clientKind: 'mobile' as const },
+      { clientKind: 'runtime' as const, pairedDeviceId: 'device-1' }
+    ]) {
+      const ctx = contextFor(overrides)
+      expect(await method('notifications.testPush').handler(null, ctx)).toEqual({
+        accepted: false,
+        reason: 'not_registered'
+      })
+      expect(ctx.runtime.testMobilePushDevice).not.toHaveBeenCalled()
+    }
   })
 })

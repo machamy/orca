@@ -17,8 +17,9 @@ function credentials(): ApnsCredentials {
   return { keyPem: privateKey, keyId: 'ABCDE12345', teamId: 'TEAM123456' }
 }
 
-function delivery(coalescedCount = 1) {
+function delivery(now = Date.now()) {
   return buildPushDelivery({
+    expiresAt: now + 300_000,
     registrationId: 'reg-1',
     hostFingerprint: HOST,
     notification: {
@@ -30,10 +31,7 @@ function delivery(coalescedCount = 1) {
       title: 'Agent needs input',
       body: 'Waiting on your answer',
       worktreeId: 'wt-1'
-    },
-    title: 'Agent needs input',
-    body: 'Waiting on your answer',
-    coalescedCount
+    }
   })
 }
 
@@ -82,7 +80,7 @@ describe('apns client', () => {
       now: () => clock
     })
     await expect(
-      client.send(delivery(), { token: 'a'.repeat(64), apnsEnvironment: 'production' })
+      client.send(delivery(clock), { token: 'a'.repeat(64), apnsEnvironment: 'production' })
     ).resolves.toEqual({ status: 'sent' })
     const request = fake.requests[0]!
     expect(request.host).toBe('api.push.apple.com')
@@ -91,8 +89,8 @@ describe('apns client', () => {
       'apns-topic': 'com.stably.orca.mobile',
       'apns-push-type': 'alert',
       'apns-priority': '10',
-      'apns-expiration': String(Math.floor(clock / 1000) + 4 * 60 * 60),
-      'apns-collapse-id': 'note-1'
+      'apns-expiration': String(Math.floor(clock / 1000) + 5 * 60),
+      'apns-collapse-id': expect.stringMatching(/^[a-f0-9]{64}$/)
     })
     expect(request.headers.authorization).toMatch(/^bearer /)
     expect(JSON.parse(request.body)).toEqual({
@@ -108,29 +106,27 @@ describe('apns client', () => {
         notificationSeq: 7,
         notificationEpoch: 'epoch-1',
         source: 'agent-task-complete',
-        agentState: 'needs-input',
-        coalescedCount: 1
+        agentState: 'needs-input'
       }
     })
   })
 
-  it('targets the sandbox host and the host collapse id for a summary', async () => {
+  it('targets the sandbox host and keeps the individual collapse id', async () => {
     const fake = fakeTransport({ status: 200, body: '' })
     const client = new ApnsClient({
       topic: 'com.stably.orca.mobile',
       credentials: credentials(),
       transport: fake.transport
     })
-    await client.send(delivery(3), { token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
+    await client.send(delivery(), { token: 'b'.repeat(64), apnsEnvironment: 'sandbox' })
     expect(fake.requests[0]?.host).toBe('api.sandbox.push.apple.com')
-    expect(fake.requests[0]?.headers['apns-collapse-id']).toBe(`host:${HOST}`)
+    expect(fake.requests[0]?.headers['apns-collapse-id']).toMatch(/^[a-f0-9]{64}$/)
   })
 
   it.each([
     [410, 'Unregistered'],
     [400, 'BadDeviceToken'],
-    [400, 'Unregistered'],
-    [400, 'DeviceTokenNotForTopic']
+    [400, 'Unregistered']
   ])('classifies %i %s as a dead token', async (status, reason) => {
     const fake = fakeTransport({ status, body: JSON.stringify({ reason }) })
     const client = new ApnsClient({
@@ -145,6 +141,7 @@ describe('apns client', () => {
 
   it.each([
     [400, 'PayloadTooLarge'],
+    [400, 'DeviceTokenNotForTopic'],
     [429, 'TooManyRequests'],
     [500, 'InternalServerError']
   ])('treats %i %s with the appropriate retry policy', async (status, reason) => {
@@ -171,4 +168,53 @@ describe('apns client', () => {
       client.send(delivery(), { token: 'a'.repeat(64), apnsEnvironment: 'production' })
     ).resolves.toEqual({ status: 'error', reason: 'Error', retryable: true })
   })
+})
+
+it('does not collapse background dismissals with visible alerts', async () => {
+  const fake = fakeTransport({ status: 200, body: '' })
+  const apns = new ApnsClient({
+    topic: 'test',
+    credentials: credentials(),
+    transport: fake.transport
+  })
+  const alert = delivery()
+  await apns.send(
+    { ...alert, orca: { ...alert.orca, kind: 'dismiss' } },
+    {
+      token: 'test',
+      apnsEnvironment: 'sandbox'
+    }
+  )
+  expect(fake.requests[0]?.headers).not.toHaveProperty('apns-collapse-id')
+  expect(fake.requests[0]?.headers).toMatchObject({
+    'apns-push-type': 'background',
+    'apns-priority': '5'
+  })
+  expect(JSON.parse(fake.requests[0]!.body).aps).toEqual({ 'content-available': 1 })
+})
+
+it('keeps the absolute deadline across retries and refuses expired delivery', async () => {
+  let now = 1_700_000_000_000
+  const fake = fakeTransport({ status: 503, body: '{}' })
+  const client = new ApnsClient({
+    topic: 'test',
+    credentials: credentials(),
+    now: () => now,
+    transport: fake.transport
+  })
+  const pending = delivery(now)
+  const device = { token: 'test', apnsEnvironment: 'sandbox' as const }
+  await client.send(pending, device)
+  now += 60_000
+  await client.send(pending, device)
+  expect(fake.requests.map((request) => request.headers['apns-expiration'])).toEqual([
+    String(pending.expiresAt / 1000),
+    String(pending.expiresAt / 1000)
+  ])
+  now = pending.expiresAt
+  await expect(client.send(pending, device)).resolves.toEqual({
+    status: 'error',
+    reason: 'expired'
+  })
+  expect(fake.requests).toHaveLength(2)
 })

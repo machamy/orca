@@ -1,8 +1,14 @@
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import type * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const original = await importOriginal<typeof fs>()
+  return { ...original, readFileSync: vi.fn(original.readFileSync) }
+})
 
 const OUTBOX_FILENAME = 'mobile-push-unregister-outbox.json'
 
@@ -54,6 +60,29 @@ describe('PushUnregisterOutbox', () => {
     )
 
     expect(new PushUnregisterOutbox(dir).pending()).toEqual([valid])
+  })
+
+  it('preserves unreadable pending deletes until the outbox can be reloaded', () => {
+    const dir = userDataDir()
+    const pending = new PushUnregisterOutbox(dir).enqueue({
+      registrationId: 'reg-1',
+      deviceId: 'device-1'
+    })
+    const path = join(dir, OUTBOX_FILENAME)
+    const original = readFileSync(path, 'utf-8')
+    vi.mocked(readFileSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error('temporarily unavailable'), { code: 'EIO' })
+    })
+    const unreadable = new PushUnregisterOutbox(dir)
+
+    expect(() => unreadable.enqueue({ registrationId: 'reg-2', deviceId: 'device-2' })).toThrow(
+      'Cannot overwrite unreadable push unregister outbox'
+    )
+    expect(readFileSync(path, 'utf-8')).toBe(original)
+    const recovered = new PushUnregisterOutbox(dir)
+    expect(recovered.pending()).toEqual([pending])
+    recovered.enqueue({ registrationId: 'reg-2', deviceId: 'device-2' })
+    expect(new PushUnregisterOutbox(dir).pending()).toHaveLength(2)
   })
 
   it('starts empty when the file is not JSON at all', () => {

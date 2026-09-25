@@ -115,7 +115,7 @@ describe('loadBrowserGuestUrl', () => {
     const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
 
     await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
-    expect(setActiveTabType).toHaveBeenCalledWith('editor')
+    expect(setActiveTabType).toHaveBeenCalledWith('editor', 'wt-1')
     expect(authorizeExternalPath).toHaveBeenCalledWith({
       targetPath: '/workspace/sample-project/docs/guide.md'
     })

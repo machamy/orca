@@ -5,7 +5,6 @@ import type { PushDatabase } from './push-database.js'
 import { createPushServer } from './push-server.js'
 import {
   createPushServerHarness,
-  FILTER,
   testPushConfig
 } from './push-server-harness.test-fixture.js'
 
@@ -33,6 +32,8 @@ describe('push gateway authentication and device routes', () => {
       },
       transaction: async (operation) => await operation(unreachable),
       lockQuotaScope: async () => undefined,
+      tryLockScope: async () => true,
+      tryLockSharedScope: async () => true,
       close: async () => undefined
     }
     const broken = createPushServer(testPushConfig(), unreachable, {
@@ -41,7 +42,7 @@ describe('push gateway authentication and device routes', () => {
     })
     expect((await broken.app.request('/health')).status).toBe(200)
     expect((await broken.app.request('/ready')).status).toBe(503)
-    broken.coalescer.stop()
+    await broken.worker.stop()
   })
 
   it('completes challenge, session, register, list, delete', async () => {
@@ -80,11 +81,13 @@ describe('push gateway authentication and device routes', () => {
     const challenge = await harness.issueChallenge(host)
     const proof = harness.answer(challenge, host)
     expect(
-      (await harness.post('/v1/host/session', {
-        v: 1,
-        challengeId: challenge.challengeId,
-        proofB64: proof
-      })).status
+      (
+        await harness.post('/v1/host/session', {
+          v: 1,
+          challengeId: challenge.challengeId,
+          proofB64: proof
+        })
+      ).status
     ).toBe(200)
 
     const replay = await harness.post('/v1/host/session', {
@@ -138,8 +141,7 @@ describe('push gateway authentication and device routes', () => {
         v: 1,
         deviceId: 'device-1',
         platform: 'android',
-        token: 'rotated_token:APA91b-newnewnewnewnewnewnewnewnewnew',
-        filter: FILTER
+        token: 'rotated_token:APA91b-newnewnewnewnewnewnewnewnewnew'
       },
       sessionToken
     )
@@ -153,7 +155,7 @@ describe('push gateway authentication and device routes', () => {
     const sessionToken = await harness.signIn(createPushHostKeypair(16))
     const bad = await harness.post(
       '/v1/devices',
-      { v: 1, deviceId: 'device-1', platform: 'ios', token: 'not-hex', filter: FILTER },
+      { v: 1, deviceId: 'device-1', platform: 'ios', token: 'not-hex' },
       sessionToken
     )
     expect(bad.status).toBe(400)

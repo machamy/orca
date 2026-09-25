@@ -24,6 +24,65 @@ source.
 
 ---
 
+## machamy.14 — upstream `1.4.197` · 2026-09-25
+
+Catches up **1,307 upstream commits**. No new fork features. The upstream version
+stays `1.4.197` (upstream cut no `release:` commit in between). The default-worktree
+switch stays: it was not what conflicted — its share of the 11 conflicted files it
+touched was a line or two each.
+
+### Upstream merge (1,307 commits, `1.4.197` unchanged)
+- By type: fix 602 · **perf 224** · feat 166 · test 87 · refactor 64.
+- By area: **mobile 208** · native chat 97 · relay 63 · terminal 54 · runtime 37 ·
+  orchestration 22 · browser 21 · editor 20 · agent status 19 · sidebar 13.
+- Notable upstream features: **bundled ripgrep** (local, WSL, SSH search), **Jupyter
+  notebooks rendered as notebooks and run in a persistent kernel**, **agent-session
+  history search** (`orca search`, across computers), **default terminal shell** and
+  shell-argument settings, terminal **inline images**, **collapsed unchanged regions**
+  in diffs, **multi-line range** diff comments, **base-ref picker** in the New Workspace
+  composer, per-project **gh account binding**, a setting to turn off preview tabs, and
+  ZCode, Muse Code and OpenCode 2 harnesses.
+- **Upstream removed Agent Map entirely** (#20929). The fork's workspace-menu tests on
+  that surface lost their subject and left the contract list; the same actions stay in
+  the sidebar menu.
+
+### What the fork adjusted
+Resolved 25 conflicts. Upstream again dissolved files into facades
+(`src/shared/rpc-contract/*`); fork edits were transplanted into the new modules:
+
+- **RPC schemas.** `StrictOptionalBoolean`, the `worktree.defaultSet` selector and the
+  worktree-folder fields moved into upstream's new `rpc-contract` modules; the params
+  catalog was regenerated.
+- **CLI.** Upstream's `terminal create --shell` moved into the fork's split-out
+  `specs/terminal.ts`.
+- **Worktree ID migration.** Upstream's new row re-pointing (closed-terminal tombstones,
+  client-hosted browser pages) merged into the fork's session-migration module.
+- **Agent status cache.** Upstream made the cache read-only, so the direct write during
+  worktree migration now goes through upstream's `admitLegacyAgentStatus`. Both the
+  fork's `effort` field and upstream's `modelSwitchCommand` survive.
+- **Line caps.** Five files upstream grew went over `max-lines` because of the fork's
+  share. No disable comments — the fork's share moved into its own files: fork settings
+  types (`fork-global-settings.ts`), title-based agent identity
+  (`worktree-title-agent-identity.ts`), the default-switch menu item, Unity seed
+  scheduling, and the browser URL sync's `worktreeId` lookup. `global-settings-types.ts`
+  and `browser-page-pane.tsx` are now one line off, or identical to, upstream, which
+  makes the next merge lighter.
+- **Two fork bugs caught by new upstream tests.**
+  - The Unity seed re-listed worktrees right after a create. That scan could start before
+    the create path recorded the new worktree's metadata and cache a stale name. It now
+    lists only for Unity projects whose seeding was not declined.
+  - The temporary diagnostic added to chase vanishing tabs **walked every terminal tab on
+    every store update**, so each update got slower with workspace count. It now compares
+    only when the tab map actually changed.
+- **Two new upstream tests aligned with fork behavior.** Upstream saves an edited
+  `<details>` with `class="orca-details"` added; the fork keeps the source opening tag
+  (machamy.8's save-time corruption fix). The two summary-image/math edit tests now
+  expect that.
+
+### Verification
+- Fork contract suite **120 files / 1,517 tests** pass. Typecheck 0 errors, lint on
+  changed files 0 errors, no `max-lines` disables added.
+
 ## machamy.13 — on upstream `1.4.197` · 2026-09-25
 
 Makes reviewing code and reading docs easier. No upstream merge.

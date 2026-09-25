@@ -12,7 +12,7 @@ import { readRelayWorkflow, relayWorkflowFile } from './relay-repository.mjs'
 
 // Why: the push gateway holds the APNs key and is the only thing standing between a paired
 // phone and a silent notification pipeline. Its deploy is a blue/green rollout against the
-// shared Cloud SQL instance, and each of the guarantees below is one careless edit from gone.
+// dedicated Cloud SQL instance, and each of the guarantees below is one careless edit from gone.
 const WORKFLOW = 'push-deploy.yml'
 const workflow = readRelayWorkflow(WORKFLOW)
 const deploy = () => {
@@ -44,8 +44,8 @@ test('the whole surface stays inert until the owner enables cloud operations', (
 
 test('it authenticates through Workload Identity and holds no repository secret', () => {
   assert.match(workflow, /uses: google-github-actions\/auth@v2/)
-  assert.match(workflow, /workload_identity_provider: \$\{\{ vars\.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER \}\}/)
-  assert.match(workflow, /service_account: \$\{\{ vars\.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT \}\}/)
+  assert.match(workflow, /workload_identity_provider: \$\{\{ vars\.PRODUCTION_GCP_PUSH_DEPLOY_WORKLOAD_IDENTITY_PROVIDER \}\}/)
+  assert.match(workflow, /service_account: \$\{\{ vars\.PRODUCTION_GCP_PUSH_DEPLOY_SERVICE_ACCOUNT \}\}/)
   assert.match(workflow, /environment: production/)
   for (const [, name] of workflow.matchAll(/secrets\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
     assert.equal(name, 'GITHUB_TOKEN', `the workflow reads secrets.${name}`)
@@ -55,19 +55,20 @@ test('it authenticates through Workload Identity and holds no repository secret'
 // Why: Terraform trusts exact workflow filenames, not a prefix. A rename here without the
 // matching tfvars-independent list entry would fail authentication at dispatch time only.
 test('Terraform trusts this exact workflow file on the production deploy provider', () => {
-  assert.match(terraform('relay-github-actions.tf'), /^\s*"push-deploy\.yml"$/m)
+  assert.match(terraform('push-deploy-identity.tf'), /push-deploy\.yml@refs\/heads\/main/)
+  assert.doesNotMatch(terraform('relay-github-actions.tf'), /push-deploy\.yml/)
   assert.equal(relayWorkflowFile(WORKFLOW), 'cloud-push-deploy.yml')
 })
 
-test('the rollout is serialized and leases the production Cloud SQL rollout lock', () => {
+test('the rollout is serialized and leases its dedicated push rollout lock', () => {
   const blocks = concurrencyBlocks(workflow)
   assert.equal(blocks.length, 1)
-  assert.equal(blocks[0].group, 'production-cloud-sql-rollout')
+  assert.equal(blocks[0].group, 'production-push-rollout')
   assert.equal(blocks[0].cancelInProgress, 'false')
   const steps = leaseSteps(workflow)
   assert.equal(steps.length, 1, 'exactly one lease step, held for the whole run')
   assert.equal(steps[0].bucket, 'onorca-cloud-terraform-state')
-  assert.equal(steps[0].object, 'terraform/state/cloud-sql-rollout/production.lock')
+  assert.equal(steps[0].object, 'terraform/state/push-rollout/production.lock')
   assert.equal(steps[0].release, undefined, 'release stays at its default for a single-job run')
 })
 
@@ -137,7 +138,7 @@ test('the database pool size is Terraform-owned and bounded at plan time', () =>
   assert.ok(block, 'the push service no longer declares a lifecycle block')
   assert.match(
     block[1],
-    /var\.push_max_instances \* var\.push_database_pool_max <= 4/,
+    /var\.push_max_instances \* var\.push_database_pool_max \* 3 <= 64/,
     'instances x pool must be bounded at plan time'
   )
   assert.match(
@@ -153,7 +154,8 @@ test('the candidate is probed on its own URL before any traffic moves', () => {
   assert.ok(probe < indexOfStep('Shift all traffic to the verified candidate'))
   assert.match(workflow, /"\$\{CANDIDATE_URL\}\/ready"/)
   assert.match(workflow, /test "\$\{code\}" = 200/)
-  assert.doesNotMatch(workflow, /\$\{CANDIDATE_URL\}\/health/, 'liveness is not readiness')
+  assert.ok(workflow.indexOf('${CANDIDATE_URL}/ready') < workflow.indexOf('${CANDIDATE_URL}/health'))
+  assert.match(workflow, /\.deliveryProtocol == 2/, 'verify the durable gateway after readiness')
 })
 
 // Why: a gateway that answers /ready can still hold no usable FCM credential. The probe must be
@@ -238,7 +240,7 @@ test('the summary is written before anything that can fail after the shift', () 
   const summary = indexOfStep('Publish the rollout summary')
   assert.ok(summary > indexOfStep('Shift all traffic to the verified candidate'))
   assert.ok(summary < indexOfStep('Verify the public origin after the shift'))
-  assert.match(workflow, /--to-revisions \$\{ROLLBACK_REVISION\}=100/)
+  assert.match(workflow, /Known-good image:/)
   assert.match(workflow, /GITHUB_STEP_SUMMARY/)
 })
 
@@ -260,7 +262,7 @@ test('a failure after the shift rolls production back automatically', () => {
   )
   assert.match(
     body,
-    /if: \$\{\{ \(failure\(\) \|\| cancelled\(\)\) && env\.TRAFFIC_SHIFT_ATTEMPTED == 'true' \}\}/,
+    /if: \$\{\{ \(failure\(\) \|\| cancelled\(\)\) && env\.TRAFFIC_SHIFT_ATTEMPTED == 'true' && env\.ROLLOUT_VERIFIED != 'true' \}\}/,
     'the rollback must be conditioned on both failure and the shift marker'
   )
   assert.match(body, /test -n "\$\{ROLLBACK_REVISION:-\}"/)
@@ -271,17 +273,17 @@ test('a failure after the shift rolls production back automatically', () => {
 
 // Why: a candidate that never took traffic still holds a warm instance and a Cloud SQL pool. Its
 // tag comes off first, because Cloud Run refuses to delete a revision a traffic target names.
-test('a failure before the shift deletes the candidate it created', () => {
+test('verified recovery authorizes rejected candidate deletion', () => {
   const body = workflow.slice(
     workflow.indexOf('- name: Delete the rejected candidate revision'),
     workflow.indexOf('- name: Drop the candidate traffic tag')
   )
   assert.match(
     body,
-    /env\.TRAFFIC_SHIFT_ATTEMPTED != 'true' \|\| env\.TRAFFIC_ROLLED_BACK == 'true'/,
-    'the cleanup must be conditioned on both failure and the absence of the shift marker'
+    /env\.RECOVERY_VERIFIED == 'true'/,
+    'cleanup must wait for verified recovery traffic and public checks'
   )
-  assert.match(body, /test -n "\$\{CANDIDATE_REVISION:-\}" \|\| exit 0/)
+  assert.match(body, /if test -z "\$\{CANDIDATE_REVISION:-\}"; then/)
   assert.ok(
     body.indexOf('--remove-tags') < body.indexOf('gcloud run revisions delete'),
     'the tag must come off before the revision is deleted'
@@ -296,4 +298,37 @@ test('the run always drops its traffic tag', () => {
   const body = workflow.slice(workflow.indexOf('- name: Drop the candidate traffic tag'))
   assert.match(body, /if: always\(\)/)
   assert.match(body, /test -n "\$\{CANDIDATE_TAG:-\}" \|\| exit 0/)
+})
+
+test('push credentials cannot assume the shared Relay deploy identity', () => {
+  const source = terraform('push-deploy-identity.tf')
+  assert.match(source, /"attribute.push_deploy"\s*=\s*"'production'"/)
+  assert.doesNotMatch(source, /"attribute.repository"\s*=/)
+  assert.match(source, /attribute\.push_deploy\/production/)
+  assert.doesNotMatch(workflow, /PRODUCTION_GCP_RELAY_DEPLOY_/)
+  assert.doesNotMatch(terraform('push-gateway.tf'), /member\s*=\s*local\.relay_github_deploy_service_account_member/)
+})
+
+// A latest revision needs a successor even when validation is inert.
+test('dedicated database admits three simultaneous revision pools', () => {
+  assert.match(terraform('push-gateway.tf'), /var\.push_max_instances \* var\.push_database_pool_max \* 3 <= 64/)
+})
+
+test('push has only a dedicated database attachment and a narrowly scoped deployment lease', () => {
+  const service = terraform('push-gateway.tf')
+  const database = terraform('push-dedicated-database.tf')
+  assert.match(service, /instances = \[google_sql_database_instance\.push_dedicated\[0\]\.connection_name\]/)
+  assert.match(service, /secret\s*= google_secret_manager_secret\.push_dedicated_database_url\[0\]\.secret_id/)
+  assert.match(service, /version = google_secret_manager_secret_version\.push_dedicated_database_url\[0\]\.version/)
+  assert.doesNotMatch(service + database, /push_dedicated_database_(?:active|enabled)|local\.relay_database_connection_name|resource "google_sql_database" "push"/)
+  assert.match(database, /tier\s*= "db-custom-2-7680"/)
+  assert.match(database, /availability_type = "REGIONAL"/)
+  assert.match(database, /deletion_protection\s*= true/)
+  assert.match(database, /deletion_protection_enabled = true/)
+  const identity = terraform('push-deploy-identity.tf')
+  const lease = identity.match(/resource "google_storage_bucket_iam_member" "github_push_rollout_lease" \{([\s\S]*?)\n\}/)?.[1]
+  assert.ok(lease)
+  assert.match(lease, /member = local\.push_deploy_member/)
+  assert.match(lease, /role\s*= "roles\/storage.objectAdmin"/)
+  assert.match(lease, /resource.name == 'projects\/_\/buckets\/\$\{var.project_id\}-terraform-state\/objects\/terraform\/state\/push-rollout\/production.lock'/)
 })

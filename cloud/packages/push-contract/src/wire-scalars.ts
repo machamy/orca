@@ -14,12 +14,3 @@ export const BoundedCiphertextSchema = z
   .min(1)
   .max(16 * 1024)
   .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
-
-export const CanonicalHttpsOriginSchema = z.string().max(2048).refine((value) => {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' && url.origin === value && url.pathname === '/'
-  } catch {
-    return false
-  }
-}, 'must be a canonical HTTPS origin')
