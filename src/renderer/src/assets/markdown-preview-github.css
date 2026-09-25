@@ -215,3 +215,104 @@
   background: var(--gh-border);
   border: 0;
 }
+
+/* Fork: GitHub alerts (`> [!NOTE]` …), produced by remarkGithubAlerts. Colors are
+   GitHub's; icons are the matching lucide glyphs. */
+.markdown-preview .markdown-body .markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: 0.25em solid var(--gh-alert-color, var(--gh-border));
+}
+
+.markdown-preview .markdown-body .markdown-alert > :first-child {
+  margin-top: 0;
+}
+
+.markdown-preview .markdown-body .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-preview .markdown-body .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--gh-alert-color);
+}
+
+.markdown-preview .markdown-body .markdown-alert-title::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: currentColor;
+  mask: var(--gh-alert-icon) center / contain no-repeat;
+}
+
+.markdown-preview .markdown-body .markdown-alert-note {
+  --gh-alert-icon: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%2210%22%2F%3E%3Cpath%20d%3D%22M12%2016v-4%22%2F%3E%3Cpath%20d%3D%22M12%208h.01%22%2F%3E%3C%2Fsvg%3E');
+}
+
+.markdown-preview.markdown-light .markdown-body .markdown-alert-note {
+  --gh-alert-color: #0969da;
+}
+
+.markdown-preview.markdown-dark .markdown-body .markdown-alert-note {
+  --gh-alert-color: #4493f8;
+}
+
+.markdown-preview .markdown-body .markdown-alert-tip {
+  --gh-alert-icon: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M15%2014c.2-1%20.7-1.7%201.5-2.5%201-.9%201.5-2.2%201.5-3.5A6%206%200%200%200%206%208c0%201%20.2%202.2%201.5%203.5.7.7%201.3%201.5%201.5%202.5%22%2F%3E%3Cpath%20d%3D%22M9%2018h6%22%2F%3E%3Cpath%20d%3D%22M10%2022h4%22%2F%3E%3C%2Fsvg%3E');
+}
+
+.markdown-preview.markdown-light .markdown-body .markdown-alert-tip {
+  --gh-alert-color: #1a7f37;
+}
+
+.markdown-preview.markdown-dark .markdown-body .markdown-alert-tip {
+  --gh-alert-color: #3fb950;
+}
+
+.markdown-preview .markdown-body .markdown-alert-important {
+  --gh-alert-icon: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M21%2015a2%202%200%200%201-2%202H7l-4%204V5a2%202%200%200%201%202-2h14a2%202%200%200%201%202%202z%22%2F%3E%3Cpath%20d%3D%22M12%207v2%22%2F%3E%3Cpath%20d%3D%22M12%2013h.01%22%2F%3E%3C%2Fsvg%3E');
+}
+
+.markdown-preview.markdown-light .markdown-body .markdown-alert-important {
+  --gh-alert-color: #8250df;
+}
+
+.markdown-preview.markdown-dark .markdown-body .markdown-alert-important {
+  --gh-alert-color: #ab7df8;
+}
+
+.markdown-preview .markdown-body .markdown-alert-warning {
+  --gh-alert-icon: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m21.73%2018-8-14a2%202%200%200%200-3.48%200l-8%2014A2%202%200%200%200%204%2021h16a2%202%200%200%200%201.73-3%22%2F%3E%3Cpath%20d%3D%22M12%209v4%22%2F%3E%3Cpath%20d%3D%22M12%2017h.01%22%2F%3E%3C%2Fsvg%3E');
+}
+
+.markdown-preview.markdown-light .markdown-body .markdown-alert-warning {
+  --gh-alert-color: #9a6700;
+}
+
+.markdown-preview.markdown-dark .markdown-body .markdown-alert-warning {
+  --gh-alert-color: #d29922;
+}
+
+.markdown-preview .markdown-body .markdown-alert-caution {
+  --gh-alert-icon: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%2016h.01%22%2F%3E%3Cpath%20d%3D%22M12%208v4%22%2F%3E%3Cpath%20d%3D%22M15.312%202a2%202%200%200%201%201.414.586l4.688%204.688A2%202%200%200%201%2022%208.688v6.624a2%202%200%200%201-.586%201.414l-4.688%204.688a2%202%200%200%201-1.414.586H8.688a2%202%200%200%201-1.414-.586l-4.688-4.688A2%202%200%200%201%202%2015.312V8.688a2%202%200%200%201%20.586-1.414l4.688-4.688A2%202%200%200%201%208.688%202z%22%2F%3E%3C%2Fsvg%3E');
+}
+
+.markdown-preview.markdown-light .markdown-body .markdown-alert-caution {
+  --gh-alert-color: #d1242f;
+}
+
+.markdown-preview.markdown-dark .markdown-body .markdown-alert-caution {
+  --gh-alert-color: #f85149;
+}
+
+/* GitHub does not italicize comments in code blocks. */
+.markdown-preview .markdown-body .hljs-comment,
+.markdown-preview .markdown-body .hljs-quote {
+  font-style: normal;
+}

@@ -6,12 +6,12 @@ import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import rehypeSlug from 'rehype-slug'
-import remarkBreaks from 'remark-breaks'
 import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { remarkMarkdownDocLinks } from './markdown-doc-links'
+import { remarkGithubAlerts } from './markdown-github-alerts'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 
 export const markdownPreviewSanitizeSchema: SanitizeSchema = {
@@ -31,7 +31,16 @@ export const markdownPreviewSanitizeSchema: SanitizeSchema = {
       ...(defaultSchema.attributes?.code ?? []),
       ['className', /^language-[\w-]+$/, 'math-inline', 'math-display']
     ],
-    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^language-[\w-]+$/], 'align'],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      [
+        'className',
+        /^language-[\w-]+$/,
+        /^markdown-alert(?:-(?:note|tip|important|warning|caution))?$/
+      ],
+      'align'
+    ],
+    p: [...(defaultSchema.attributes?.p ?? []), ['className', 'markdown-alert-title']],
     details: [
       ...(defaultSchema.attributes?.details ?? []),
       'open',
@@ -54,13 +63,15 @@ export const markdownPreviewSanitizeSchema: SanitizeSchema = {
 }
 
 type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins']>
+// Fork: no remark-breaks. A GitHub file view joins soft line breaks (only comments keep
+// them), so hard-wrapped docs must reflow here to read like GitHub.
 const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
   remarkCjkFriendly,
-  remarkBreaks,
   remarkFrontmatter,
   remarkMath,
-  remarkMarkdownDocLinks
+  remarkMarkdownDocLinks,
+  remarkGithubAlerts
 ]
 // GitHub-flavored HTML mode (fork feature): the default schema strips tags and
 // attributes GitHub renders — <video>, <picture>, <center>, width/align — so a

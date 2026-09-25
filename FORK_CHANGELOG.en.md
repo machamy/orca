@@ -46,6 +46,14 @@ touched was a line or two each.
   narrow while one-liners ran full width. The column now exists only on blocks with a note
   or an open composer. The hover `+` button is unchanged.
 - Inline `<code>` no longer leaks a `node="[object Object]"` attribute.
+- **GitHub alerts.** `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` and `[!CAUTION]`
+  showed as a quote with the literal marker. They now render as GitHub's alerts: colored
+  bar, icon and title (GitHub's colors; titles stay English, as on GitHub).
+- **Line breaks like a GitHub file view.** The preview turned every source newline into
+  `<br>`, which is how comments render. GitHub joins those lines when showing a `.md`
+  file, and now so does the preview; explicit breaks (two trailing spaces or `\`) stay.
+  Sidebar comment rendering keeps its breaks, since those are comments.
+- Code-block comments are no longer italic, matching GitHub.
 
 ### Upstream merge (1,307 commits, `1.4.197` unchanged)
 - By type: fix 602 · **perf 224** · feat 166 · test 87 · refactor 64.
