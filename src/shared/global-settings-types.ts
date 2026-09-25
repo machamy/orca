@@ -476,6 +476,9 @@ export type GlobalSettings = {
   /** Fork: pane-corner badge naming the agent's current model and reasoning effort.
    *  Absent means the default (on, bottom-right) — see resolveAgentModelBadgeSettings. */
   agentModelBadge?: AgentModelBadgeSettings
+  /** Fork: the view a markdown file opens in. Absent means 'preview' — the rendered,
+   *  GitHub-style read view — since the rich editor refuses whole classes of docs. */
+  markdownDefaultViewMode?: 'preview' | 'rich' | 'source'
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */

@@ -12039,6 +12039,12 @@
             "topRight": "Top right",
             "bottomRight": "Bottom right"
           }
+        },
+        "fork": {
+          "markdownDefaultView": {
+            "title": "Markdown Default View",
+            "description": "How markdown files open. Preview renders like GitHub, including HTML and docs the rich editor cannot edit. The toggle in the editor switches per file."
+          }
         }
       },
       "right": {

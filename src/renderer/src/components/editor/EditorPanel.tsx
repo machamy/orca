@@ -217,7 +217,8 @@ function EditorPanelInner({
     markdownViewMode,
     markdownRichModeSizeOverridden,
     isChangesMode,
-    canOpenWorkspaceFileBrowser
+    canOpenWorkspaceFileBrowser,
+    markdownDefaultViewMode: settings?.markdownDefaultViewMode
   })
 
   const handleOpenPreviewToSide = (): void => {

@@ -27,6 +27,8 @@ type EditorPanelRenderModelParams = {
   markdownRichModeSizeOverridden: boolean
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
+  /** Fork: settings.markdownDefaultViewMode. */
+  markdownDefaultViewMode?: MarkdownViewMode
 }
 
 export function getEditorPanelRenderModel({
@@ -38,7 +40,8 @@ export function getEditorPanelRenderModel({
   markdownViewMode,
   markdownRichModeSizeOverridden,
   isChangesMode,
-  canOpenWorkspaceFileBrowser
+  canOpenWorkspaceFileBrowser,
+  markdownDefaultViewMode
 }: EditorPanelRenderModelParams) {
   const isSingleDiff =
     activeFile.mode === 'diff' &&
@@ -93,11 +96,14 @@ export function getEditorPanelRenderModel({
     diffSource: activeFile.diffSource
   })
   const hasViewModeToggle = markdownViewModes.length > 0
-  const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
-    language: viewerLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
+  const defaultMarkdownViewMode = getDefaultMarkdownViewMode(
+    {
+      language: viewerLanguage,
+      mode: activeFile.mode,
+      diffSource: activeFile.diffSource
+    },
+    markdownDefaultViewMode
+  )
   const storedMarkdownViewMode = markdownViewMode[activeFile.id]
   const mdViewMode: MarkdownViewMode =
     hasViewModeToggle &&

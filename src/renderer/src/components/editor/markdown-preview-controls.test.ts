@@ -8,23 +8,24 @@ import {
 } from './markdown-preview-controls'
 
 describe('getMarkdownViewModes', () => {
-  it('offers source and rich for markdown edit tabs', () => {
+  // Fork: preview is back in the toggle so a doc the rich editor refuses is readable in place.
+  it('offers source, rich and preview for markdown edit tabs', () => {
     expect(
       getMarkdownViewModes({
         language: 'markdown',
         mode: 'edit'
       })
-    ).toEqual(['source', 'rich'])
+    ).toEqual(['source', 'rich', 'preview'])
   })
 
-  it('offers source and rich for single-file markdown diffs', () => {
+  it('offers source, rich and preview for single-file markdown diffs', () => {
     expect(
       getMarkdownViewModes({
         language: 'markdown',
         mode: 'diff',
         diffSource: 'unstaged'
       })
-    ).toEqual(['source', 'rich'])
+    ).toEqual(['source', 'rich', 'preview'])
   })
 
   it('does not offer preview for mermaid edit tabs', () => {
@@ -47,13 +48,36 @@ describe('getMarkdownViewModes', () => {
 })
 
 describe('markdown preview helpers', () => {
-  it('defaults markdown edit tabs to rich mode', () => {
+  it('defaults markdown edit tabs to preview when no default is set', () => {
     expect(
       getDefaultMarkdownViewMode({
         language: 'markdown',
         mode: 'edit'
       })
-    ).toBe('rich')
+    ).toBe('preview')
+  })
+
+  it('honours the markdown default view setting', () => {
+    expect(getDefaultMarkdownViewMode({ language: 'markdown', mode: 'edit' }, 'rich')).toBe('rich')
+    expect(getDefaultMarkdownViewMode({ language: 'markdown', mode: 'edit' }, 'source')).toBe(
+      'source'
+    )
+  })
+
+  it('keeps diffs on source regardless of the markdown default', () => {
+    // Why: a diff tab exists to show changes; preview would hide them.
+    expect(
+      getDefaultMarkdownViewMode(
+        { language: 'markdown', mode: 'diff', diffSource: 'unstaged' },
+        'preview'
+      )
+    ).toBe('source')
+  })
+
+  it('does not apply the markdown default to other languages', () => {
+    expect(getDefaultMarkdownViewMode({ language: 'mermaid', mode: 'edit' }, 'preview')).toBe(
+      'rich'
+    )
   })
 
   it('defaults markdown diffs to source mode', () => {

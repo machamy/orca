@@ -191,6 +191,7 @@ module.exports = {
     // that displaces every arm64 asar offset after it. Observed 2026-09-10: 21 files
     // rode into app.asar because nothing excluded them.
     '!mockups{,/**/*}',
+    '!briefs{,/**/*}',
     // Why: fork-local churn at the repo root. electron-builder scans file metadata once
     // and reuses it for both mac archs, so a file rewritten between the x64 and arm64
     // packs shifts every asar offset after it and the arm64 app silently fails to boot.

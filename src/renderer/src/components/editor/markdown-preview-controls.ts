@@ -6,8 +6,19 @@ type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
 }
 
-const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
-const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+// Fork: 'preview' is back in the toggle. Upstream moved it to a separate tab (#849) but
+// kept the in-pane render path; reading a doc the rich editor refuses (HTML, generics
+// like `List<T>`, >50k chars) should not take a second tab.
+const MARKDOWN_EDIT_VIEW_MODES = [
+  'source',
+  'rich',
+  'preview'
+] as const satisfies readonly MarkdownViewMode[]
+const MARKDOWN_DIFF_VIEW_MODES = [
+  'source',
+  'rich',
+  'preview'
+] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
@@ -68,11 +79,18 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
   return NO_VIEW_MODES
 }
 
-export function getDefaultMarkdownViewMode(target: MarkdownPreviewTarget): MarkdownViewMode {
+export function getDefaultMarkdownViewMode(
+  target: MarkdownPreviewTarget,
+  /** Fork: the user's default for markdown files; absent means 'preview'. */
+  markdownDefault: MarkdownViewMode = 'preview'
+): MarkdownViewMode {
   if (target.language === 'markdown' && target.mode === 'diff') {
     return 'source'
   }
   const modes = getMarkdownViewModes(target)
+  if (target.language === 'markdown' && modes.includes(markdownDefault)) {
+    return markdownDefault
+  }
   return modes.includes('rich') ? 'rich' : 'source'
 }
 

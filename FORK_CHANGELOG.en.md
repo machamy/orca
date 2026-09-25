@@ -24,6 +24,42 @@ source.
 
 ---
 
+## machamy.13 — on upstream `1.4.197` · 2026-09-25
+
+Makes reviewing code and reading docs easier. No upstream merge.
+
+### Markdown preview is back in the toggle, and is the default view
+- The rich editor refuses raw HTML, prose generics (`List<Foo>`) and anything over
+  50k characters; such docs dead-ended at "editable only in code mode". The renderer
+  was never missing — upstream moved preview to a **separate tab** in #849 and dropped
+  it from the toggle, but left the in-pane preview path in both the edit and diff
+  surfaces.
+- That path is exposed again: the editor's top-right toggle is **Source · Rich ·
+  Preview · Changes**. Preview renders like GitHub (GFM tables and task lists, raw
+  HTML, `<details>`, highlighted code, cross-document links).
+- **Markdown opens in Preview by default.** Settings → Editor → "Markdown Default
+  View" picks Preview, Rich or Source; the per-file toggle still wins.
+- **Diffs can switch to Preview too** (rendering the modified side). Their default
+  stays Source — a diff tab is opened to see changes, which a preview would hide.
+- Note: an unfenced `List<MetaRewardDto>` loses `<MetaRewardDto>` as an unknown tag,
+  exactly as on GitHub. Backticks keep it.
+
+### Source Control filter: by extension, with a review preset
+- The filter was a path substring, so `.cs` dragged in `Foo.cs.meta`, `Foo.csproj`
+  and `style.css`, and several extensions could not be asked for at once. Tokens
+  written as extensions (`.cs .json .md`, `*.cs`, `.cs.meta`) now match the path's
+  **ending** and OR together; a bare word keeps its substring meaning, so folder
+  searches are unchanged. Working-tree groups and the committed-vs-base list share it.
+- A **`.cs .json .md` chip** beside the input leaves just the files a human reads when
+  reviewing agent output; a second click clears it.
+
+### Verification
+- Fork gate **120 files / 1,468 tests** green; typecheck and lint 0.
+- Two rendered-app checks: a seven-extension fixture through the filter, and a doc the
+  rich editor refuses (raw HTML, prose generics, >50k chars) opening in the GitHub-style
+  preview by default and toggling Source ↔ Preview. Also rendered a real 135KB internal
+  doc and checked it by eye.
+
 ## machamy.12 — on upstream `1.4.197` · 2026-09-09
 
 Fixes machamy.11's badge appearing on some agent panes and not others. Digging
