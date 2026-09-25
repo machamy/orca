@@ -16,6 +16,7 @@
 
 /** Test files that exist only in the fork. */
 export const FORK_ADDED_TESTS = [
+  'src/renderer/src/components/editor/markdown-preview-reading-layout.test.ts',
   'src/cli/handlers/worktree-default-set.test.ts',
   'src/main/claude/claude-project-transcript-swap.test.ts',
   'src/main/git/default-worktree-switch-ignored-collision.test.ts',

@@ -153,7 +153,7 @@ export function useMarkdownPreviewComponents({
 
         return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
-      code: ({ className, children, ...props }) => {
+      code: ({ node: _node, className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
           return (
             <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />

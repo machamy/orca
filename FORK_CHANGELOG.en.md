@@ -31,6 +31,22 @@ stays `1.4.197` (upstream cut no `release:` commit in between). The default-work
 switch stays: it was not what conflicted — its share of the 11 conflicted files it
 touched was a line or two each.
 
+### Markdown preview that looks like GitHub (follow-up to machamy.13's preview)
+- **The body uses GitHub's styles.** Light is `#ffffff` with `#1f2328` text; dark is GitHub's
+  dark default, `#0d1117` with `#f0f6fc`. 16px body at 1.5 line height, rules under h1/h2,
+  inline code chips, `#f6f8fa` code blocks, bordered and striped tables, a left bar on
+  quotes and a heavy hr, all at GitHub's values. Only the preview body changes; review
+  notes, search and the toolbar keep Orca's look.
+- **Inline code vanished on a light app.** The preview read the theme once when it opened,
+  so opening it while macOS was dark and Orca light froze it dark: the code chip became 10%
+  white on white, and only its padding showed as gaps. It now uses upstream's reactive
+  theme hook (`useDocumentDarkTheme`).
+- **Text wrapped at 60% of the width.** Upstream's new review notes reserve a 220–300px
+  note column beside **every** block, even with no notes, so multi-line paragraphs wrapped
+  narrow while one-liners ran full width. The column now exists only on blocks with a note
+  or an open composer. The hover `+` button is unchanged.
+- Inline `<code>` no longer leaks a `node="[object Object]"` attribute.
+
 ### Upstream merge (1,307 commits, `1.4.197` unchanged)
 - By type: fix 602 · **perf 224** · feat 166 · test 87 · refactor 64.
 - By area: **mobile 208** · native chat 97 · relay 63 · terminal 54 · runtime 37 ·

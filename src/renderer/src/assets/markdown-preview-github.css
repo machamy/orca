@@ -1,0 +1,217 @@
+/* Fork: the markdown preview is the "read it like GitHub" view (machamy.13), so the
+   document body takes GitHub's own markdown styles (Primer, light + dark default)
+   instead of Orca's tokens. Scoped to the preview body; the rail, toolbar and search
+   bar keep Orca's look. Selectors carry `.markdown-preview` to outrank the base
+   `.markdown-body` / `.markdown-light` rules in markdown-preview.css. */
+
+.markdown-preview.markdown-light {
+  --gh-fg: #1f2328;
+  --gh-fg-muted: #59636e;
+  --gh-canvas: #ffffff;
+  --gh-canvas-subtle: #f6f8fa;
+  --gh-border: #d1d9e0;
+  --gh-border-muted: #d1d9e0b3;
+  --gh-neutral-muted: #818b981f;
+  --gh-accent: #0969da;
+  background: var(--gh-canvas);
+  color: var(--gh-fg);
+}
+
+.markdown-preview.markdown-dark {
+  --gh-fg: #f0f6fc;
+  --gh-fg-muted: #9198a1;
+  --gh-canvas: #0d1117;
+  --gh-canvas-subtle: #151b23;
+  --gh-border: #3d444d;
+  --gh-border-muted: #3d444db3;
+  --gh-neutral-muted: #656c7633;
+  --gh-accent: #4493f8;
+  background: var(--gh-canvas);
+  color: var(--gh-fg);
+}
+
+.markdown-preview .markdown-body {
+  /* 16px at the default 14px editor size, and still follows editor zoom. */
+  font-size: calc(1em * 16 / 14);
+  line-height: 1.5;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+  color: var(--gh-fg);
+  overflow-wrap: break-word;
+}
+
+.markdown-preview .markdown-body p,
+.markdown-preview .markdown-body blockquote,
+.markdown-preview .markdown-body ul,
+.markdown-preview .markdown-body ol,
+.markdown-preview .markdown-body dl,
+.markdown-preview .markdown-body table,
+.markdown-preview .markdown-body pre,
+.markdown-preview .markdown-body details {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.markdown-preview .markdown-body h1,
+.markdown-preview .markdown-body h2,
+.markdown-preview .markdown-body h3,
+.markdown-preview .markdown-body h4,
+.markdown-preview .markdown-body h5,
+.markdown-preview .markdown-body h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: normal;
+}
+
+.markdown-preview .markdown-body h1 {
+  font-size: 2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--gh-border-muted);
+}
+
+.markdown-preview .markdown-body h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--gh-border-muted);
+}
+
+.markdown-preview .markdown-body h3 {
+  font-size: 1.25em;
+}
+
+.markdown-preview .markdown-body h4 {
+  font-size: 1em;
+}
+
+.markdown-preview .markdown-body h5 {
+  font-size: 0.875em;
+  color: var(--gh-fg);
+}
+
+.markdown-preview .markdown-body h6 {
+  font-size: 0.85em;
+  color: var(--gh-fg-muted);
+}
+
+.markdown-preview .markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-preview .markdown-body a {
+  color: var(--gh-accent);
+  text-decoration: none;
+}
+
+.markdown-preview .markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-preview .markdown-body code,
+.markdown-preview .markdown-body kbd,
+.markdown-preview .markdown-body pre {
+  font-family:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.markdown-preview .markdown-body code {
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  white-space: break-spaces;
+  background: var(--gh-neutral-muted);
+  border-radius: 6px;
+}
+
+.markdown-preview .markdown-body pre {
+  padding: 16px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  color: var(--gh-fg);
+  background: var(--gh-canvas-subtle);
+  border: 0;
+  border-radius: 6px;
+}
+
+.markdown-preview .markdown-body pre code {
+  padding: 0;
+  font-size: 100%;
+  white-space: pre;
+  background: transparent;
+  border: 0;
+}
+
+.markdown-preview .markdown-body blockquote {
+  padding: 0 1em;
+  color: var(--gh-fg-muted);
+  background: transparent;
+  border-left: 0.25em solid var(--gh-border);
+  border-radius: 0;
+}
+
+.markdown-preview .markdown-body ul,
+.markdown-preview .markdown-body ol {
+  padding-left: 2em;
+}
+
+.markdown-preview .markdown-body ul ul,
+.markdown-preview .markdown-body ul ol,
+.markdown-preview .markdown-body ol ol,
+.markdown-preview .markdown-body ol ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.markdown-preview .markdown-body li + li {
+  margin-top: 0.25em;
+}
+
+.markdown-preview .markdown-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+  border-spacing: 0;
+  border-collapse: collapse;
+  font-size: 1em;
+  font-variant: tabular-nums;
+}
+
+.markdown-preview .markdown-body th,
+.markdown-preview .markdown-body td {
+  padding: 6px 13px;
+  border: 1px solid var(--gh-border);
+}
+
+.markdown-preview .markdown-body th {
+  font-size: 1em;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  background: transparent;
+}
+
+.markdown-preview .markdown-body tr {
+  background: var(--gh-canvas);
+  border-top: 1px solid var(--gh-border-muted);
+}
+
+.markdown-preview .markdown-body tr td,
+.markdown-preview .markdown-body tr:nth-child(even) td {
+  background: transparent;
+}
+
+.markdown-preview .markdown-body tr:nth-child(2n) {
+  background: var(--gh-canvas-subtle);
+}
+
+.markdown-preview .markdown-body hr {
+  height: 0.25em;
+  padding: 0;
+  margin: 24px 0;
+  background: var(--gh-border);
+  border: 0;
+}

@@ -334,6 +334,17 @@
   align-items: start;
 }
 
+/* Fork: reserve the note rail only where a note or composer lives; otherwise an
+   un-annotated doc wraps every block at ~60% width and reads nothing like GitHub. */
+.markdown-annotation-block:not(.has-review-notes):not(
+    :has(> .markdown-annotation-controls .markdown-annotation-composer)
+  ),
+.markdown-annotation-list-block:not(.has-review-notes):not(
+    :has(> .markdown-annotation-controls .markdown-annotation-composer)
+  ) {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
 .markdown-annotation-block > :not(.markdown-annotation-controls),
 .markdown-annotation-list-content {
   grid-column: 1;

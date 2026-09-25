@@ -14,6 +14,7 @@ import {
   resolveMarkdownPreviewSourceWorktree
 } from './markdown-preview-source-routing'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
+import { useDocumentDarkTheme } from './use-document-dark-theme'
 
 export function useMarkdownPreviewSourceFoundation({
   content,
@@ -143,9 +144,9 @@ export function useMarkdownPreviewSourceFoundation({
   )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  // Why the shared hook: a one-shot matchMedia read kept the theme it saw at mount, so a
+  // preview opened mid OS-theme change stayed dark on a light app (invisible inline code).
+  const isDark = useDocumentDarkTheme()
 
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
