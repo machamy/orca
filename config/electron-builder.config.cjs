@@ -12,6 +12,7 @@ const {
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+const { localGitExcludePackagingPatterns } = require('./scripts/local-git-exclude-packaging.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const {
@@ -192,6 +193,10 @@ module.exports = {
     // rode into app.asar because nothing excluded them.
     '!mockups{,/**/*}',
     '!briefs{,/**/*}',
+    // Why: E2E screenshots and traces; gitignored, but electron-builder ignores that.
+    '!test-results{,/**/*}',
+    // Why: anything hidden from git locally (see local-git-exclude-packaging.cjs).
+    ...localGitExcludePackagingPatterns(resolve(__dirname, '..')),
     // Why: fork-local churn at the repo root. electron-builder scans file metadata once
     // and reuses it for both mac archs, so a file rewritten between the x64 and arm64
     // packs shifts every asar offset after it and the arm64 app silently fails to boot.

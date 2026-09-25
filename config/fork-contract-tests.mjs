@@ -36,6 +36,7 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/browser-pane/navigate/retry-browser-page-load.test.ts',
   'src/renderer/src/components/editor/details-markdown-html.test.ts',
   'src/renderer/src/components/editor/markdown-rich-mode.test.ts',
+  'config/scripts/local-git-exclude-packaging.test.mjs',
   'src/renderer/src/components/editor/markdown-preview-controls.test.ts',
   'src/renderer/src/components/right-sidebar/source-control/listing/file-filter.test.ts',
   'src/renderer/src/components/right-sidebar/source-control/panel/SourceControlFilterPreset.test.tsx',
