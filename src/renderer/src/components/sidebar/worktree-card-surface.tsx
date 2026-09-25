@@ -70,12 +70,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         isDefaultSwitchDropTarget
           ? 'border border-worktree-sidebar-ring/50 bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40'
           : isLineageDropTarget
-          ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
-          : isActiveSurface
-            ? 'border border-transparent'
-            : isMultiSelected
-              ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-              : 'border border-transparent worktree-sidebar-card-hover',
+            ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
+            : isActiveSurface
+              ? 'border border-transparent'
+              : isMultiSelected
+                ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
+                : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         // Why: the wash sits at -z-10 so the row's glyphs stay above it; without a
         // stacking context here it would drop behind the sidebar and disappear.
