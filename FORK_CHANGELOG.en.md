@@ -36,6 +36,13 @@ up `main` again and labels the base with the latest release tag.
   0.157+ startup failure (#22878, a socket path too long in Orca-managed homes), is in.**
   The rest of the 1.4.212 tag's difference is version bumps, release CI and a
   release-only revert, so there is nothing else to take.
+- **The label comes from a `FORK_UPSTREAM_RELEASE` file.** `package.json` keeps upstream's value
+  (1.4.197): upstream's hourly tooling and tests assume it stays low, and changing it would
+  conflict on every merge. Only the local build (`build:mac`) uses the file as its base
+  version; bump it to the latest tag when catching up.
+- One upstream test had been failing quietly since machamy.13 (the fork's added
+  `extensionSuffixes` field in the source-control filter state). Its expectations are fixed
+  and it is now on the fork contract list.
 - Upstream features: Cursor usage tracking, a one-time tip for agent session search, and
   native Claude chats recording subagent status.
 - Merged upstream's rule that a folder project's root is its default workspace with the

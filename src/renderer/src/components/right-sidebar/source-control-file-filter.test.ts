@@ -12,7 +12,11 @@ describe('source-control-file-filter', () => {
   it('normalizes bounded queries and filters entries by path', () => {
     const filter = getSourceControlFileFilterState('  SRC/button  ')
 
-    expect(filter).toEqual({ normalizedFilter: 'src/button', tooLarge: false })
+    expect(filter).toEqual({
+      normalizedFilter: 'src/button',
+      tooLarge: false,
+      extensionSuffixes: null
+    })
     expect(
       filterSourceControlPathEntries(
         [{ path: 'src/Button.tsx' }, { path: 'docs/Button.md' }],
@@ -45,7 +49,7 @@ describe('source-control-file-filter', () => {
     const filter = getSourceControlFileFilterState(oversizedQuery)
 
     expect(isSourceControlFileFilterQueryTooLarge(oversizedQuery)).toBe(true)
-    expect(filter).toEqual({ normalizedFilter: '', tooLarge: true })
+    expect(filter).toEqual({ normalizedFilter: '', tooLarge: true, extensionSuffixes: null })
     expect(filterSourceControlPathEntries([throwingEntry], filter)).toEqual([])
     expect(
       filterSourceControlGroupedPathEntries(
@@ -58,6 +62,6 @@ describe('source-control-file-filter', () => {
   it('rejects oversized whitespace before trimming source-control filters', () => {
     expect(
       getSourceControlFileFilterState(' '.repeat(SOURCE_CONTROL_FILE_FILTER_QUERY_MAX_BYTES + 1))
-    ).toEqual({ normalizedFilter: '', tooLarge: true })
+    ).toEqual({ normalizedFilter: '', tooLarge: true, extensionSuffixes: null })
   })
 })

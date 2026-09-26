@@ -18,7 +18,11 @@ export function createLocalBuildVersion(baseVersion, timestamp, commit, forkRev)
     throw new Error('Git commit identity is empty.')
   }
   const sanitizedForkRev =
-    forkRev == null ? '' : String(forkRev).replace(/[^0-9A-Za-z-]/g, '').slice(0, 32)
+    forkRev == null
+      ? ''
+      : String(forkRev)
+          .replace(/[^0-9A-Za-z-]/g, '')
+          .slice(0, 32)
   const suffix = sanitizedForkRev
     ? `machamy.${sanitizedForkRev}.local.${timestamp}.${sanitizedCommit}`
     : `local.${timestamp}.${sanitizedCommit}`
@@ -34,14 +38,27 @@ function readForkRevision() {
   }
 }
 
+// Fork: upstream never bumps package.json on main (releases are tags on side
+// branches, and its hourly tooling relies on that), so the upstream release this
+// fork tracks lives in FORK_UPSTREAM_RELEASE and only labels the build.
+export function readForkUpstreamRelease(path = resolve('FORK_UPSTREAM_RELEASE')) {
+  try {
+    const raw = readFileSync(path, 'utf8').trim()
+    return /^\d+\.\d+\.\d+$/.test(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
 export function getLocalBuildIdentity() {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'
   }).trim()
+  const baseVersion = readForkUpstreamRelease() ?? packageJson.version
   return {
     commit,
-    version: createLocalBuildVersion(packageJson.version, Date.now(), commit, readForkRevision())
+    version: createLocalBuildVersion(baseVersion, Date.now(), commit, readForkRevision())
   }
 }
 
