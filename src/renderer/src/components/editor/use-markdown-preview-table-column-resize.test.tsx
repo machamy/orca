@@ -118,6 +118,21 @@ describe('preview table column resize', () => {
     expect(loadMarkdownTableColumnWidths(FILE, 0, 2)).toBeNull()
   })
 
+  it('resets on a double-click that pointer capture retargeted to the body', () => {
+    saveMarkdownTableColumnWidths(FILE, 0, [180, null])
+    const { body, headers } = mount()
+    placeCell(headers[0], 180, 180)
+    const original = document.elementFromPoint
+    document.elementFromPoint = () => headers[0]
+    try {
+      body.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 178 }))
+    } finally {
+      document.elementFromPoint = original
+    }
+    expect(headers[0].style.width).toBe('')
+    expect(loadMarkdownTableColumnWidths(FILE, 0, 2)).toBeNull()
+  })
+
   it('never changes the markdown source it is given', () => {
     const source = '| a | b |\n| - | - |\n| 1 | 2 |'
     const { body, headers } = mount(source)

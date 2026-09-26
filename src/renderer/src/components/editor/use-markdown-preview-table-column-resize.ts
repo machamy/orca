@@ -54,7 +54,11 @@ function ownedWidths(table: HTMLTableElement): (number | null)[] {
 }
 
 function edgeCellAt(body: HTMLElement, event: MouseEvent): HTMLTableCellElement | null {
-  const cell = event.target instanceof Element ? event.target.closest('th') : null
+  // Why the point lookup: pointer capture retargets the dblclick that ends a
+  // double-click to the body, so the event target no longer names the cell.
+  const fromTarget = event.target instanceof Element ? event.target.closest('th') : null
+  const atPoint = fromTarget ? null : document.elementFromPoint?.(event.clientX, event.clientY)
+  const cell = fromTarget ?? atPoint?.closest('th') ?? null
   if (!(cell instanceof HTMLTableCellElement) || !body.contains(cell)) {
     return null
   }
