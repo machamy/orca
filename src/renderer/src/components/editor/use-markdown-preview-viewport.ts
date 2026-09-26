@@ -140,10 +140,18 @@ export function useMarkdownPreviewViewport({
       }
 
       const decodedAnchor = decodeMarkdownPreviewAnchor(rawAnchor)
+      // Fork: like GitHub, fall back to the sanitizer's `user-content-` id, which is what
+      // footnote back-links and raw-HTML ids actually carry.
+      const wantedIds = [decodedAnchor, `user-content-${decodedAnchor}`]
       let target: HTMLElement | null = null
-      for (const candidate of body.querySelectorAll<HTMLElement>('[id]')) {
-        if (candidate.id === decodedAnchor) {
-          target = candidate
+      for (const wanted of wantedIds) {
+        for (const candidate of body.querySelectorAll<HTMLElement>('[id]')) {
+          if (candidate.id === wanted) {
+            target = candidate
+            break
+          }
+        }
+        if (target) {
           break
         }
       }

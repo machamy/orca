@@ -54,6 +54,14 @@ touched was a line or two each.
   file, and now so does the preview; explicit breaks (two trailing spaces or `\`) stay.
   Sidebar comment rendering keeps its breaks, since those are comments.
 - Code-block comments are no longer italic, matching GitHub.
+- **Task lists and footnotes like GitHub.** Checkboxes came out as Orca's custom box or the
+  native one depending on the item; they are now GitHub's native disabled checkbox (dark
+  styled in dark). Footnotes render small and muted under a rule, with a text `↩` rather
+  than an emoji. The last paragraph of an alert no longer adds bottom space.
+- **Footnote and anchor links did not jump.** The sanitizer prefixes ids with
+  `user-content-`, but the preview matched ids exactly, so footnote links
+  (`#user-content-fn-1`, whose real id carries the prefix twice) and `#links` to raw-HTML
+  ids went nowhere. Like GitHub, it now also tries the prefixed id.
 
 ### Upstream merge (1,307 commits, `1.4.197` unchanged)
 - By type: fix 602 · **perf 224** · feat 166 · test 87 · refactor 64.

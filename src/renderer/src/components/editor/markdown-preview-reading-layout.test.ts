@@ -33,15 +33,27 @@ describe('markdown preview reading layout', () => {
     }
   })
 
+  it('renders task lists, footnotes and alert endings the GitHub way', () => {
+    const github = read('../../assets/markdown-preview-github.css')
+    expect(github).toContain('appearance: auto;')
+    expect(github).toContain('.markdown-preview .markdown-body .footnotes {')
+    expect(github).toContain('font-variant-emoji: text;')
+    expect(github).toMatch(/> \.markdown-annotation-block:last-child\s*> :first-child/)
+  })
+
+  it('resolves #anchors to the sanitizer-prefixed id, as GitHub does', () => {
+    expect(read('use-markdown-preview-viewport.ts')).toContain('`user-content-${decodedAnchor}`')
+  })
+
   it('follows the resolved app theme instead of a one-shot media query', () => {
     const foundation = read('use-markdown-preview-source-foundation.ts')
     expect(foundation).toContain('const isDark = useDocumentDarkTheme()')
     expect(foundation).not.toContain("window.matchMedia('(prefers-color-scheme: dark)')")
   })
 
-  it('keeps the react-markdown node object off the inline code element', () => {
-    expect(read('use-markdown-preview-components.tsx')).toContain(
-      'code: ({ node: _node, className, children, ...props }) =>'
-    )
+  it('keeps the react-markdown node object off inline code and links', () => {
+    const components = read('use-markdown-preview-components.tsx')
+    expect(components).toContain('code: ({ node: _node, className, children, ...props }) =>')
+    expect(components).toContain('a: ({ node: _node, href, children, className, ...props }) =>')
   })
 })

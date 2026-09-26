@@ -13,6 +13,7 @@
   --gh-border-muted: #d1d9e0b3;
   --gh-neutral-muted: #818b981f;
   --gh-accent: #0969da;
+  color-scheme: light;
   background: var(--gh-canvas);
   color: var(--gh-fg);
 }
@@ -26,6 +27,8 @@
   --gh-border-muted: #3d444db3;
   --gh-neutral-muted: #656c7633;
   --gh-accent: #4493f8;
+  /* Native task-list checkboxes follow this, as on GitHub. */
+  color-scheme: dark;
   background: var(--gh-canvas);
   color: var(--gh-fg);
 }
@@ -229,7 +232,12 @@
   margin-top: 0;
 }
 
-.markdown-preview .markdown-body .markdown-alert > :last-child {
+.markdown-preview .markdown-body .markdown-alert > :last-child,
+.markdown-preview
+  .markdown-body
+  .markdown-alert
+  > .markdown-annotation-block:last-child
+  > :first-child {
   margin-bottom: 0;
 }
 
@@ -315,4 +323,44 @@
 .markdown-preview .markdown-body .hljs-comment,
 .markdown-preview .markdown-body .hljs-quote {
   font-style: normal;
+}
+
+/* GitHub task lists: the native disabled checkbox, hung in the list indent. Undoes the
+   custom box in markdown-preview.css (which also missed items wrapped for review notes). */
+.markdown-preview .markdown-body .task-list-item {
+  list-style-type: none;
+}
+
+.markdown-preview .markdown-body li input[type='checkbox'],
+.markdown-preview .markdown-body li input[type='checkbox']:checked {
+  appearance: auto;
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0 0.2em 0.25em -1.4em;
+  border: revert;
+  border-radius: revert;
+  background: revert;
+  vertical-align: middle;
+}
+
+.markdown-preview .markdown-body li input[type='checkbox']::after,
+.markdown-preview .markdown-body li input[type='checkbox']:checked::after {
+  content: none;
+}
+
+/* GitHub footnotes: small, muted, under a rule; the back-link arrow stays text, not emoji. */
+.markdown-preview .markdown-body .footnotes {
+  font-size: 0.75em;
+  color: var(--gh-fg-muted);
+  border-top: 1px solid var(--gh-border);
+}
+
+.markdown-preview .markdown-body .footnotes ol {
+  padding-left: 16px;
+}
+
+.markdown-preview .markdown-body .data-footnote-backref {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-variant-emoji: text;
 }

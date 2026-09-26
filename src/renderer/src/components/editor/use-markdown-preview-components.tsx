@@ -83,7 +83,7 @@ export function useMarkdownPreviewComponents({
     }
 
     return {
-      a: ({ href, children, className, ...props }) => {
+      a: ({ node: _node, href, children, className, ...props }) => {
         const docLinkTarget = parseMarkdownDocLinkHref(href)
         if (docLinkTarget !== null) {
           const resolution = resolveMarkdownDocLink(docLinkTarget, markdownDocumentIndex)
