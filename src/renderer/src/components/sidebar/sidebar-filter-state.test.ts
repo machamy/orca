@@ -8,6 +8,8 @@ import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
+const gitRepo = { kind: 'git' } as const
+
 function makeWorktree(id: string, repoId = 'repo1'): Worktree {
   return {
     id,
@@ -57,11 +59,19 @@ describe('isDefaultBranchWorkspace', () => {
     expect(isDefaultBranchWorkspace(main, repoAt(main.path))).toBe(true)
   })
 
-  it('returns false for folder-mode main worktrees (empty branch)', () => {
+  it('returns false for an empty-branch git main (detached HEAD or offline SSH row)', () => {
+    const detached = makeWorktree('detached')
+    detached.isMainWorktree = true
+    detached.branch = ''
+    expect(isDefaultBranchWorkspace(detached, gitRepo)).toBe(false)
+  })
+
+  it('returns true for a folder project root, which has no branch', () => {
     const folder = makeWorktree('folder')
     folder.isMainWorktree = true
     folder.branch = ''
-    expect(isDefaultBranchWorkspace(folder, repoAt(folder.path))).toBe(false)
+    folder.head = ''
+    expect(isDefaultBranchWorkspace(folder, { kind: 'folder' })).toBe(true)
   })
 
   it('returns false for non-default-path worktrees even on the default branch', () => {
@@ -73,7 +83,7 @@ describe('isDefaultBranchWorkspace', () => {
     const provisionedRoot = makeWorktree('provisioned-root')
     provisionedRoot.isMainWorktree = true
     provisionedRoot.ephemeralVmCheckoutMode = 'provisioned-root'
-    expect(isDefaultBranchWorkspace(provisionedRoot)).toBe(false)
+    expect(isDefaultBranchWorkspace(provisionedRoot, gitRepo)).toBe(false)
   })
 })
 

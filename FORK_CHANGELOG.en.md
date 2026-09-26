@@ -24,6 +24,30 @@ source.
 
 ---
 
+## machamy.15 — upstream `1.4.212` · 2026-09-26
+
+Aligns with upstream's latest release, **1.4.212**. machamy.14 merged upstream `main`, but
+upstream never bumps the version on `main`; it tags release branches (`v1.4.212`) instead.
+So the build was mostly newer than 1.4.212 yet still labeled `1.4.197`. This rev catches
+up `main` again and labels the base with the latest release tag.
+
+### Upstream merge (66 commits, label `1.4.197` → `1.4.212`)
+- fix 41 · refactor 4 · feat 3. **The one substantive fix that only 1.4.212 had, the Codex
+  0.157+ startup failure (#22878, a socket path too long in Orca-managed homes), is in.**
+  The rest of the 1.4.212 tag's difference is version bumps, release CI and a
+  release-only revert, so there is nothing else to take.
+- Upstream features: Cursor usage tracking, a one-time tip for agent session search, and
+  native Claude chats recording subagent status.
+- Merged upstream's rule that a folder project's root is its default workspace with the
+  fork's rule that, after a default-worktree switch, the repo-path checkout is the default
+  (folders follow upstream, git repos follow the fork).
+- Upstream deleted a Windows process-list helper it no longer used; the Unity editor lookup
+  now reads the Windows process table directly.
+
+### Verification
+- Fork contract suite **122 files / 1,573 tests** and the merge-affected areas **1,432
+  files / 13,112 tests** pass. Typecheck and lint 0 errors.
+
 ## machamy.14 — upstream `1.4.197` · 2026-09-25
 
 Catches up **1,307 upstream commits**. No new fork features. The upstream version

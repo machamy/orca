@@ -124,8 +124,7 @@ describe('attachMainWindowServices', () => {
     await providerStartup.promise
     await Promise.resolve()
 
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledOnce()
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledWith(store)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledExactlyOnceWith(store)
   })
 
   it('passes injected update quit cleanup to the auto-updater', async () => {
@@ -139,17 +138,23 @@ describe('attachMainWindowServices', () => {
       createRuntime() as never,
       undefined,
       undefined,
-      { onBeforeUpdateQuit, updateInstallMode: 'supervised-headless-serve' }
+      {
+        onBeforeUpdateQuit,
+        onBeforeUpdateQuitFailure: 'abort',
+        updateInstallMode: 'supervised-headless-serve'
+      }
     )
 
     // Deferred to first paint — must not be configured at attach time.
     expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
     await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
-    expect(setupAutoUpdaterMock).toHaveBeenCalledWith(
-      mainWindow,
-      expect.objectContaining({ installMode: 'supervised-headless-serve' })
-    )
+    const [updaterWindow, updaterOptions] = setupAutoUpdaterMock.mock.calls[0]
+    expect(updaterWindow).toBe(mainWindow)
+    expect(updaterOptions).toMatchObject({
+      installMode: 'supervised-headless-serve',
+      onBeforeQuitFailure: 'abort'
+    })
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)

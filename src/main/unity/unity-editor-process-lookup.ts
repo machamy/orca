@@ -4,7 +4,7 @@ import {
 } from '../../shared/cross-platform-path'
 import { getCommandTokenPathBasename } from '../../shared/command-token-scanner'
 import { getFreshProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
-import { queryWindowsProcessRowsFresh } from '../providers/windows-foreground-process-rows'
+import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 
 /**
  * Which Unity EDITOR process (if any) already has a project open.
@@ -204,8 +204,11 @@ export function selectUnityEditorProcesses(
  *  scan from just before that launch is still inside its window. */
 async function defaultProcessRows(platform: NodeJS.Platform): Promise<UnityProcessRow[]> {
   if (platform === 'win32') {
-    // Why the copy: the Windows reader hands back a readonly view.
-    return [...(await queryWindowsProcessRowsFresh())]
+    // Why fall back to the image name: a process that denied a query handle has no command line.
+    return (await readWindowsProcessTableFresh()).map((row) => ({
+      pid: row.pid,
+      command: row.command || row.name
+    }))
   }
   return getFreshProcessTableSnapshot()
 }

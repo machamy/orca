@@ -158,8 +158,8 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
   })
 
   it('keeps a sleeping folder workspace, which has no sibling row to fall back to', () => {
-    // Folder-mode projects are main worktrees with an empty branch/head, so the
-    // default-branch predicate rejects them; sweeping them drops the whole project.
+    // Folder-mode projects are main worktrees with an empty branch/head; sweeping
+    // them drops the whole project.
     const folder: Worktree = {
       ...makeDefaultBranchWorktree(),
       id: 'wt-folder',
