@@ -10,6 +10,7 @@ import { MarkdownPreviewSearchBar } from './MarkdownPreviewSearchBar'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import type { MarkdownPreviewReviewActions } from './use-markdown-preview-review-actions'
 import type { MarkdownPreviewViewport } from './use-markdown-preview-viewport'
+import { useMarkdownPreviewTableColumnResize } from './use-markdown-preview-table-column-resize'
 
 export function MarkdownPreviewSurface({
   foundation,
@@ -40,6 +41,7 @@ export function MarkdownPreviewSurface({
     frontMatterInner,
     renderedContent
   } = foundation
+  useMarkdownPreviewTableColumnResize(bodyRef, filePath, renderedContent)
   // Fork feature: the default preview sanitizes raw HTML down to a small
   // whitelist, so a README written for GitHub renders with holes and nothing
   // says why. Detect that case and offer the wider, GitHub-flavored schema.

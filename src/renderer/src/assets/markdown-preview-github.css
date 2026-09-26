@@ -364,3 +364,14 @@
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
   font-variant-emoji: text;
 }
+
+/* Fork: view-only column resize (use-markdown-preview-table-column-resize.ts). */
+.markdown-preview .markdown-body th.is-column-resize-edge {
+  cursor: col-resize;
+  box-shadow: inset -2px 0 0 var(--gh-accent);
+}
+
+.markdown-preview .markdown-body.is-resizing-table-column {
+  cursor: col-resize;
+  user-select: none;
+}

@@ -18,6 +18,8 @@
 export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/editor/markdown-preview-reading-layout.test.ts',
   'src/renderer/src/components/editor/MarkdownPreviewBody.github.test.tsx',
+  'src/renderer/src/components/editor/markdown-preview-table-widths-storage.test.ts',
+  'src/renderer/src/components/editor/use-markdown-preview-table-column-resize.test.tsx',
   'src/cli/handlers/worktree-default-set.test.ts',
   'src/main/claude/claude-project-transcript-swap.test.ts',
   'src/main/git/default-worktree-switch-ignored-collision.test.ts',

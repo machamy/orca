@@ -24,6 +24,22 @@ source.
 
 ---
 
+## machamy.16 — upstream `1.4.212` · 2026-09-26
+
+No upstream merge. One feature for reading wide preview tables.
+
+### Resizable preview table columns (remembered per file)
+- Hover the **right edge of a header cell** in a preview table: the cursor turns ↔ and a
+  blue line shows. Drag to resize that column; **double-click** the edge to return it to
+  automatic width.
+- Widths are **remembered per file and table**, across reopening and restarting Orca. If
+  a table's column count changes (the document was edited into a different table), its
+  saved widths are not applied.
+- **View-only.** The markdown file is never touched; widths live only in this device's Orca
+  app storage (nothing is written in the repo or a remote workspace, so nothing can reach
+  git). The 200 most recently resized files are kept.
+- GitHub has no such control, but a table you have not resized looks exactly as on GitHub.
+
 ## machamy.15 — upstream `1.4.212` · 2026-09-26
 
 Aligns with upstream's latest release, **1.4.212**. machamy.14 merged upstream `main`, but
