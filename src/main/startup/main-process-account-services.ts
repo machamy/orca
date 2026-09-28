@@ -1,3 +1,4 @@
+import { broadcastClaudeStatusLineModel } from '../agent-hooks/claude-statusline-model-broadcast'
 import { app } from 'electron'
 import { RateLimitService } from '../rate-limits/service'
 import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
@@ -115,6 +116,7 @@ export function initializeMainProcessAccountServices(): void {
   agentHookServer.setClaudeStatusLineListener((event) => {
     state.rateLimits!.ingestLiveClaudeRateLimits(event)
   })
+  agentHookServer.setClaudeStatusLineModelListener(broadcastClaudeStatusLineModel)
   state.rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store.getSettings()
     return {

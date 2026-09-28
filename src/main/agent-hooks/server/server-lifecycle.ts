@@ -6,6 +6,10 @@ import {
   CLAUDE_STATUSLINE_PATHNAME,
   parseClaudeStatusLineBody
 } from '../../../shared/claude-statusline-rate-limits'
+import {
+  CLAUDE_STATUSLINE_MODEL_PATHNAME,
+  parseClaudeStatusLineModelBody
+} from '../../../shared/claude-statusline-model-badge'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
@@ -76,6 +80,15 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
       try {
         const body = await readRequestBody(req)
+        if (pathname === CLAUDE_STATUSLINE_MODEL_PATHNAME) {
+          const report = parseClaudeStatusLineModelBody(body)
+          if (report) {
+            this.onClaudeStatusLineModel?.(report)
+          }
+          res.writeHead(204)
+          res.end()
+          return
+        }
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
           const statusLineEvent = parseClaudeStatusLineBody(body)
           if (statusLineEvent) {
@@ -197,6 +210,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.env = 'production'
     this.onAgentStatus = null
     this.onClaudeStatusLine = null
+    this.onClaudeStatusLineModel = null
     this.onPaneStatusCleared = null
     this.onTransportInterference = null
     this.transportInterference.reset()

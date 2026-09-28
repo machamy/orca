@@ -24,6 +24,26 @@ source.
 
 ---
 
+## machamy.17 — upstream `1.4.212` · 2026-09-28
+
+No upstream merge. Makes the model/effort badge actually follow the agent.
+
+### The badge reads model and effort from the statusline
+- **The badge could not follow a mid-session model switch.** machamy.12 assumed Claude
+  puts model and effort on every tool hook; the official SDK types show hooks carry
+  **effort only** (the model arrives once, on SessionStart). So the model came from the
+  scraped startup frame, went stale on `/model` and vanished once the frame scrolled.
+- **Only the statusline receives model and effort on every refresh.** A fork wrapper now
+  sits in the statusLine slot: it reads both, tells Orca **only when they change**, then
+  runs the command that was there (your own status line, or Orca's usage feed) — **the
+  terminal's status line does not change at all.** The badge uses this value first.
+- The settings entry reads "run the wrapper if present, else the original command", so a
+  settings file carried to a machine without Orca still shows its status line. Uninstalling
+  Orca's hooks restores the original command. A user who deleted the status line is left alone.
+- After an Orca restart the next refresh reports again (the hook server's port change is
+  the signal).
+- macOS and Linux only. Windows and remote (SSH) panes keep reading hooks and the frame.
+
 ## machamy.16 — upstream `1.4.212` · 2026-09-26
 
 No upstream merge. One feature for reading wide preview tables.

@@ -19,6 +19,10 @@ import { getManagedScript } from './hook-script'
 export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
 import {
+  installModelBadgeStatusLineWrapper,
+  restoreModelBadgeStatusLine
+} from './statusline-model-badge-wrapper'
+import {
   applyManagedHooks,
   applyManagedStatusLine,
   CLAUDE_EVENTS,
@@ -157,6 +161,7 @@ export class ClaudeHookService {
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
       nextConfig = this.installManagedStatusLine(nextConfig)
+      nextConfig = installModelBadgeStatusLineWrapper(nextConfig, this.options.settings)
     }
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
@@ -263,15 +268,19 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
+    const { config: badgeRestored, changed: badgeChanged } = restoreModelBadgeStatusLine(
       config,
+      this.options.settings
+    )
+    const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
+      badgeRestored,
       getManagedScriptFileName(this.options.settings)
     )
     const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
       hooksRemoved,
       getStatusLineScriptFileName(this.options.settings)
     )
-    if (hooksChanged || statusLineChanged) {
+    if (badgeChanged || hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
     }
     if (this.options.agent === 'claude') {

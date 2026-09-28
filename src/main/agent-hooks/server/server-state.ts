@@ -1,3 +1,4 @@
+import type { ClaudeStatusLineModelReport } from '../../../shared/claude-statusline-model-badge'
 import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
 
@@ -88,6 +89,8 @@ export abstract class AgentHookServerState {
   protected env = 'production'
   protected onAgentStatus: ServerAgentStatusListener = null
   protected onClaudeStatusLine: ServerStatusLineListener = null
+  // Fork: statusline model/effort for the pane badge (claude-statusline-model-badge.ts).
+  protected onClaudeStatusLineModel: ((report: ClaudeStatusLineModelReport) => void) | null = null
   protected onPaneStatusCleared: PaneStatusClearListener | null = null
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()

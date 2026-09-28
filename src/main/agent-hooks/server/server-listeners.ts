@@ -1,3 +1,4 @@
+import type { ClaudeStatusLineModelReport } from '../../../shared/claude-statusline-model-badge'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
@@ -97,6 +98,12 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ): void {
     this.onClaudeStatusLine = listener
+  }
+
+  setClaudeStatusLineModelListener(
+    listener: ((report: ClaudeStatusLineModelReport) => void) | null
+  ): void {
+    this.onClaudeStatusLineModel = listener
   }
 
   subscribeStatusChanges(listener: (statuses: AgentHookStatusChangeEntry[]) => void): () => void {

@@ -3,6 +3,7 @@
 // or the script body that lands on the remote box. Local install behavior
 // is exercised through `installer-utils.test.ts` and the per-CLI status
 // audit; this file covers ONLY the SFTP-backed path added in commit #8.
+import { getModelBadgeWrapperCommand } from './statusline-model-badge-wrapper'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -333,9 +334,14 @@ describe('ClaudeHookService.install', () => {
       expect(new ClaudeHookService().install().state).toBe('installed')
 
       const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+      // Fork: the model badge wraps the user's command instead of leaving the slot as is;
+      // the command itself is kept verbatim as the wrapper's fallback and is what uninstall restores.
       expect(settings.statusLine).toEqual({
         type: 'command',
-        command: '/usr/local/bin/my-statusline'
+        command:
+          process.platform === 'win32'
+            ? '/usr/local/bin/my-statusline'
+            : getModelBadgeWrapperCommand('/usr/local/bin/my-statusline')
       })
 
       // remove() must also leave the user's statusLine untouched.

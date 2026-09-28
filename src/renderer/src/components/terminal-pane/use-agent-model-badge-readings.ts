@@ -13,6 +13,10 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '../../store'
 import { readAgentModelBadge, type AgentModelBadgeReading } from './agent-model-badge-reading'
+import {
+  ensureAgentModelBadgeStatusLineFeed,
+  readAgentModelBadgeStatusLine
+} from './agent-model-badge-statusline-feed'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -59,6 +63,7 @@ export function useAgentModelBadgeReadings(args: {
       setReadings((previous) => (previous === EMPTY_READINGS ? previous : EMPTY_READINGS))
       return
     }
+    ensureAgentModelBadgeStatusLineFeed()
     const sample = (): void => {
       const state = useAppStore.getState()
       const next: Record<number, AgentModelBadgeReading> = {}
@@ -67,11 +72,14 @@ export function useAgentModelBadgeReadings(args: {
         if (!agent) {
           continue
         }
-        const status = state.agentStatusByPaneKey[makePaneKey(tabId, pane.leafId)]
+        const paneKey = makePaneKey(tabId, pane.leafId)
+        const status = state.agentStatusByPaneKey[paneKey]
+        // Why first: the statusline is the only feed that follows a mid-session `/model`.
+        const live = agent === 'claude' ? readAgentModelBadgeStatusLine(paneKey) : undefined
         const reading = readAgentModelBadge({
           agent,
-          reportedModel: status?.model,
-          reportedEffort: status?.effort,
+          reportedModel: live?.model ?? status?.model,
+          reportedEffort: live?.effort ?? status?.effort,
           screen: agent === 'claude' ? pane.serializeAddon.serialize({ scrollback: 0 }) : null,
           persisted: state.settings?.nativeChatSessionOptions
         })

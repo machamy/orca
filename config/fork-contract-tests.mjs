@@ -20,6 +20,8 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/editor/MarkdownPreviewBody.github.test.tsx',
   'src/renderer/src/components/editor/markdown-preview-table-widths-storage.test.ts',
   'src/renderer/src/components/editor/use-markdown-preview-table-column-resize.test.tsx',
+  'src/main/claude/statusline-model-badge-wrapper.test.ts',
+  'src/renderer/src/components/terminal-pane/agent-model-badge-statusline-feed.test.ts',
   'src/cli/handlers/worktree-default-set.test.ts',
   'src/main/claude/claude-project-transcript-swap.test.ts',
   'src/main/git/default-worktree-switch-ignored-collision.test.ts',
@@ -113,6 +115,7 @@ export const FORK_ADDED_TESTS = [
 
 /** Upstream test files carrying fork-added cases or fork-adjusted expectations. */
 export const FORK_CARRYING_TESTS = [
+  'src/main/claude/hook-service.test.ts',
   'config/scripts/build-mac-local.test.mjs',
   'src/renderer/src/components/right-sidebar/source-control-file-filter.test.ts',
   'src/main/browser/browser-guest-shortcut-forwarding.test.ts',

@@ -94,6 +94,7 @@
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",
     "../src/main/claude/statusline-script.ts",
+    "../src/main/claude/statusline-model-badge-wrapper.ts",
     "../src/main/claude-accounts/keychain.ts",
     "../src/main/macos-keychain/generic-password.ts",
     "../src/main/codex/codex-app-server-capability-cache.ts",
