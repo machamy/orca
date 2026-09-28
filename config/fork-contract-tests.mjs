@@ -21,6 +21,7 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/editor/markdown-preview-table-widths-storage.test.ts',
   'src/renderer/src/components/editor/use-markdown-preview-table-column-resize.test.tsx',
   'src/main/claude/statusline-model-badge-wrapper.test.ts',
+  'src/main/macos-app-bundle-editor-cli.test.ts',
   'src/renderer/src/components/terminal-pane/agent-model-badge-statusline-feed.test.ts',
   'src/cli/handlers/worktree-default-set.test.ts',
   'src/main/claude/claude-project-transcript-swap.test.ts',

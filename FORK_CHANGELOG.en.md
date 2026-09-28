@@ -48,6 +48,13 @@ No upstream merge. Makes the model/effort badge actually follow the agent.
   pane's badge would be empty right after an Orca restart.
 - macOS and Linux only. Windows and remote (SSH) panes keep reading hooks and the frame.
 
+### "Open in VS Code" did nothing useful
+- Orca opens VS Code with the `code` command, which only exists once VS Code's "Shell Command:
+  Install 'code' command in PATH" has been run; without it, opening failed with "Could not open
+  workspace folder" even though the app was installed.
+- On macOS, when PATH has no `code`, Orca now uses **the CLI inside the VS Code app bundle**
+  (`/Applications`, `~/Applications`), and likewise for Insiders and Cursor, including SSH remote opens.
+
 ## machamy.16 — upstream `1.4.212` · 2026-09-26
 
 No upstream merge. One feature for reading wide preview tables.

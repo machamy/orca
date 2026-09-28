@@ -4,6 +4,7 @@ import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../shared/wsl-paths'
 import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
 import { resolveCliCommand } from './codex-cli/command'
+import { resolveMacAppBundleEditorCli } from './macos-app-bundle-editor-cli'
 import {
   getLauncherBaseName,
   hasMatchingOuterQuotes,
@@ -134,11 +135,13 @@ function resolveSimpleEditorCommand(
   platform: NodeJS.Platform,
   fileExists: (path: string) => boolean
 ): string {
-  return preferJetBrainsGuiExecutable(
-    resolveCliCommand(command, { platform }),
-    platform,
-    fileExists
-  )
+  const resolved = resolveCliCommand(command, { platform })
+  // Fork: fall back to the CLI inside the app bundle when PATH has no match.
+  const bundled =
+    platform === 'darwin' && resolved === command
+      ? resolveMacAppBundleEditorCli(command, fileExists)
+      : null
+  return preferJetBrainsGuiExecutable(bundled ?? resolved, platform, fileExists)
 }
 
 function buildExecutableLaunchSpec(
@@ -232,7 +235,11 @@ export function resolveVsCodeRemoteSshLaunchSpec(
     if (isCompoundShellCommand(trimmed)) {
       return null
     }
-    editorCommand = resolveCliCommand(trimmed, { platform })
+    const resolved = resolveCliCommand(trimmed, { platform })
+    editorCommand =
+      (platform === 'darwin' && resolved === trimmed
+        ? resolveMacAppBundleEditorCli(trimmed, fileExists)
+        : null) ?? resolved
   }
 
   if (!isVsCodeLauncherExecutable(editorCommand)) {

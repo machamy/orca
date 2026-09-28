@@ -43,6 +43,12 @@
   스테이터스 라인을 새로 그리는데도 Orca 를 재시작한 직후 가만히 있는 패인의 배지가 비지 않는다.
 - macOS·Linux 만. Windows 와 원격(SSH)은 예전처럼 훅·화면 프레임으로 읽는다.
 
+### "VS Code 로 열기"가 안 되던 문제
+- Orca 는 `code` 명령으로 VS Code 를 여는데, VS Code 에서 "Shell Command: Install 'code' command in
+  PATH" 를 한 번도 안 했으면 이 명령이 없어서 앱이 설치돼 있어도 "폴더를 열 수 없습니다"로 실패했다.
+- 이제 macOS 에서 `code` 를 PATH 에서 못 찾으면 **VS Code 앱 안에 들어 있는 명령**을 직접 쓴다
+  (`/Applications`, `~/Applications`). Insiders·Cursor 도 같다. SSH 원격 폴더 열기도 같은 방식이다.
+
 ## machamy.16 — 원본 `1.4.212` 기준 · 2026-09-26
 
 원본 병합은 없다. 미리보기 표를 넓혀 보는 기능 하나.
