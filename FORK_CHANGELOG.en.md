@@ -43,7 +43,9 @@ No upstream merge. Makes the model/effort badge actually follow the agent.
 - After an Orca restart the next refresh reports again (the hook server's port change is
   the signal).
 - Main remembers the last value per pane, so a badge that mounts late (opening a terminal
-  after reading a document, or after a renderer reload) shows what already arrived.
+  after reading a document, or after a renderer reload) shows what already arrived. It is
+  also kept on disk: Claude reruns its statusline only on activity, so without it an idle
+  pane's badge would be empty right after an Orca restart.
 - macOS and Linux only. Windows and remote (SSH) panes keep reading hooks and the frame.
 
 ## machamy.16 — upstream `1.4.212` · 2026-09-26
