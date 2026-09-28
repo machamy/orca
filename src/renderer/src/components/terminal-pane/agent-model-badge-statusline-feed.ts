@@ -11,13 +11,24 @@ export function ensureAgentModelBadgeStatusLineFeed(): void {
   if (unsubscribe || typeof window === 'undefined') {
     return
   }
-  const onStatusLine = window.api?.agentModelBadge?.onStatusLine
-  if (!onStatusLine) {
+  const bridge = window.api?.agentModelBadge
+  if (!bridge?.onStatusLine) {
     return
   }
-  unsubscribe = onStatusLine((report) => {
+  unsubscribe = bridge.onStatusLine((report) => {
     reportsByPaneKey.set(report.paneKey, report)
   })
+  // Why: reports that arrived before this subscription only exist in main now.
+  void bridge
+    .snapshot?.()
+    .then((reports) => {
+      for (const report of reports) {
+        if (!reportsByPaneKey.has(report.paneKey)) {
+          reportsByPaneKey.set(report.paneKey, report)
+        }
+      }
+    })
+    .catch(() => {})
 }
 
 export function readAgentModelBadgeStatusLine(

@@ -42,6 +42,8 @@ No upstream merge. Makes the model/effort badge actually follow the agent.
   Orca's hooks restores the original command. A user who deleted the status line is left alone.
 - After an Orca restart the next refresh reports again (the hook server's port change is
   the signal).
+- Main remembers the last value per pane, so a badge that mounts late (opening a terminal
+  after reading a document, or after a renderer reload) shows what already arrived.
 - macOS and Linux only. Windows and remote (SSH) panes keep reading hooks and the frame.
 
 ## machamy.16 — upstream `1.4.212` · 2026-09-26

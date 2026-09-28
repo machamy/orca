@@ -10,6 +10,7 @@
 
 export const CLAUDE_STATUSLINE_MODEL_PATHNAME = '/statusline/claude-model'
 export const AGENT_MODEL_BADGE_STATUSLINE_CHANNEL = 'agentModelBadge:statusLine'
+export const AGENT_MODEL_BADGE_SNAPSHOT_CHANNEL = 'agentModelBadge:snapshot'
 
 // Model names and effort levels are short; anything longer is not what we asked for.
 const MAX_FIELD_LENGTH = 120
