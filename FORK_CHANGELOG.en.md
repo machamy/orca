@@ -24,6 +24,51 @@ source.
 
 ---
 
+## machamy.18 — upstream `1.4.219` · 2026-10-03
+
+Catches up **720 upstream commits** to the latest release, **1.4.219**. No new fork features.
+
+### Upstream merge (720 commits, `1.4.212` → `1.4.219`)
+- fix 373 · test 86 · feat 69 · perf 52. What matters most for this fork:
+  - **Codex**: runs in Orca terminals without Codex 0.157+'s shared background server
+    (#23900). Opening a terminal no longer **strips or reverts hooks in the real `~/.codex`**
+    (#23552), and an Esc-cancelled turn now settles (#24332).
+  - **Worktrees**: creation stops rescanning large repositories (#24346); git relists only
+    the repo that changed (#23998).
+  - **Sidebar**: an agent that retitles its pane to the project name (Codex) keeps its row
+    while it runs (#23948) — upstream fixed at the root, by foreground process, what the fork
+    had patched by title.
+  - **Markdown preview**: very large documents render only what is on screen, so they no
+    longer freeze (#24880).
+  - **Terminal**: background terminals no longer open as duplicate tabs (#24458), one tab
+    changing no longer re-renders every tab (#24261), and Reset Terminal was added (#23602).
+  - **Claude**: older Claude versions no longer discard the whole settings file (#23614).
+- Most new upstream features are for SSH remote servers (`orcad`), plus Qoder, DeepSeek and
+  Freebuff agent support and mid-turn message cards in Chat UI.
+
+### What the fork adjusted
+Resolved 30 conflicts (20 + 10 across two passes).
+
+- **Title-derived agent rows now use upstream's implementation.** #23948 solves the same
+  problem more broadly, so the fork's `worktree-title-agent-identity.ts` is gone. The fork's
+  regression cases (a Claude pane titled with only a task, a tab that never launched an
+  agent, dead panes) pass unchanged on upstream's logic.
+- **The statusline wrapper (machamy.17) sits inside upstream's version-aware install plan.**
+  When upstream retires its statusline for an old Claude, the wrapper unwraps first so
+  upstream recognizes its own entry.
+- **Preview rendering moved into upstream's new structure.** Upstream pulled the plugin
+  lists into `markdown-preview-plugins.ts` and renders large documents in a worker. The
+  fork's soft-break joining and GitHub alerts live in those lists, so they **apply to large
+  documents too** (pinned by a test); GitHub-flavored HTML and table column resizing are
+  rewired into the new surface. GitHub-flavored HTML is offered for ordinary-size documents
+  only (the large path keeps the default sanitizer).
+- The post-switch note to agents is sent as `driving` input under upstream's new input kinds.
+- Cleanup to match upstream removals: the now-duplicate `agentSubagentsEqual` fork module
+  and the removed agent-trust IPC registration.
+
+### Verification
+- Fork contract suite **130 files / 1,686 tests** pass. Typecheck and lint 0 errors.
+
 ## machamy.17 — upstream `1.4.212` · 2026-09-28
 
 No upstream merge. Makes the model/effort badge actually follow the agent.

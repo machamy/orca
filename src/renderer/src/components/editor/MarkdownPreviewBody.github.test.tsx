@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { MarkdownPreviewBody } from './MarkdownPreviewBody'
+import { parseMarkdownPreviewDocument } from './markdown-preview-document-tree'
 
 // Fork contract: the preview renders a .md file the way GitHub's file view does.
 const render = (content: string): string =>
@@ -46,5 +47,26 @@ describe('MarkdownPreviewBody GitHub parity', () => {
   it('leaves unknown markers and ordinary quotes alone', () => {
     expect(render('> [!FOO]\n> body\n')).toContain('<blockquote>')
     expect(render('> just a quote\n')).toContain('<blockquote>')
+  })
+
+  // Upstream renders large documents through a worker engine with its own pipeline entry;
+  // it must share the fork's rules or a long doc would stop reading like GitHub.
+  it('applies the same rules on the large-preview engine path', () => {
+    const { tree } = parseMarkdownPreviewDocument('first line\nsecond line\n\n> [!NOTE]\n> Body\n')
+    const serialized = JSON.stringify(tree)
+    expect(serialized).toContain('markdown-alert-note')
+    expect(serialized).toContain('markdown-alert-title')
+    expect(serialized).not.toContain('"tagName":"br"')
+    expect(serialized).not.toContain('[!NOTE]')
+  })
+
+  it('offers the GitHub-flavored HTML schema as an opt-in body mode', () => {
+    const markdown = '<center>middle</center>\n'
+    expect(render(markdown)).not.toContain('<center>')
+    expect(
+      renderToStaticMarkup(
+        <MarkdownPreviewBody content={markdown} components={{}} htmlMode="github" />
+      )
+    ).toContain('<center>middle</center>')
   })
 })

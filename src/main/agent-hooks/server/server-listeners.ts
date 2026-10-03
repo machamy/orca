@@ -1,4 +1,5 @@
 import type { ClaudeStatusLineModelReport } from '../../../shared/claude-statusline-model-badge'
+import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
@@ -55,7 +56,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
       })
     }
     for (const parent of this.canonicalStatusStore.getParents()) {
-      if (!parent.status) {
+      if (!parent.status || isTmuxInnerSubject(parent.subject)) {
         continue
       }
       rows.push({

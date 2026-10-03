@@ -116,6 +116,7 @@ export const FORK_ADDED_TESTS = [
 
 /** Upstream test files carrying fork-added cases or fork-adjusted expectations. */
 export const FORK_CARRYING_TESTS = [
+  'src/renderer/src/components/sidebar/WorktreeCardAgents.acknowledgement-emphasis.test.tsx',
   'src/main/claude/hook-service.test.ts',
   'config/scripts/build-mac-local.test.mjs',
   'src/renderer/src/components/right-sidebar/source-control-file-filter.test.ts',

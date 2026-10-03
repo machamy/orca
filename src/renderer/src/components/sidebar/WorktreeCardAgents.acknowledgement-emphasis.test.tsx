@@ -23,6 +23,9 @@ vi.mock('@/store', () => ({
       agentActivityDisplayMode: 'compact',
       acknowledgedAgentsByPaneKey: acknowledgements,
       agentSendPopoverTargetMode: null,
+      // Fork: the card also reads these (uncovered terminal tabs, default-switch progress).
+      tabsByWorktree: {},
+      defaultSwitchInFlight: null,
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
       sendPromptToSidebarAgentTarget: vi.fn()
