@@ -447,6 +447,7 @@ describe('WorktreeJumpPalette', () => {
     // The first row names ITS OWN host — the wrong-host open is gone.
     await act(async () => fireEvent.click(rows[0]!))
     expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+      navigationIntent: 'user-open',
       executionHostId: 'local'
     })
   })
@@ -469,6 +470,7 @@ describe('WorktreeJumpPalette', () => {
 
     await act(async () => fireEvent.click(rows[1]!))
     expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+      navigationIntent: 'user-open',
       executionHostId: 'ssh:box'
     })
   })
@@ -513,6 +515,7 @@ describe('WorktreeJumpPalette', () => {
 
     await act(async () => fireEvent.click(hubARow!))
     expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared-runtime', {
+      navigationIntent: 'user-open',
       executionHostId: 'runtime:hub-a'
     })
   })

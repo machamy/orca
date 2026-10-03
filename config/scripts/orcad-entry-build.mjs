@@ -3,14 +3,15 @@ import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..', '..')
 
-export const ORCAD_EXTERNAL_MODULES = [
-  'electron',
-  'node-pty',
-  '@parcel/watcher',
-  'fsevents',
-  'bun:ffi',
-  'bun:sqlite'
-]
+export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
+export const ORCAD_CHILD_ENTRY_POINTS = {
+  watcher: 'src/main/ipc/parcel-watcher-process-entry.ts',
+  daemon: 'src/main/daemon/daemon-entry.ts',
+  writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
+  backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
+}
+
+export const ORCAD_EXTERNAL_MODULES = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
 
 // Native binaries are staged separately from every JavaScript entry.
 export const externalNativeAddons = {
@@ -32,7 +33,7 @@ const jsoncParserEsm = {
 
 export function buildOrcadEntry(outfile) {
   return build({
-    entryPoints: [join(root, 'src/main/orcad/main.ts')],
+    entryPoints: [join(root, ORCAD_ENTRY_POINT)],
     bundle: true,
     platform: 'node',
     target: 'node18',

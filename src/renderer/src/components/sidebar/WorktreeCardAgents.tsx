@@ -173,7 +173,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     agentSendPopoverTargetMode?.sendingPaneKey,
     agentSendPopoverTargetMode?.status,
     isAgentSendTargetModeActive,
-    // sendTargetInputs: stable empty when inactive, shallow bundle of the five maps when active — one ref covers all five deps.
+    // sendTargetInputs: stable empty when inactive, shallow bundle of the target maps when active — one ref covers them all.
     sendTargetInputs,
     worktreeId
   ])
@@ -278,7 +278,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const isRootAgent = ancestorPaneKeys.size === 0
     // Why: spawned child agents are actionable work, so show them as soon as the parent appears (disclosure still folds noise).
     const expanded = !collapsedLineageParents.has(agent.paneKey)
     const sendTarget = isAgentSendTargetModeActive
@@ -304,14 +303,12 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           stateDotSize="sm"
           // Why: clicking the row jumps straight to the agent, so the expand chevron is redundant (keep the identity glyph).
           hideExpand
-          // Why: fold children under the parent row's leading chevron so a parent reads as a tree node (Variant B in the mockups).
+          // Why: child expansion belongs to the parent agent row.
           childAgentCount={hasChildAgents ? childAgents.length : undefined}
           childAgentsExpanded={expanded}
           onToggleChildAgents={
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
-          // Why: nested levels keep the chevron inline; their gutter is the parent's guide line.
-          disclosureInGutter={isRootAgent}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
@@ -340,7 +337,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const isRootAgent = ancestorPaneKeys.size === 0
     const expanded = !collapsedLineageParents.has(agent.paneKey)
     const sendTarget = isAgentSendTargetModeActive
       ? (sendTargetsByPaneKey.get(agent.paneKey) ?? {
@@ -355,6 +351,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         <CompactAgentRow
           agent={agent}
           now={now}
+          isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
           onActivate={
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }
@@ -366,7 +363,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onToggleChildAgents={
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
-          disclosureInGutter={isRootAgent}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           cacheTimerActive={cacheTimerActive}
         />

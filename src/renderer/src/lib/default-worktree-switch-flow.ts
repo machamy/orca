@@ -329,7 +329,7 @@ export async function runDefaultWorktreeSwitchFlow(
         }),
         noticeFor: (worktreeId) => noticeByWorktreeId[worktreeId] ?? '',
         getState: () => useAppStore.getState(),
-        write: (ptyId, data) => window.api.pty.write(ptyId, data)
+        write: (ptyId, data) => window.api.pty.write(ptyId, data, 'driving')
       })
       toast.info(
         translate(

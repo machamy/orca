@@ -4,6 +4,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
+import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
@@ -41,6 +42,10 @@ function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
     activeLeafId: leafId,
     expandedLeafId: null
   }
+}
+
+function processRead(agent: TuiAgent): TitleDerivedPaneForeground {
+  return { agent, agentEvidence: 'process-read', shellForeground: false }
 }
 
 describe('buildTitleDerivedAgentRows', () => {
@@ -369,7 +374,11 @@ describe('buildTitleDerivedAgentRows', () => {
   })
 
   it('still resolves Claude from a title that presents Claude, owner or not', () => {
-    const rowsFor = (title: string, launchAgent?: TuiAgent) =>
+    const rowsFor = (
+      title: string,
+      launchAgent?: TuiAgent,
+      foreground?: TitleDerivedPaneForeground
+    ) =>
       buildWorktreeAgentRows({
         tabs: [makeTab('tab-1', launchAgent ? { launchAgent } : {})],
         entries: [],
@@ -377,12 +386,19 @@ describe('buildTitleDerivedAgentRows', () => {
         runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
         ptyIdsByTabId: { 'tab-1': ['pty-agent'] },
         terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        ...(foreground
+          ? { paneForegroundAgentByPaneKey: { [makePaneKey('tab-1', LEAF_ID_1)]: foreground } }
+          : {}),
         now: 2000
       })
 
     expect(rowsFor('⠋ Claude Code').map((row) => row.agentType)).toEqual(['claude'])
-    // Pane reuse: the user exited OpenCode and ran claude in the same pane.
+    // Pane reuse: the user exited OpenCode and ran claude in the same pane. The launch record is
+    // a latch with no run id, so the title outranks it even before any process read.
     expect(rowsFor('✳ Claude Code', 'opencode').map((row) => row.agentType)).toEqual(['claude'])
+    expect(
+      rowsFor('✳ Claude Code', 'opencode', processRead('claude')).map((row) => row.agentType)
+    ).toEqual(['claude'])
     // No owner to defend the pane: naming Claude stays the only available identity.
     expect(rowsFor('⠋ use Claude Sonnet').map((row) => row.agentType)).toEqual(['claude'])
     expect(rowsFor('zsh', 'opencode')).toHaveLength(0)
@@ -403,79 +419,172 @@ describe('buildTitleDerivedAgentRows', () => {
   })
 })
 
-// M5/N5 of the default-worktree-switch contract: a resumed agent must show up as
-// an AGENT row, not fall through to the muted terminal-tab list. Observed live:
-// an idle codex pane titles itself with the cwd basename, which classifies as
-// nothing, so the row vanished and the tab rendered as a plain terminal — the
-// exact "코덱스가 사이드바에서 터미널로 나온다" report.
-describe('agent rows for a resumed agent whose title carries no identity', () => {
-  const CODEX_TAB = 'codex-tab'
+// #23767: Codex retitles its pane to the project name, so a title-gated row vanished while
+// Codex kept running. A live process read now identifies the pane; the title sets activity.
+describe('hook-less agent rows identified by the foreground process', () => {
+  const PANE_KEY = makePaneKey('tab-1', LEAF_ID_1)
 
-  it('keeps a live codex pane an agent row when its title is just the cwd', () => {
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab(CODEX_TAB, { launchAgent: 'codex' as TuiAgent, title: 'skills' })],
-      entries: [],
-      retained: [],
-      runtimePaneTitlesByTabId: { [CODEX_TAB]: { 1: 'skills' } },
-      ptyIdsByTabId: { [CODEX_TAB]: ['pty-1'] },
-      terminalLayoutsByTabId: { [CODEX_TAB]: makeSingleLayout(LEAF_ID_1) },
-      now: 1_000
-    })
-
-    expect(rows.map((row) => row.agentType)).toEqual(['codex'])
-    expect(rows[0]?.tab.id).toBe(CODEX_TAB)
-  })
-
-  it('keeps a claude pane an agent row when its title is a task, not the word "claude"', () => {
-    // Live regression: `✳ Preswap configuration verification` classifies as
-    // ('idle', 'Claude Code'), but the identity resolver refuses a Claude label
-    // unless the title literally says "claude" — so three running claude panes,
-    // one of them a 3-pane all-claude split, rendered as plain terminal rows.
-    // On a claude-launched tab that title corroborates the launch identity.
-    const rows = buildWorktreeAgentRows({
+  function rowsFor(args: {
+    title: string
+    launchAgent?: TuiAgent
+    foreground?: TitleDerivedPaneForeground
+    ptyIds?: string[]
+    layout?: TerminalLayoutSnapshot
+  }) {
+    return buildWorktreeAgentRows({
       tabs: [
-        makeTab('claude-tab', {
-          launchAgent: 'claude' as TuiAgent,
-          title: '✳ Preswap configuration verification'
+        makeTab('tab-1', {
+          defaultTitle: 'Terminal 1',
+          ...(args.launchAgent ? { launchAgent: args.launchAgent } : {})
         })
       ],
       entries: [],
       retained: [],
-      runtimePaneTitlesByTabId: { 'claude-tab': { 1: '✳ Preswap configuration verification' } },
-      ptyIdsByTabId: { 'claude-tab': ['pty-3'] },
-      terminalLayoutsByTabId: { 'claude-tab': makeSingleLayout(LEAF_ID_1) },
-      now: 1_000
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: args.title } },
+      ptyIdsByTabId: { 'tab-1': args.ptyIds ?? ['pty-agent'] },
+      terminalLayoutsByTabId: { 'tab-1': args.layout ?? makeSingleLayout(LEAF_ID_1) },
+      ...(args.foreground ? { paneForegroundAgentByPaneKey: { [PANE_KEY]: args.foreground } } : {}),
+      now: 2000
     })
+  }
 
-    expect(rows.map((row) => row.agentType)).toEqual(['claude'])
+  const summarize = (rows: ReturnType<typeof rowsFor>) =>
+    rows.map((row) => [row.agentType, row.state, row.entry.prompt, row.entry.lastAssistantMessage])
+
+  it('keeps a launched Codex row when Codex retitles the pane to the project name', () => {
+    const foreground = processRead('codex')
+    expect(summarize(rowsFor({ title: 'Codex', launchAgent: 'codex', foreground }))).toEqual([
+      ['codex', 'idle', 'Codex', 'Idle']
+    ])
+    expect(summarize(rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground }))).toEqual([
+      ['codex', 'idle', 'Codex', 'Idle']
+    ])
   })
 
-  it('still refuses a tab that never launched an agent', () => {
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('plain-tab', { title: 'skills' })],
-      entries: [],
-      retained: [],
-      runtimePaneTitlesByTabId: { 'plain-tab': { 1: 'skills' } },
-      ptyIdsByTabId: { 'plain-tab': ['pty-2'] },
-      terminalLayoutsByTabId: { 'plain-tab': makeSingleLayout(LEAF_ID_1) },
-      now: 1_000
-    })
-
-    expect(rows).toEqual([])
+  it('never keeps a plain-title row on the launch record alone', () => {
+    // No process read (WSL, a launch that never started), or a read that found no agent (after an
+    // SSH exit, or a parked pane's boundary retiring its unconfirmable read): no row, as before.
+    expect(rowsFor({ title: 'demo-repo', launchAgent: 'codex' })).toHaveLength(0)
+    expect(
+      rowsFor({
+        title: 'demo-repo',
+        launchAgent: 'codex',
+        foreground: { agent: null, shellForeground: false }
+      })
+    ).toHaveLength(0)
   })
 
-  it('still refuses a launchAgent tab whose panes are all dead', () => {
+  it("does not trust a reattach's launch record as a process read", () => {
+    // Reattach seeds the daemon's launch agent, which can outlive the process while Orca is
+    // closed; a background pane is not re-read until it is shown.
+    const launchSeed: TitleDerivedPaneForeground = {
+      agent: 'codex',
+      agentEvidence: 'launch-record',
+      shellForeground: false
+    }
+    expect(rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground: launchSeed })).toEqual(
+      []
+    )
+    expect(rowsFor({ title: 'demo-repo', foreground: launchSeed })).toEqual([])
+    expect(
+      rowsFor({ title: 'demo-repo', foreground: { ...launchSeed, agentEvidence: undefined } })
+    ).toEqual([])
+    // Once a real read confirms the same agent, the row comes back.
+    expect(
+      summarize(
+        rowsFor({ title: 'demo-repo', launchAgent: 'codex', foreground: processRead('codex') })
+      )
+    ).toEqual([['codex', 'idle', 'Codex', 'Idle']])
+  })
+
+  it('rows a hand-typed agent from its foreground process, whatever its title says', () => {
+    for (const agent of ['codex', 'claude', 'gemini', 'opencode', 'grok'] as const) {
+      const rows = rowsFor({ title: 'demo-repo', foreground: processRead(agent) })
+      expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+        [PANE_KEY, agent, 'idle']
+      ])
+    }
+  })
+
+  it('scopes process evidence to its own pane inside a split', () => {
     const rows = buildWorktreeAgentRows({
-      tabs: [makeTab(CODEX_TAB, { launchAgent: 'codex' as TuiAgent, title: 'skills' })],
+      tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
       entries: [],
       retained: [],
-      runtimePaneTitlesByTabId: { [CODEX_TAB]: { 1: 'skills' } },
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: { [CODEX_TAB]: makeSingleLayout(LEAF_ID_1) },
-      now: 1_000
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'demo-repo', 2: 'demo-repo' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey('tab-1', LEAF_ID_2)]: processRead('codex')
+      },
+      now: 2000
     })
 
-    expect(rows).toEqual([])
+    expect(rows.map((row) => [row.paneKey, row.agentType])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex']
+    ])
+  })
+
+  it('lets the title drive activity without deciding who the agent is', () => {
+    const foreground = processRead('codex')
+    expect(summarize(rowsFor({ title: '⠋ demo-repo', foreground }))).toEqual([
+      ['codex', 'working', 'Codex', 'Running']
+    ])
+    expect(summarize(rowsFor({ title: 'demo-repo', foreground }))).toEqual([
+      ['codex', 'idle', 'Codex', 'Idle']
+    ])
+    // A title naming another agent does not outrank the process that is actually running.
+    expect(summarize(rowsFor({ title: '⠋ Gemini CLI', foreground }))).toEqual([
+      ['codex', 'working', 'Codex', 'Running']
+    ])
+  })
+
+  it('drops the row once the agent is really gone', () => {
+    // The process tracker proved the shell is back.
+    expect(
+      rowsFor({
+        title: 'demo-repo',
+        launchAgent: 'codex',
+        foreground: { agent: null, shellForeground: true }
+      })
+    ).toHaveLength(0)
+    // A shell or default title outranks a process read that has not caught up yet.
+    expect(
+      rowsFor({
+        title: 'zsh',
+        launchAgent: 'codex',
+        foreground: processRead('codex')
+      })
+    ).toHaveLength(0)
+    expect(rowsFor({ title: 'Terminal 1', launchAgent: 'codex' })).toHaveLength(0)
+    // Git Bash has no command marks, so its prompt title is what retires a stale process read.
+    expect(
+      rowsFor({
+        title: 'MINGW64:/c/Users/dev/demo-repo',
+        foreground: processRead('codex')
+      })
+    ).toHaveLength(0)
+    // Codex clears its title on exit; a pane without command marks never re-reads the process.
+    expect(rowsFor({ title: '', foreground: processRead('codex') })).toHaveLength(0)
+    expect(
+      rowsFor({ title: '  ', launchAgent: 'codex', foreground: processRead('codex') })
+    ).toHaveLength(0)
+    // The PTY exited.
+    expect(
+      rowsFor({
+        title: 'demo-repo',
+        launchAgent: 'codex',
+        foreground: processRead('codex'),
+        ptyIds: []
+      })
+    ).toHaveLength(0)
+  })
+
+  it('makes no row from a plain title when nothing identifies an agent', () => {
+    expect(rowsFor({ title: 'demo-repo' })).toHaveLength(0)
+    expect(
+      rowsFor({ title: 'demo-repo', foreground: { agent: null, shellForeground: false } })
+    ).toHaveLength(0)
   })
 })
 
@@ -613,5 +722,61 @@ describe('split-pane runtime title attribution', () => {
       [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'idle'],
       [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'working']
     ])
+  })
+})
+
+describe('agent rows for a resumed agent whose title carries no identity', () => {
+  const CODEX_TAB = 'codex-tab'
+
+  it('keeps a claude pane an agent row when its title is a task, not the word "claude"', () => {
+    // Live regression: `✳ Preswap configuration verification` classifies as
+    // ('idle', 'Claude Code'), but the identity resolver refuses a Claude label
+    // unless the title literally says "claude" — so three running claude panes,
+    // one of them a 3-pane all-claude split, rendered as plain terminal rows.
+    // On a claude-launched tab that title corroborates the launch identity.
+    const rows = buildWorktreeAgentRows({
+      tabs: [
+        makeTab('claude-tab', {
+          launchAgent: 'claude' as TuiAgent,
+          title: '✳ Preswap configuration verification'
+        })
+      ],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'claude-tab': { 1: '✳ Preswap configuration verification' } },
+      ptyIdsByTabId: { 'claude-tab': ['pty-3'] },
+      terminalLayoutsByTabId: { 'claude-tab': makeSingleLayout(LEAF_ID_1) },
+      now: 1_000
+    })
+
+    expect(rows.map((row) => row.agentType)).toEqual(['claude'])
+  })
+
+  it('still refuses a tab that never launched an agent', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('plain-tab', { title: 'skills' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'plain-tab': { 1: 'skills' } },
+      ptyIdsByTabId: { 'plain-tab': ['pty-2'] },
+      terminalLayoutsByTabId: { 'plain-tab': makeSingleLayout(LEAF_ID_1) },
+      now: 1_000
+    })
+
+    expect(rows).toEqual([])
+  })
+
+  it('still refuses a launchAgent tab whose panes are all dead', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab(CODEX_TAB, { launchAgent: 'codex' as TuiAgent, title: 'skills' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { [CODEX_TAB]: { 1: 'skills' } },
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: { [CODEX_TAB]: makeSingleLayout(LEAF_ID_1) },
+      now: 1_000
+    })
+
+    expect(rows).toEqual([])
   })
 })
