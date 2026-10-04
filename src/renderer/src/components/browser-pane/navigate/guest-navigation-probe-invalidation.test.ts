@@ -71,6 +71,7 @@ function createGuestNavigationHandlers(webviewUrl: () => string) {
     faviconUrlRef: ref<string | null>(null),
     setAddressBarValue: vi.fn(),
     annotationViewportBridgeTokenRef: ref('token'),
+    invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
     setBrowserOverlayViewport: vi.fn()
   })
 }

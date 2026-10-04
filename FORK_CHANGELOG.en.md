@@ -24,6 +24,35 @@ source.
 
 ---
 
+## machamy.19 — upstream `1.4.220` · 2026-10-04
+
+Upstream cut **1.4.220** the day machamy.18 was installed, so this merges the remaining
+**157 commits**. No new fork features.
+
+### Upstream merge (157 commits, `1.4.219` → `1.4.220`)
+- fix 43 · feat 10. Everything in the 1.4.220 tag is in, including its tag-only packaging fix
+  (#25128, Windows/Linux).
+- Notable: linking GitHub PRs and GitLab issues/MRs from `orca worktree create/set` (`--pr`,
+  `--gitlab-issue`, `--gitlab-mr`), `orca worktree set --unread/--read`, per-repo external
+  worktree visibility, folder workspaces in keyboard navigation, lighter list refreshes from
+  reused git queries (#24923), opening CSV/TSV from the OS, and Jcode agent support.
+
+### What the fork adjusted
+7 conflicts.
+
+- **Hook server**: upstream added a "status hooks off" gate. The fork's statusline
+  model/effort endpoint sits behind it, so turning status hooks off also stops badge reports.
+- **Window-services tests are upstream's file again.** The harness and TCC test file the fork
+  had split out for the line cap became duplicates once upstream did the same cleanup;
+  upstream's 31 tests pass unchanged on fork code, so the two fork files are gone.
+- The sidebar reveal path feeds the fork's worktree-folder expansion from upstream's new
+  host-scoped lineage inputs.
+- The `orca-cli` skill guide carries both upstream's new examples and the fork's
+  default-worktree-switch notes.
+
+### Verification
+- Fork contract suite **131 files / 1,712 tests** pass. Typecheck and lint 0 errors.
+
 ## machamy.18 — upstream `1.4.219` · 2026-10-03
 
 Catches up **720 upstream commits** to the latest release, **1.4.219**. No new fork features.

@@ -116,6 +116,7 @@ export const FORK_ADDED_TESTS = [
 
 /** Upstream test files carrying fork-added cases or fork-adjusted expectations. */
 export const FORK_CARRYING_TESTS = [
+  'src/renderer/src/components/sidebar/worktree-list/grouping/recent-project-rank-scan-budget.test.ts',
   'src/renderer/src/components/sidebar/WorktreeCardAgents.acknowledgement-emphasis.test.tsx',
   'src/main/claude/hook-service.test.ts',
   'config/scripts/build-mac-local.test.mjs',
@@ -129,7 +130,6 @@ export const FORK_CARRYING_TESTS = [
   'src/main/persistence-cohort-and-identity-migration.test.ts',
   'src/main/providers/local-pty-provider-windows-shell-launch.test.ts',
   'src/main/window/attach-main-window-services.test.ts',
-  'src/main/window/attach-main-window-services-tcc-notice.test.ts',
   'src/renderer/src/components/WorktreeJumpPalette.test.tsx',
   'src/renderer/src/components/browser-pane/describe-page/browser-page-url-display.test.ts',
   'src/renderer/src/components/settings/ExperimentalPane.test.tsx',

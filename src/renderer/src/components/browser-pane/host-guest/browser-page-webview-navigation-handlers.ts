@@ -29,6 +29,7 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
   webview: Electron.WebviewTag
   browserTabId: string
   browserTabUrl: string
+  invalidateBrowserAnnotationDocumentRef: MutableRefObject<() => void>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
@@ -58,6 +59,7 @@ export function createBrowserPageWebviewNavigationHandlers({
   webview,
   browserTabId,
   browserTabUrl,
+  invalidateBrowserAnnotationDocumentRef,
   recoveryNavigationValidationRef,
   activeLoadFailureRef,
   lastKnownWebviewUrlRef,
@@ -93,6 +95,9 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
+    if (event.isMainFrame && event.url) {
+      invalidateBrowserAnnotationDocumentRef.current()
+    }
     if (!event.isMainFrame || event.isInPlace || !event.url) {
       return
     }
@@ -129,6 +134,9 @@ export function createBrowserPageWebviewNavigationHandlers({
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const normalizedBrowserModelUrl =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+    if (lastKnownWebviewUrlRef.current !== normalizedBrowserModelUrl) {
+      invalidateBrowserAnnotationDocumentRef.current()
+    }
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     rememberLiveBrowserUrl(browserTabId, browserModelUrl)
     // Why: don't overwrite in-progress typing (see above).

@@ -92,6 +92,9 @@ export abstract class AgentHookServerState {
   protected onClaudeStatusLine: ServerStatusLineListener = null
   // Fork: statusline model/effort for the pane badge (claude-statusline-model-badge.ts).
   protected onClaudeStatusLineModel: ((report: ClaudeStatusLineModelReport) => void) | null = null
+  protected onStartupPromptClaim: ((body: unknown) => boolean | 'pending') | null = null
+  protected clearStartupPromptClaims: (() => void) | null = null
+  protected statusHooksEnabled = true
   protected onPaneStatusCleared: PaneStatusClearListener | null = null
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()
