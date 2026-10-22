@@ -117,6 +117,14 @@ function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): st
   return attributes.join(' ')
 }
 
+export function createDetailsMatcher(content: string): (start: number) => DetailsHtmlBlock | null {
+  let codeRanges: MarkdownFenceRanges | undefined
+  return (start) =>
+    /^<details\b[^>]*>/i.test(content.slice(start))
+      ? matchDetailsHtmlBlock(content, start, (codeRanges ??= markdownCodeRanges(content)))
+      : null
+}
+
 export function matchDetailsHtmlBlock(
   content: string,
   start: number,

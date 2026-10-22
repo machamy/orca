@@ -18,6 +18,8 @@
  *      either, so nothing claims the in-place wake).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as PtyInventory from './worktree-activation-pty-inventory'
+import type * as SurfaceOwners from './worktree-live-terminal-surface-owners'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -39,6 +41,20 @@ vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
 }))
 
 const toastCalls = vi.hoisted(() => [] as { kind: string; message: unknown }[])
+// Why: the background wake now asks the host for its PTY and chat inventory first; this
+// simulation has no host, so both inventories answer "nothing live".
+vi.mock('./worktree-activation-pty-inventory', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyInventory>()),
+  listActivationPtySessions: async () => []
+}))
+vi.mock('./worktree-agent-structured-inventory', () => ({
+  readWorktreeStructuredActivationInventory: async () => false
+}))
+vi.mock('./worktree-live-terminal-surface-owners', async (importOriginal) => ({
+  ...(await importOriginal<typeof SurfaceOwners>()),
+  readWorktreeLiveTerminalSurfaceOwners: async () => null
+}))
+
 vi.mock('sonner', () => ({
   toast: {
     info: (message: unknown) => toastCalls.push({ kind: 'info', message }),
@@ -212,6 +228,9 @@ function seedModeBPostSleepState(options: SeedOptions = {}): {
     ...(selState === 'done' ? { restoreOnTabOpenOnly: true } : {})
   })
   useAppStore.setState({
+    // The background wake gates on a restored session before it lists the host's PTYs.
+    workspaceSessionReady: true,
+    terminalStartupRestorationReady: true,
     repos: [{ id: REPO_ID, path: '/repo', displayName: 'repo', badgeColor: '#888', addedAt: 1 }],
     worktreesByRepo: {
       [REPO_ID]: [makeWorktree(DEFAULT_ID, '/repo'), makeWorktree(SEL_ID, '/sel')]
@@ -276,12 +295,20 @@ function attachWakeEventSpy(): {
 /** Runs the useIpcEvents.ts:859-868 follow-wake tail with the ids the real
  *  flow queues (WorktreeList.tsx:1457 swappedIds = [source, currentDefault],
  *  activate = currentDefault). */
-function runFollowWakeTail(): ReturnType<typeof attachWakeEventSpy>['details'] {
+// Why the flush: the background wake awaits the host PTY inventory before it resumes (STA-3859).
+async function flushBackgroundWakes(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+async function runFollowWakeTail(): Promise<ReturnType<typeof attachWakeEventSpy>['details']> {
   const spy = attachWakeEventSpy()
   useAppStore.getState().setActiveWorktree(DEFAULT_ID)
   for (const worktreeId of [SEL_ID, DEFAULT_ID]) {
     wakeSleepingAgentsForWorktreeInBackground(worktreeId)
   }
+  await flushBackgroundWakes()
   spy.detach()
   return spy.details
 }
@@ -349,11 +376,11 @@ describe('mode-B follow switch: renderer store simulation', () => {
     expect(staleFields).toEqual([])
   })
 
-  it('EMPIRICAL: activated (promoted) worktree gets NO launch and NO mount — its resume depends entirely on pane cold-restore', () => {
+  it('EMPIRICAL: activated (promoted) worktree gets NO launch and NO mount — its resume depends entirely on pane cold-restore', async () => {
     seedModeBPostSleepState()
     applyFollowMigrations()
 
-    const wakeDetails = runFollowWakeTail()
+    const wakeDetails = await runFollowWakeTail()
     const s = useAppStore.getState()
 
     // Wake events fired for both ids but nothing could claim them (no panes mounted).
@@ -380,10 +407,10 @@ describe('mode-B follow switch: renderer store simulation', () => {
     expect(s.sleepingAgentSessionsByPaneKey[PANE_KEY_SEL]?.worktreeId).toBe(DEFAULT_ID)
   })
 
-  it('EMPIRICAL: demoted (non-active) worktree launches a fresh resume tab and requests a targeted background mount', () => {
+  it('EMPIRICAL: demoted (non-active) worktree launches a fresh resume tab and requests a targeted background mount', async () => {
     seedModeBPostSleepState()
     applyFollowMigrations()
-    runFollowWakeTail()
+    await runFollowWakeTail()
 
     const s = useAppStore.getState()
     // r::/sel now owns tab-repo + its record; the worktree is NOT active, so the
@@ -410,10 +437,10 @@ describe('mode-B follow switch: renderer store simulation', () => {
     expect(selTabs.some((tab) => tab.id === TAB_REPO)).toBe(true)
   })
 
-  it('EMPIRICAL: done agents (restoreOnTabOpenOnly) get neither mount nor launch on either side', () => {
+  it('EMPIRICAL: done agents (restoreOnTabOpenOnly) get neither mount nor launch on either side', async () => {
     seedModeBPostSleepState({ agentStates: { repo: 'done', sel: 'done' } })
     applyFollowMigrations()
-    runFollowWakeTail()
+    await runFollowWakeTail()
 
     const s = useAppStore.getState()
     console.log('[follow-simulation] done-agent outcome:', {
@@ -479,7 +506,7 @@ describe('mode-B follow switch: renderer store simulation', () => {
     // both layers claim "the other one will resume it" -> nobody does.
   })
 
-  it('EMPIRICAL control: without prior activation, BOTH worktrees launch background resume tabs', () => {
+  it('EMPIRICAL control: without prior activation, BOTH worktrees launch background resume tabs', async () => {
     // Shows the resume path itself works when nothing is pane-owned: if
     // setActiveWorktree(promoted) were NOT called first, both sides would take
     // the fresh-tab launch path.
@@ -489,6 +516,7 @@ describe('mode-B follow switch: renderer store simulation', () => {
     for (const worktreeId of [SEL_ID, DEFAULT_ID]) {
       wakeSleepingAgentsForWorktreeInBackground(worktreeId)
     }
+    await flushBackgroundWakes()
     spy.detach()
 
     const s = useAppStore.getState()

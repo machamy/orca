@@ -2,18 +2,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { navigateBrowserPageToUrl } from './navigate-browser-page-url'
 import type { MutableRefObject } from 'react'
 
-const statRuntimePath = vi.fn(async () => ({ isDirectory: false }))
-const isRemoteRuntimeFileOperation = vi.fn(() => false)
+type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
+
+const statUserOpenedPath = vi.fn(async (..._args: unknown[]): Promise<PathStat> => ({
+  isDirectory: false,
+  escapesWorktree: false
+}))
 const openFile = vi.fn()
 const setActiveTabType = vi.fn()
-const authorizeExternalPath = vi.fn(async () => undefined)
 
 let repos: { id: string; path: string; connectionId?: string }[] = []
 
-vi.mock('@/runtime/runtime-file-client', () => ({
-  statRuntimePath: (...args: unknown[]) => statRuntimePath(...(args as [])),
-  isRemoteRuntimeFileOperation: (...args: unknown[]) =>
-    isRemoteRuntimeFileOperation(...(args as []))
+vi.mock('@/lib/user-opened-local-path', () => ({
+  statUserOpenedPath: (...args: unknown[]) => statUserOpenedPath(...args)
+}))
+
+vi.mock('@/lib/file-owner-runtime-target', () => ({
+  requireRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    runtimeEnvironmentId: string | null | undefined
+  ) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
 }))
 
 vi.mock('@/store', () => ({
@@ -50,7 +62,6 @@ function navigate(url: string): { webview: { src: string } } {
     worktreeId: 'wt-1',
     activeLoadFailureRef: ref(null),
     lastKnownWebviewUrlRef: ref<string | null>(null),
-    trackNextLoadingEventRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
     webviewRef: ref(webview as unknown as Electron.WebviewTag),
     onSetUrlRef: ref(vi.fn()),
@@ -66,11 +77,7 @@ describe('navigateBrowserPageToUrl', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     repos = [{ id: 'wt-1', path: '/repo' }]
-    statRuntimePath.mockResolvedValue({ isDirectory: false })
-    isRemoteRuntimeFileOperation.mockReturnValue(false)
-    Object.assign(globalThis, {
-      window: { api: { fs: { authorizeExternalPath } } }
-    })
+    statUserOpenedPath.mockResolvedValue({ isDirectory: false, escapesWorktree: false })
   })
 
   it('opens a file:// markdown document in the editor instead of the browser', async () => {
@@ -78,7 +85,14 @@ describe('navigateBrowserPageToUrl', () => {
 
     await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
     expect(setActiveTabType).toHaveBeenCalledWith('editor', 'wt-1')
-    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/repo/docs/guide.md' })
+    expect(statUserOpenedPath).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: 'local' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      }),
+      '/repo/docs/guide.md'
+    )
     expect(openFile).toHaveBeenCalledWith(
       {
         filePath: '/repo/docs/guide.md',
@@ -128,7 +142,7 @@ describe('navigateBrowserPageToUrl', () => {
   })
 
   it('falls back to the browser when the markdown path is a directory', async () => {
-    statRuntimePath.mockResolvedValue({ isDirectory: true })
+    statUserOpenedPath.mockResolvedValue({ isDirectory: true, escapesWorktree: false })
     const { webview } = navigate('file:///repo/weird.md')
 
     await vi.waitFor(() => expect(webview.src).toBe('file:///repo/weird.md'))

@@ -4,8 +4,8 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { findRepoForHost } from '../../../../store/slices/repo-host-identity'
-import { getCyclicProjectedWorktreeLineageIds } from '../../worktree-lineage-projection'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getWorktreeFolderGroupKey,
   resolveWorktreeFolderTreeForProject,

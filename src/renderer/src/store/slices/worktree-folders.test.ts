@@ -322,9 +322,13 @@ describe('worktree folder slice — paired-host capability gate (G4/G4a)', () =>
       worktreeFolderId: 'folder-a'
     })
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      // The paired host owns the repo row; routing follows the row, not a focused-host setting.
       repos: [
-        { ...repo1, worktreeFolders: [folderFixture('folder-a'), folderFixture('folder-b')] }
+        {
+          ...repo1,
+          executionHostId: 'runtime:env-1',
+          worktreeFolders: [folderFixture('folder-a'), folderFixture('folder-b')]
+        }
       ],
       worktreesByRepo: { repo1: [worktree] }
     } as Partial<AppState>)
@@ -358,8 +362,9 @@ describe('worktree folder slice — paired-host capability gate (G4/G4a)', () =>
       _meta: { runtimeId: 'runtime-remote' }
     })
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [{ ...repo1, worktreeFolders: [folderFixture('folder-a')] }],
+      repos: [
+        { ...repo1, executionHostId: 'runtime:env-1', worktreeFolders: [folderFixture('folder-a')] }
+      ],
       worktreesByRepo: { repo1: [worktree] }
     } as Partial<AppState>)
 
@@ -410,8 +415,9 @@ describe('worktree folder slice — paired-host capability gate (G4/G4a)', () =>
     const worktree = makeWorktree({ id: 'repo1::/tmp/worktree-1', repoId: 'repo1' })
     runtimeEnvironmentCall.mockRejectedValue(new Error('boom'))
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [{ ...repo1, worktreeFolders: [folderFixture('folder-a')] }],
+      repos: [
+        { ...repo1, executionHostId: 'runtime:env-1', worktreeFolders: [folderFixture('folder-a')] }
+      ],
       worktreesByRepo: { repo1: [worktree] }
     } as Partial<AppState>)
 

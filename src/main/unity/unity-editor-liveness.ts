@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { runProcess } from '@orca/process-host'
 import { unityEditorRecentlyLaunched } from './unity-recent-launch-stamp'
 
 /** Unity's own project lock; created seconds AFTER start, removed on clean quit. */
@@ -8,11 +9,14 @@ export function editorLockfilePath(projectPath: string): string {
 }
 
 async function defaultListProcessCommands(): Promise<string> {
-  const { execFile } = await import('node:child_process')
-  const { promisify } = await import('node:util')
-  const result = await promisify(execFile)('/bin/ps', ['-axo', 'command'], {
-    maxBuffer: 8 * 1024 * 1024
+  const result = await runProcess({
+    program: '/bin/ps',
+    args: ['-axo', 'command'],
+    maxOutputBytes: 8 * 1024 * 1024
   })
+  if (result.code !== 0) {
+    throw new Error(`ps exited with ${result.code ?? result.signal}`)
+  }
   return result.stdout
 }
 

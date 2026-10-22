@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { WorktreeDefaultSetSelector } from './worktree-schemas'
+import { WorktreeDefaultSetSelector } from '../../../../shared/rpc-contract/worktree-params'
 
 /**
  * `worktree.defaultSet` — promote a worktree to the repo's default checkout.
@@ -11,6 +11,7 @@ import { WorktreeDefaultSetSelector } from './worktree-schemas'
  */
 export const DEFAULT_SET_METHOD = defineMethod({
   name: 'worktree.defaultSet',
+  permission: 'workspace',
   params: WorktreeDefaultSetSelector,
   handler: async (params, { runtime, clientKind }) => {
     // Follow mode is only half a transaction on this side: it re-keys persisted

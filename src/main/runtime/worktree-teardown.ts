@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from './orca-runtime'
 import {
   isUnstoppedPtyRemovalError,
@@ -20,7 +20,8 @@ import {
   listStructuredSessionsForWorktree,
   retireStructuredSessionTabsForWorktree,
   unclosedStructuredSessions,
-  type StructuredSessionInWorkspace
+  type StructuredSessionInWorkspace,
+  type StructuredWorktreeSweepRuntime
 } from './structured-session-worktree-teardown'
 import {
   createWorktreeSweepTracker,
@@ -34,8 +35,11 @@ import {
   resolveUnstoppedPtyVerdict
 } from './unstopped-pty-verification'
 
+export type WorktreeTeardownRuntime = StructuredWorktreeSweepRuntime &
+  Pick<OrcaRuntimeService, 'stopTerminalsForWorktree' | 'getPtyLivenessVerdict'>
+
 export type WorktreeTeardownDeps = {
-  runtime?: OrcaRuntimeService
+  runtime?: WorktreeTeardownRuntime
   /** Session ids embed the spawn-time worktree id; after an identity migration
    *  (default-worktree swap) that id names ANOTHER live worktree. Returning true
    *  excludes the pty from prefix/registry sweeps so deleting the displaced
@@ -75,8 +79,6 @@ export type WorktreeTeardownResult = {
 }
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
-
-export { WORKTREE_TEARDOWN_RPC_MARGIN_MS, teardownRpcDeadline } from './worktree-teardown-deadline'
 
 /**
  * Kills every PTY we can prove belongs to `worktreeId`, across all three

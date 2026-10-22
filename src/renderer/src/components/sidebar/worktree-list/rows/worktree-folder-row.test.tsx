@@ -7,7 +7,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { WorktreeFolderRow } from '../grouping/row-types'
+import type { WorktreeFolderRow } from '../../../../../../shared/sidebar-list/row-types'
 import { renderWorktreeFolderVirtualRow } from './worktree-folder-row'
 
 function folderRowFixture(): WorktreeFolderRow {

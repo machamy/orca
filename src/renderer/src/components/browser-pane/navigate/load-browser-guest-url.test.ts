@@ -11,32 +11,55 @@ import type { BrowserPage as BrowserPageState } from '../../../../../shared/brow
 import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../../shared/repo-types'
 
-const statRuntimePath = vi.fn(async () => ({ isDirectory: false }))
-const isRemoteRuntimeFileOperation = vi.fn((..._args: unknown[]) => false)
-const readRuntimeFilePreview = vi.fn(async () => ({ content: '# plain markdown', isBinary: false }))
+type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
+
+const statUserOpenedPath = vi.fn(async (..._args: unknown[]): Promise<PathStat> => ({
+  isDirectory: false,
+  escapesWorktree: false
+}))
+const readRuntimeFilePreview = vi.fn(async (..._args: unknown[]) => ({
+  content: '# plain markdown',
+  isBinary: false
+}))
 const getMarkdownRichModeUnsupportedMessage = vi.fn((_content: string): string | null => null)
 const openFile = vi.fn()
 const openMarkdownPreview = vi.fn()
 const setActiveTabType = vi.fn()
 const setBrowserPageUrl = vi.fn()
 const updateBrowserPageState = vi.fn()
-const authorizeExternalPath = vi.fn(async () => undefined)
+// The workspace's inferred owner; null is this app.
+let workspaceRuntimeEnvironmentId: string | null = null
 
 let browserPagesByWorkspace: Record<string, BrowserPageState[]> = {}
 let repos: Repo[] = []
 let folderWorkspaces: FolderWorkspace[] = []
 let projectGroups: { id: string }[] = []
-let settings: {
-  activeRuntimeEnvironmentId?: string | null
-  browserMarkdownEditorHandoff?: boolean
-} = {}
+let settings: { browserMarkdownEditorHandoff?: boolean } = {}
 let activeWorktreeId: string | null = 'wt-1'
 
-vi.mock('@/runtime/runtime-file-client', () => ({
-  statRuntimePath: (...args: unknown[]) => statRuntimePath(...(args as [])),
-  isRemoteRuntimeFileOperation: (...args: unknown[]) =>
-    isRemoteRuntimeFileOperation(...(args as [])),
-  readRuntimeFilePreview: (...args: unknown[]) => readRuntimeFilePreview(...(args as []))
+vi.mock('@/lib/user-opened-local-path', () => ({
+  statUserOpenedPath: (...args: unknown[]) => statUserOpenedPath(...args)
+}))
+
+vi.mock('@/runtime/runtime-file-read-client', () => ({
+  readRuntimeFilePreview: (...args: unknown[]) => readRuntimeFilePreview(...args)
+}))
+
+// Echoes the owner the probe picked, so assertions can see which host it targeted.
+vi.mock('@/lib/file-owner-runtime-target', () => ({
+  requireRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    runtimeEnvironmentId: string | null | undefined
+  ) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
+}))
+
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => workspaceRuntimeEnvironmentId
 }))
 
 // Why: the real detector drags TipTap's round-trip editor into a node-env test;
@@ -95,8 +118,7 @@ async function settle(): Promise<void> {
 describe('loadBrowserGuestUrl', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    statRuntimePath.mockResolvedValue({ isDirectory: false })
-    isRemoteRuntimeFileOperation.mockReturnValue(false)
+    statUserOpenedPath.mockResolvedValue({ isDirectory: false, escapesWorktree: false })
     readRuntimeFilePreview.mockResolvedValue({ content: '# plain markdown', isBinary: false })
     getMarkdownRichModeUnsupportedMessage.mockReturnValue(null)
     // The page under test exists by default; individual tests override the URL or close it.
@@ -105,10 +127,8 @@ describe('loadBrowserGuestUrl', () => {
     folderWorkspaces = []
     projectGroups = []
     settings = {}
+    workspaceRuntimeEnvironmentId = null
     activeWorktreeId = 'wt-1'
-    Object.assign(globalThis, {
-      window: { api: { fs: { authorizeExternalPath } } }
-    })
   })
 
   it('hands a markdown file:// document to the editor instead of the guest', async () => {
@@ -116,9 +136,15 @@ describe('loadBrowserGuestUrl', () => {
 
     await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
     expect(setActiveTabType).toHaveBeenCalledWith('editor', 'wt-1')
-    expect(authorizeExternalPath).toHaveBeenCalledWith({
-      targetPath: '/workspace/sample-project/docs/guide.md'
-    })
+    expect(statUserOpenedPath).toHaveBeenCalledWith(
+      {
+        target: { kind: 'local' },
+        worktreeId: 'wt-1',
+        worktreePath: '/workspace/sample-project',
+        connectionId: undefined
+      },
+      '/workspace/sample-project/docs/guide.md'
+    )
     expect(openFile).toHaveBeenCalledWith(
       {
         filePath: '/workspace/sample-project/docs/guide.md',
@@ -235,7 +261,7 @@ describe('loadBrowserGuestUrl', () => {
     // Upstream behavior: no probe at all, the guest paints the raw source.
     expect(loaded).toEqual(['file:///workspace/sample-project/docs/guide.md'])
     await settle()
-    expect(statRuntimePath).not.toHaveBeenCalled()
+    expect(statUserOpenedPath).not.toHaveBeenCalled()
     expect(openFile).not.toHaveBeenCalled()
   })
 
@@ -268,7 +294,7 @@ describe('loadBrowserGuestUrl', () => {
       expect(loaded).toEqual(['file:///workspace/sample-project/docs/guide.md'])
     )
     expect(openFile).not.toHaveBeenCalled()
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
+    expect(statUserOpenedPath).not.toHaveBeenCalled()
   })
 
   it('resolves the owner per FILE in a mixed local/SSH folder workspace', async () => {
@@ -307,7 +333,7 @@ describe('loadBrowserGuestUrl', () => {
     load('file:///workspace/sample-project/docs/guide.md', 'folder:fw-1')
 
     await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
-    expect(statRuntimePath).toHaveBeenCalledWith(
+    expect(statUserOpenedPath).toHaveBeenCalledWith(
       expect.objectContaining({ worktreePath: '/workspace' }),
       '/workspace/sample-project/docs/guide.md'
     )
@@ -320,7 +346,7 @@ describe('loadBrowserGuestUrl', () => {
   it('probes a client-local fallback page against the local host, not the workspace runtime', async () => {
     // A runtime-owned workspace can still host client-local browser pages; their
     // file:// documents live on the client disk, so the probe must stay local.
-    settings = { activeRuntimeEnvironmentId: 'env-9' }
+    workspaceRuntimeEnvironmentId = 'env-9'
     browserPagesByWorkspace = {
       'workspace-1': [
         {
@@ -329,24 +355,17 @@ describe('loadBrowserGuestUrl', () => {
         } as BrowserPageState
       ]
     }
-    isRemoteRuntimeFileOperation.mockImplementation((...args: unknown[]) => {
-      const context = args[0] as { settings?: { activeRuntimeEnvironmentId?: string | null } }
-      return Boolean(context.settings?.activeRuntimeEnvironmentId)
-    })
 
     const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
 
     await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
-    expect(authorizeExternalPath).toHaveBeenCalledWith({
-      targetPath: '/workspace/sample-project/docs/guide.md'
-    })
-    expect(statRuntimePath).toHaveBeenCalledWith(
-      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null } }),
+    expect(statUserOpenedPath).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { kind: 'local' } }),
       '/workspace/sample-project/docs/guide.md'
     )
     // The rendered-preview probe must read through the same client-local owner.
     expect(readRuntimeFilePreview).toHaveBeenCalledWith(
-      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null } }),
+      expect.objectContaining({ target: { kind: 'local' } }),
       '/workspace/sample-project/docs/guide.md'
     )
     // The probe's verified owner must reach the editor too: without an explicit
@@ -359,8 +378,36 @@ describe('loadBrowserGuestUrl', () => {
     expect(loaded).toEqual([])
   })
 
+  it('probes a runtime-owned workspace page against its runtime host', async () => {
+    workspaceRuntimeEnvironmentId = 'env-9'
+
+    load('file:///workspace/sample-project/docs/guide.md')
+
+    await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
+    expect(statUserOpenedPath).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { kind: 'environment', environmentId: 'env-9' } }),
+      '/workspace/sample-project/docs/guide.md'
+    )
+    expect(openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeEnvironmentId: 'env-9' }),
+      expect.anything()
+    )
+  })
+
+  it('keeps the absolute path for a project file that resolves outside the project', async () => {
+    statUserOpenedPath.mockResolvedValue({ isDirectory: false, escapesWorktree: true })
+
+    load('file:///workspace/sample-project/docs/guide.md')
+
+    await vi.waitFor(() => expect(openFile).toHaveBeenCalled())
+    expect(openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: '/workspace/sample-project/docs/guide.md' }),
+      expect.anything()
+    )
+  })
+
   it('falls back to the guest when the markdown path is a directory', async () => {
-    statRuntimePath.mockResolvedValue({ isDirectory: true })
+    statUserOpenedPath.mockResolvedValue({ isDirectory: true, escapesWorktree: false })
     const { loaded } = load('file:///workspace/sample-project/weird.md')
 
     await vi.waitFor(() => expect(loaded).toEqual(['file:///workspace/sample-project/weird.md']))
@@ -368,7 +415,7 @@ describe('loadBrowserGuestUrl', () => {
   })
 
   it('falls back to the guest when the path cannot be authorized', async () => {
-    authorizeExternalPath.mockRejectedValueOnce(new Error('denied'))
+    statUserOpenedPath.mockRejectedValueOnce(new Error('denied'))
     const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
 
     await vi.waitFor(() =>
@@ -403,7 +450,7 @@ describe('loadBrowserGuestUrl', () => {
   })
 
   it('does not park a page when the handoff was declined', async () => {
-    statRuntimePath.mockResolvedValue({ isDirectory: true })
+    statUserOpenedPath.mockResolvedValue({ isDirectory: true, escapesWorktree: false })
     browserPagesByWorkspace = {
       'workspace-1': [page('file:///workspace/sample-project/weird.md')]
     }
@@ -416,9 +463,9 @@ describe('loadBrowserGuestUrl', () => {
   it('drops a stale probe superseded by a newer navigation on the same page', async () => {
     // Fix 1: navigating to B while A.md is mid-probe must not let A's late
     // completion open the editor or park the page under B.
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const loaded: string[] = []
     const loadInGuest = (target: string): void => {
@@ -440,7 +487,7 @@ describe('loadBrowserGuestUrl', () => {
     expect(loaded).toEqual(['https://example.com/app'])
 
     await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
-    releaseStat({ isDirectory: false })
+    releaseStat({ isDirectory: false, escapesWorktree: false })
     await settle()
 
     expect(openFile).not.toHaveBeenCalled()
@@ -452,15 +499,15 @@ describe('loadBrowserGuestUrl', () => {
     // The agent bridge's CDP goto calls wc.loadURL() directly: no
     // loadBrowserGuestUrl call, and its guest-navigation events can land after
     // the probe already resolved — the store URL is the only trace left.
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
 
     await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
     browserPagesByWorkspace = { 'workspace-1': [page('https://cdp-target.example/app')] }
-    releaseStat({ isDirectory: false })
+    releaseStat({ isDirectory: false, escapesWorktree: false })
     await settle()
 
     expect(openFile).not.toHaveBeenCalled()
@@ -471,15 +518,15 @@ describe('loadBrowserGuestUrl', () => {
   it('does not load a stale declined URL over an unknown-source navigation', async () => {
     // The decline path drives the guest back to the probed URL; after a CDP
     // navigation that would clobber the page the agent just opened.
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const { loaded } = load('file:///workspace/sample-project/weird.md')
 
     await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
     browserPagesByWorkspace = { 'workspace-1': [page('https://cdp-target.example/app')] }
-    releaseStat({ isDirectory: true })
+    releaseStat({ isDirectory: true, escapesWorktree: false })
     await settle()
 
     expect(loaded).toEqual([])
@@ -488,15 +535,15 @@ describe('loadBrowserGuestUrl', () => {
   it('does not steal the active surface after a workspace switch mid-probe', async () => {
     // The commit flips the ACTIVE view to the editor; completing worktree A's
     // probe while B is active would convert B's surface to A's file.
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
 
     await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
     activeWorktreeId = 'wt-2'
-    releaseStat({ isDirectory: false })
+    releaseStat({ isDirectory: false, escapesWorktree: false })
     await settle()
 
     expect(openFile).not.toHaveBeenCalled()
@@ -552,15 +599,15 @@ describe('loadBrowserGuestUrl', () => {
 
   it('does nothing when the page was closed while the probe ran', async () => {
     // Fix 1: a closed tab must not have its handoff open an editor tab later.
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const { loaded } = load('file:///workspace/sample-project/docs/guide.md')
 
     await vi.waitFor(() => expect(releaseStat).toBeTypeOf('function'))
     browserPagesByWorkspace = {}
-    releaseStat({ isDirectory: false })
+    releaseStat({ isDirectory: false, escapesWorktree: false })
     await settle()
 
     expect(openFile).not.toHaveBeenCalled()

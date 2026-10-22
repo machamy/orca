@@ -111,6 +111,9 @@ export function buildTerminalCreateWindow(args: {
         },
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate,
+        onPublishAgentLaunchTab: () => () => {},
+        onRevealTerminalPane: () => () => {},
+        onAgentLaunchPaneVerdict: () => () => {},
         onSplitTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onFocusTerminal: (
@@ -139,6 +142,7 @@ export function buildTerminalCreateWindow(args: {
         onNewBrowserTab: () => () => {},
         onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
+        onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
         onRequestTabClose: () => () => {},
         replyTabClose: vi.fn(),

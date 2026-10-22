@@ -32,7 +32,6 @@ export function useBrowserPageWebviewUrlSync({
   webviewRef,
   chromeHeaderRef,
   lastKnownWebviewUrlRef,
-  trackNextLoadingEventRef,
   keepAddressBarFocusRef,
   addressBarInputRef,
   browserTabUrlRef,
@@ -49,7 +48,6 @@ export function useBrowserPageWebviewUrlSync({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   chromeHeaderRef: RefObject<HTMLDivElement | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  trackNextLoadingEventRef: MutableRefObject<boolean>
   keepAddressBarFocusRef: MutableRefObject<boolean>
   addressBarInputRef: RefObject<HTMLInputElement | null>
   browserTabUrlRef: MutableRefObject<string>
@@ -107,8 +105,6 @@ export function useBrowserPageWebviewUrlSync({
       declaredSrc !== normalizedUrl
     ) {
       const loadInGuest = (targetUrl: string): void => {
-        // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
-        trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
         lastKnownWebviewUrlRef.current = targetUrl
         webview.src = targetUrl
         if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
@@ -137,7 +133,6 @@ export function useBrowserPageWebviewUrlSync({
     focusWebviewNow,
     keepAddressBarFocusRef,
     lastKnownWebviewUrlRef,
-    trackNextLoadingEventRef,
     webviewRef
   ])
 

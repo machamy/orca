@@ -8,6 +8,7 @@ export type KeybindingScope =
   | 'editor'
   | 'fileExplorer'
   | 'composer'
+  | 'chat'
   | 'settings'
 
 export type KeybindingContext = 'app' | 'terminal' | 'browser'
@@ -78,6 +79,7 @@ export type KeybindingActionId =
   | 'tab.selectByIndex'
   | 'tab.openQuickCommandsMenu'
   | 'browser.find'
+  | 'chat.find'
   | 'browser.back'
   | 'browser.forward'
   | 'browser.reload'
@@ -155,6 +157,8 @@ export type KeybindingDefinition = {
   allowInTerminal?: boolean
   /** Never fires with terminal focus, even under orca-first (e.g. AltGr chords that must stay text). */
   neverInTerminal?: boolean
+  // Leaving it out means a focused text field keeps every key.
+  allowInTextField?: 'non-default-chords'
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string

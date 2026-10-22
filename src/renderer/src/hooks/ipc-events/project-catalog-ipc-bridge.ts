@@ -2,6 +2,8 @@ import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
 import { armWorktreeIdentityGrace } from '../../store/worktree-identity-grace'
+import { adoptFromEndpoint } from '../../store/adopt-from-endpoint'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -23,9 +25,11 @@ export function registerProjectCatalogIpcBridge(
         })()
         return
       }
-      void state.fetchProjectGroups()
-      void state.fetchFolderWorkspaces()
-      void state.fetchRepos().then(remountTerminalTabsAwaitingHostHydration)
+      // Why: this event is this app's own catalog changing, whichever host is the default.
+      const localOwner = { runtimeEnvironmentId: null }
+      void state.fetchProjectGroups(localOwner)
+      void state.fetchFolderWorkspaces(localOwner)
+      void state.fetchRepos(localOwner).then(remountTerminalTabsAwaitingHostHydration)
     })
   )
 
@@ -60,10 +64,9 @@ export function registerProjectCatalogIpcBridge(
         // focus changes; otherwise an unbound repo can refresh from the wrong host.
         // A folder rename changes the worktree id; handleWorktreesChanged re-keys
         // state and shields it from the deletion diff.
-        worktreeChangeRefreshQueue.enqueue({
-          ...data,
-          forceLocalOwner: true
-        })
+        worktreeChangeRefreshQueue.enqueue(
+          adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })
+        )
       }
     )
   )
@@ -78,7 +81,7 @@ export function registerProjectCatalogIpcBridge(
         }
         const state = useAppStore.getState()
         applyWorktreeHeadIdentities(data, {
-          getWorktreesForRepo: (repoId) => state.worktreesByRepo[repoId],
+          getWorktreesForRepo: (repoId) => selectWorktreesByRepo(state)[repoId],
           updateWorktreeGitIdentity: state.updateWorktreeGitIdentity
         })
       })
@@ -109,7 +112,11 @@ export function registerProjectCatalogIpcBridge(
       if (!data.creationId) {
         return
       }
-      useAppStore.getState().updatePendingWorktreeCreation(data.creationId, { phase: data.phase })
+      // Why: every event without a live meter (a phase change, or null when git finished) clears it.
+      useAppStore.getState().updatePendingWorktreeCreation(data.creationId, {
+        phase: data.phase,
+        checkoutProgress: data.checkout ?? undefined
+      })
     }) ?? (() => {})
   )
 

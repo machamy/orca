@@ -14,11 +14,11 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
 import { compareWorktreeFolderSiblings } from '../../../../shared/worktree-folder/resolve'
-import type { WorktreeFolderRow } from './worktree-list/grouping/row-types'
+import type { WorktreeFolderRow } from '../../../../shared/sidebar-list/row-types'
 import { collectRawWorktreeFolderMemberIds } from '@/store/slices/worktree-folder-membership'
 import { wouldCreateWorktreeFolderCycle } from '@/store/slices/worktree-folders'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './WorktreeContextMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import {
   buildWorktreeFolderDeletePlan,
   WorktreeFolderDeleteDialog,

@@ -1,12 +1,14 @@
-import { OrcaRuntimeWithRefreshRepoWorktreeScan } from './orca-runtime-refresh-repo-worktree-scan'
+import { RuntimeWorkspaceRepoScanRefresh } from './workspaces/workspace-repo-scan-refresh'
 import { RuntimeDefaultWorktree } from './orca-runtime-default-worktree'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { agentHookServer } from '../agent-hooks/server'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 /** Fork: promote a sub-worktree to the repo's default checkout. Sits here because
  *  the identity re-key it needs (`notifyWorktreeFolderRenamed`'s ingredients —
  *  tab selections, scan caches, the renderer notifier) all land on this link. */
-export class OrcaRuntimeWithDefaultWorktreeCommands extends OrcaRuntimeWithRefreshRepoWorktreeScan {
+export abstract class OrcaRuntimeWithDefaultWorktreeCommands extends RuntimeWorkspaceRepoScanRefresh {
   private readonly defaultWorktree = new RuntimeDefaultWorktree({
     resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
     getRepo: (repoId) => this.store?.getRepo(repoId),
@@ -20,7 +22,11 @@ export class OrcaRuntimeWithDefaultWorktreeCommands extends OrcaRuntimeWithRefre
       if (!store.migrateWorktreeIdentity) {
         throw new Error('default_worktree_switch_identity_store_unavailable')
       }
-      store.migrateWorktreeIdentity(oldWorktreeId, newWorktreeId)
+      const repo = store.getRepo(getRepoIdFromWorktreeId(oldWorktreeId))
+      if (!repo) {
+        throw new Error('default_worktree_switch_repo_unavailable')
+      }
+      store.migrateWorktreeIdentity(hostWorktreeTargetForRepo(oldWorktreeId, repo), newWorktreeId)
       this.clientSessionTabSelections.migrateWorktree(oldWorktreeId, newWorktreeId)
       // Why: main's mirrored agent-status rows feed snapshot replays; stale
       // attribution would resurrect chips under the swapped-away worktree.
@@ -29,7 +35,7 @@ export class OrcaRuntimeWithDefaultWorktreeCommands extends OrcaRuntimeWithRefre
     notifyIdentitiesChanged: (repoId, migrations) => {
       this.invalidateResolvedWorktreeCache()
       this.invalidateWorktreeScanCacheForRepo(repoId)
-      this.notifier?.worktreesChanged(repoId, undefined, migrations)
+      this.notifier?.worktreesChanged(repoId, undefined, { migrations })
       this.emitClientEvent({ type: 'worktreesChanged', repoId })
     }
   })

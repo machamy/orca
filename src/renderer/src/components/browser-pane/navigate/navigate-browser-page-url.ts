@@ -20,7 +20,6 @@ export type NavigateBrowserPageToUrlArgs = {
   worktreeId: string
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  trackNextLoadingEventRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
@@ -36,7 +35,6 @@ export function navigateBrowserPageToUrl({
   worktreeId,
   activeLoadFailureRef,
   lastKnownWebviewUrlRef,
-  trackNextLoadingEventRef,
   recoveryNavigationValidationRef,
   webviewRef,
   onSetUrlRef,
@@ -66,7 +64,6 @@ export function navigateBrowserPageToUrl({
     if (!webview) {
       return
     }
-    trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }

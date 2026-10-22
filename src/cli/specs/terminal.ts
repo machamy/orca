@@ -2,6 +2,7 @@ import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
 
 /** The `orca terminal ...` surface, split out of core so each list stays readable on its own. */
 export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
@@ -70,15 +71,15 @@ export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      'This creates a terminal and runs --command in it. To start an agent, use `orca agent launch` (or `orca worktree create --agent` for a new checkout), which follows your Chat UI setting.',
       '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
       'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
     ],
     examples: [
       'orca terminal create --json',
-      'orca terminal create --worktree active --command "codex" --json',
-      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
-      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus',
+      'orca terminal create --worktree active --command "pnpm dev" --json',
+      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "npm test"',
+      'orca terminal create --worktree path:/projects/myapp --command "pnpm dev" --focus',
       'orca terminal create --worktree path:C:/src/app --shell cmd.exe --json'
     ]
   },
@@ -90,6 +91,9 @@ export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+    ],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   TERMINAL_CLOSE_COMMAND_SPEC,
@@ -104,6 +108,7 @@ export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal rename --terminal term_abc123 --json'
     ]
   },
+  TERMINAL_SET_PANE_TITLE_COMMAND_SPEC,
   {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',

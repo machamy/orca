@@ -69,7 +69,8 @@ export function MarkdownPreviewSurface({
   // renders with the default schema.
   const [htmlMode, setHtmlMode] = useState<MarkdownPreviewHtmlMode>('default')
   const limitedHtml = useMemo(
-    () => (largePreview ? { limited: false, tags: [] } : detectLimitedMarkdownHtml(renderedContent)),
+    () =>
+      largePreview ? { limited: false, tags: [] } : detectLimitedMarkdownHtml(renderedContent),
     [largePreview, renderedContent]
   )
   // Opening another file must not inherit the previous one's opt-in.

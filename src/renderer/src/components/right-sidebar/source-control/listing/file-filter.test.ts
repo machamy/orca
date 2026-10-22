@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  filterSourceControlGroupedPathEntries,
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,
   parseSourceControlExtensionFilter
@@ -75,21 +74,5 @@ describe('filterSourceControlPathEntries', () => {
       'Assets/Scripts/Player.cs.meta',
       'Assets/Scripts/Enemy.CS'
     ])
-  })
-
-  it('applies the same rule to every working-tree group', () => {
-    const grouped = filterSourceControlGroupedPathEntries(
-      {
-        staged: [{ path: 'a.cs' }, { path: 'a.cs.meta' }],
-        unstaged: [{ path: 'b.json' }, { path: 'b.png' }],
-        untracked: [{ path: 'c.md' }, { path: 'c.csproj' }]
-      },
-      getSourceControlFileFilterState('.cs .json .md')
-    )
-    expect(grouped).toEqual({
-      staged: [{ path: 'a.cs' }],
-      unstaged: [{ path: 'b.json' }],
-      untracked: [{ path: 'c.md' }]
-    })
   })
 })

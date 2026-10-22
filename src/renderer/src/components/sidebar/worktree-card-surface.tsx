@@ -73,9 +73,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
             : isActiveSurface
               ? 'border border-transparent'
-              : isMultiSelected
-                ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-                : 'border border-transparent worktree-sidebar-card-hover',
+              : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         // Why: the wash sits at -z-10 so the row's glyphs stay above it; without a
         // stacking context here it would drop behind the sidebar and disappear.
@@ -97,6 +95,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       data-worktree-card-surface="true"
       data-worktree-card-active={
         isActiveSurface && !isLineageDropTarget ? activeSurfaceVariant : undefined
+      }
+      data-worktree-card-selected={
+        (isMultiSelected && !isActiveSurface && !isLineageDropTarget) || undefined
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
       onClick={handleClick}
@@ -151,9 +152,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         parentCardContent
       )}
 
-      {newCardStyle && lineageChildren ? (
+      {lineageChildren ? (
         <div
-          className="mt-1.5 space-y-1"
+          className={cn('space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
           data-worktree-lineage-children=""
           style={lineageChildrenStyle}
         >

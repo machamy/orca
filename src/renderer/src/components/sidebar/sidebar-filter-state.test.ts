@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  computeClearFilterActions,
-  isSleepingSweepExemptionNarrowingList,
-  sidebarHasActiveFilters
-} from './visible-worktrees'
-import { isDefaultBranchWorkspace } from './default-branch-workspace'
-import type { Repo } from '../../../../shared/repo-types'
+  clearSidebarFilters,
+  sidebarHasActiveFilters,
+  type SidebarFilterSetters
+} from './sidebar-filter-actions'
+import {
+  isDefaultBranchWorkspace,
+  isDefaultBranchWorkspaceAtRepoPath
+} from '../../../../shared/worktree/workspace-kinds'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const gitRepo = { kind: 'git' } as const
@@ -50,13 +52,10 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
 }
 
 describe('isDefaultBranchWorkspace', () => {
-  const repoAt = (path: string): Repo =>
-    ({ id: 'repo1', path, displayName: 'r', badgeColor: '#000', addedAt: 0 }) as Repo
-
-  it('returns true for the branch-backed repo-path checkout', () => {
+  it('returns true for a branch-backed main worktree', () => {
     const main = makeWorktree('main')
     main.isMainWorktree = true
-    expect(isDefaultBranchWorkspace(main, repoAt(main.path))).toBe(true)
+    expect(isDefaultBranchWorkspace(main, gitRepo)).toBe(true)
   })
 
   it('returns false for an empty-branch git main (detached HEAD or offline SSH row)', () => {
@@ -74,9 +73,20 @@ describe('isDefaultBranchWorkspace', () => {
     expect(isDefaultBranchWorkspace(folder, { kind: 'folder' })).toBe(true)
   })
 
-  it('returns false for non-default-path worktrees even on the default branch', () => {
+  it('returns false for non-main worktrees even on the default branch', () => {
     const feature = makeWorktree('feature')
-    expect(isDefaultBranchWorkspace(feature, repoAt('/tmp/main'))).toBe(false)
+    expect(isDefaultBranchWorkspace(feature, gitRepo)).toBe(false)
+  })
+
+  // Fork: after an in-place default-worktree switch git's main flag follows the displaced
+  // checkout, so a repo with a known path anchors on the repo-path checkout instead.
+  it('anchors on the repo-path checkout when the repo path is known', () => {
+    const atRepoPath = makeWorktree('main')
+    const displacedGitMain = makeWorktree('displaced')
+    displacedGitMain.isMainWorktree = true
+    const repo = { kind: 'git' as const, path: atRepoPath.path }
+    expect(isDefaultBranchWorkspaceAtRepoPath(atRepoPath, repo)).toBe(true)
+    expect(isDefaultBranchWorkspaceAtRepoPath(displacedGitMain, repo)).toBe(false)
   })
 
   it('keeps a provisioned root visible as the recipe-created workspace', () => {
@@ -143,143 +153,46 @@ describe('sidebarHasActiveFilters', () => {
   })
 })
 
-describe('isSleepingSweepExemptionNarrowingList', () => {
-  it('is false while sleeping workspaces are shown, even when opted out', () => {
-    expect(isSleepingSweepExemptionNarrowingList(true, false)).toBe(false)
+// The setters Clear filters calls, in order.
+function clearedSetters(state: FilterState): string[] {
+  const called: string[] = []
+  const record = (name: string) => () => void called.push(name)
+  const store: SidebarFilterSetters = {
+    setShowSleepingWorkspaces: record('setShowSleepingWorkspaces'),
+    setAlwaysShowDefaultBranchWorkspace: record('setAlwaysShowDefaultBranchWorkspace'),
+    setHideDefaultBranchWorkspace: record('setHideDefaultBranchWorkspace'),
+    setHideAutomationGeneratedWorkspaces: record('setHideAutomationGeneratedWorkspaces'),
+    setHideCliCreatedWorkspaces: record('setHideCliCreatedWorkspaces'),
+    setHideDetachedHeadWorkspaces: record('setHideDetachedHeadWorkspaces'),
+    setHideWorkspacesFromOtherDevices: record('setHideWorkspacesFromOtherDevices'),
+    setFilterRepoIds: record('setFilterRepoIds'),
+    setVisibleWorkspaceHostIds: record('setVisibleWorkspaceHostIds')
+  }
+  clearSidebarFilters(state, store)
+  return called
+}
+
+describe('clearSidebarFilters', () => {
+  it('writes nothing when nothing is set', () => {
+    expect(clearedSetters(filterState())).toEqual([])
   })
 
-  it('is true only when the sweep is on and the exemption is opted out', () => {
-    expect(isSleepingSweepExemptionNarrowingList(false, false)).toBe(true)
-    expect(isSleepingSweepExemptionNarrowingList(false, true)).toBe(false)
+  it.each([
+    [{ hideDefaultBranchWorkspace: true }, ['setHideDefaultBranchWorkspace']],
+    [{ hideAutomationGeneratedWorkspaces: true }, ['setHideAutomationGeneratedWorkspaces']],
+    [{ hideCliCreatedWorkspaces: true }, ['setHideCliCreatedWorkspaces']],
+    [{ hideDetachedHeadWorkspaces: true }, ['setHideDetachedHeadWorkspaces']],
+    [{ hideWorkspacesFromOtherDevices: true }, ['setHideWorkspacesFromOtherDevices']],
+    [{ alwaysShowDefaultBranchWorkspace: false }, ['setAlwaysShowDefaultBranchWorkspace']],
+    // The legacy single-host scope narrows with no host list saved, so Clear resets it too.
+    [{ workspaceHostScope: 'ssh:host-1' as const }, ['setVisibleWorkspaceHostIds']]
+  ] as const)('resets only the filter that is set (%o)', (overrides, expected) => {
+    expect(clearedSetters(filterState(overrides))).toEqual(expected)
   })
 
-  it('treats a missing flag as the on default', () => {
-    expect(isSleepingSweepExemptionNarrowingList(false, undefined)).toBe(false)
-  })
-})
-
-describe('computeClearFilterActions', () => {
-  it('returns no-op actions when nothing is set', () => {
-    expect(computeClearFilterActions(filterState())).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetHideCliCreatedWorkspaces: false,
-      resetHideDetachedHeadWorkspaces: false,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: false,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('flags only hideDefaultBranchWorkspace for reset when it is the sole filter', () => {
-    // Why: verifies the empty-sidebar escape hatch actually clears the hide
-    // flag. A regression here would leave users stuck on "No workspaces found"
-    // because the only active filter would never clear.
-    expect(computeClearFilterActions(filterState({ hideDefaultBranchWorkspace: true }))).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: true,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetHideCliCreatedWorkspaces: false,
-      resetHideDetachedHeadWorkspaces: false,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: false,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('flags only hideAutomationGeneratedWorkspaces for reset when it is the sole filter', () => {
+  it('resets every active filter at once, and nothing already at its default', () => {
     expect(
-      computeClearFilterActions(filterState({ hideAutomationGeneratedWorkspaces: true }))
-    ).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: true,
-      resetHideCliCreatedWorkspaces: false,
-      resetHideDetachedHeadWorkspaces: false,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: false,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('flags only hideCliCreatedWorkspaces for reset when it is the sole filter', () => {
-    expect(computeClearFilterActions(filterState({ hideCliCreatedWorkspaces: true }))).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetHideCliCreatedWorkspaces: true,
-      resetHideDetachedHeadWorkspaces: false,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: false,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('flags only hideDetachedHeadWorkspaces for reset when it is the sole filter', () => {
-    expect(computeClearFilterActions(filterState({ hideDetachedHeadWorkspaces: true }))).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetHideCliCreatedWorkspaces: false,
-      resetHideDetachedHeadWorkspaces: true,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: false,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('does not flag hideDefaultBranchWorkspace when it is already off', () => {
-    // Why: avoids issuing a pointless IPC write on every Clear Filters click
-    // in the common case where hide was never on.
-    const actions = computeClearFilterActions(
-      filterState({
-        filterRepoIds: ['repo1']
-      })
-    )
-    expect(actions.resetHideDefaultBranchWorkspace).toBe(false)
-    expect(actions.resetShowSleepingWorkspaces).toBe(false)
-    expect(actions.resetFilterRepoIds).toBe(true)
-  })
-
-  it('flags legacy single-host scope for reset even without visible host ids', () => {
-    expect(computeClearFilterActions(filterState({ workspaceHostScope: 'ssh:host-1' }))).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetHideCliCreatedWorkspaces: false,
-      resetHideDetachedHeadWorkspaces: false,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: false,
-      resetVisibleWorkspaceHostIds: true
-    })
-  })
-
-  it('flags only the default-branch exemption for reset when it is the sole filter', () => {
-    expect(
-      computeClearFilterActions(filterState({ alwaysShowDefaultBranchWorkspace: false }))
-    ).toEqual({
-      resetShowSleepingWorkspaces: false,
-      resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false,
-      resetHideAutomationGeneratedWorkspaces: false,
-      resetHideCliCreatedWorkspaces: false,
-      resetHideDetachedHeadWorkspaces: false,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: true,
-      resetVisibleWorkspaceHostIds: false
-    })
-  })
-
-  it('flags every active filter simultaneously', () => {
-    expect(
-      computeClearFilterActions(
+      clearedSetters(
         filterState({
           showSleepingWorkspaces: false,
           filterRepoIds: ['repo1', 'repo2'],
@@ -288,16 +201,12 @@ describe('computeClearFilterActions', () => {
           visibleWorkspaceHostIds: ['local']
         })
       )
-    ).toEqual({
-      resetShowSleepingWorkspaces: true,
-      resetFilterRepoIds: true,
-      resetHideDefaultBranchWorkspace: true,
-      resetHideAutomationGeneratedWorkspaces: true,
-      resetHideCliCreatedWorkspaces: false,
-      resetHideDetachedHeadWorkspaces: false,
-      resetHideWorkspacesFromOtherDevices: false,
-      resetAlwaysShowDefaultBranchWorkspace: false,
-      resetVisibleWorkspaceHostIds: true
-    })
+    ).toEqual([
+      'setShowSleepingWorkspaces',
+      'setHideDefaultBranchWorkspace',
+      'setHideAutomationGeneratedWorkspaces',
+      'setFilterRepoIds',
+      'setVisibleWorkspaceHostIds'
+    ])
   })
 })

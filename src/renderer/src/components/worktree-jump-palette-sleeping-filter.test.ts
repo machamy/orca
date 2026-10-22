@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSleepingSweepExemptWorkspace } from './sidebar/visible-worktrees'
-import type { Repo } from '../../../shared/repo-types'
+import { isSleepingSweepExempt } from '../../../shared/workspace-view/workspace-row-filters'
 import type { Worktree } from '../../../shared/worktree/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -27,23 +26,18 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('Cmd+J empty-query "Hide sleeping" pass (#8873)', () => {
-  const repoAt = (path: string): Repo =>
-    ({ id: 'repo1', path, displayName: 'r', badgeColor: '#000', addedAt: 0 }) as Repo
-
-  it('exempts the repo-path checkout by default and honours an explicit opt-out', () => {
+  it('exempts a project entry point by default and honours an explicit opt-out', () => {
     const main = makeWorktree()
-    const repo = repoAt(main.path)
 
-    expect(isSleepingSweepExemptWorkspace(main, repo, undefined)).toBe(true)
-    expect(isSleepingSweepExemptWorkspace(main, repo, true)).toBe(true)
-    expect(isSleepingSweepExemptWorkspace(main, repo, false)).toBe(false)
+    expect(isSleepingSweepExempt(main.isMainWorktree, undefined)).toBe(true)
+    expect(isSleepingSweepExempt(main.isMainWorktree, true)).toBe(true)
+    expect(isSleepingSweepExempt(main.isMainWorktree, false)).toBe(false)
   })
 
-  it('never exempts a non-default-path workspace (e.g. the git main after a switch)', () => {
-    const feature = makeWorktree({ id: 'wt-feature', isMainWorktree: true, path: '/tmp/feature' })
-    const repo = repoAt('/tmp/repo1')
+  it('never exempts a non-main workspace', () => {
+    const feature = makeWorktree({ id: 'wt-feature', isMainWorktree: false })
 
-    expect(isSleepingSweepExemptWorkspace(feature, repo, true)).toBe(false)
-    expect(isSleepingSweepExemptWorkspace(feature, repo, undefined)).toBe(false)
+    expect(isSleepingSweepExempt(feature.isMainWorktree, true)).toBe(false)
+    expect(isSleepingSweepExempt(feature.isMainWorktree, undefined)).toBe(false)
   })
 })

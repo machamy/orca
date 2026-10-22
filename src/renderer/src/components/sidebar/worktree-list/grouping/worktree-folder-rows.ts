@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
@@ -14,48 +15,23 @@ import {
   type ResolvedWorktreeFolderTree,
   type WorktreeFolderMember
 } from '../../../../../../shared/worktree-folder/resolve'
-import type { WorktreeFolder } from '../../../../../../shared/worktree-folder/types'
+import {
+  worktreeFolderHostRepoKey,
+  type SidebarWorktreeFolderModel,
+  type SidebarWorktreeFolderProject
+} from '../../../../../../shared/sidebar-list/worktree-folder-rows'
+import {
+  getCyclicProjectedWorktreeLineageIds,
+  getProjectedWorktreeLineage
+} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import { findRepoForHost } from '../../../../store/slices/repo-host-identity'
-import { getProjectedWorktreeLineage } from '../../worktree-lineage-projection'
-import { appendWorktreeRows } from './row-builders'
-import type { Row, WorktreeGroupBy } from './row-types'
 
-/** Collapse-state key — id-scoped (F4): one key folds every row of the folder. */
-export function getWorktreeFolderGroupKey(folderId: string): string {
-  return `worktree-folder:${folderId}`
-}
-
-/**
- * Where folder rows render (§6). Exhaustive on purpose — a new `WorktreeGroupBy`
- * variant must fail here, not silently hide folders (the #15362 lesson).
- * Status/PR lanes are the `'hide'` default; `'repeat-header'` is a later stage.
- */
-export function shouldRenderWorktreeFoldersForGroupBy(groupBy: WorktreeGroupBy): boolean {
-  switch (groupBy) {
-    case 'none':
-    case 'repo':
-      return true
-    case 'workspace-status':
-    case 'pr-status':
-      return false
-  }
-}
-
-type SidebarWorktreeFolderProject = {
-  hostId: ExecutionHostId
-  repo: Repo
-  resolved: ResolvedWorktreeFolderTree
-}
-
-/** One resolver pass per project per host (§6); lanes only read the answer. */
-export type SidebarWorktreeFolderModel = {
-  byHostRepo: ReadonlyMap<string, SidebarWorktreeFolderProject>
-}
-
-// Escaped NUL, never the raw byte: a raw \x00 makes git/diff read the file as binary.
-function hostRepoKey(hostId: ExecutionHostId, repoId: string): string {
-  return `${hostId}\u0000${repoId}`
-}
+// Emission and row keys live in the shared builder; the window only resolves membership.
+export {
+  getWorktreeFolderGroupKey,
+  shouldRenderWorktreeFoldersForGroupBy,
+  type SidebarWorktreeFolderModel
+} from '../../../../../../shared/sidebar-list/worktree-folder-rows'
 
 type FolderSettings = Pick<
   GlobalSettings,
@@ -144,7 +120,7 @@ export function resolveSidebarWorktreeFolders(args: {
       args.repoMap.get(worktree.repoId),
       args.defaultHostId
     )
-    const key = hostRepoKey(hostId, worktree.repoId)
+    const key = worktreeFolderHostRepoKey(hostId, worktree.repoId)
     const slot = worktreesByHostRepo.get(key)
     if (slot) {
       slot.worktrees.push(worktree)
@@ -182,123 +158,48 @@ export function resolveSidebarWorktreeFolders(args: {
   return byHostRepo.size > 0 ? { byHostRepo } : null
 }
 
-type AppendWorktreeRowsOptions = Parameters<typeof appendWorktreeRows>[5]
-
-/**
- * §6 — the one place a folder becomes row-shaped. Emits, per project-per-host
- * block in first-appearance order: one `WorktreeFolderRow` per folder
- * (depth-first, siblings in resolver order), each followed by its members via
- * the existing `appendWorktreeRows`, then all unfiled worktrees in one final
- * call — today's behaviour, byte for byte, when there are no folders.
- */
-export function appendWorktreeRowsWithFolders(
-  result: Row[],
-  worktrees: Worktree[],
-  repoMap: Map<string, Repo>,
-  lineageById: Record<string, WorktreeLineage>,
-  worktreeMap: Map<string, Worktree>,
-  options: AppendWorktreeRowsOptions & {
-    groupBy: WorktreeGroupBy
-    defaultHostId: ExecutionHostId
-  },
-  model: SidebarWorktreeFolderModel | null
-): void {
-  const { groupBy: _groupBy, defaultHostId: _defaultHostId, ...baseOptions } = options
-  if (!model || !shouldRenderWorktreeFoldersForGroupBy(options.groupBy)) {
-    appendWorktreeRows(result, worktrees, repoMap, lineageById, worktreeMap, baseOptions)
-    return
-  }
-
-  const blockKeys: string[] = []
-  const membersByBlockFolder = new Map<string, Worktree[]>()
-  const unfiled: Worktree[] = []
-  for (const worktree of worktrees) {
-    const hostId = getWorktreeExecutionHostId(
-      worktree,
-      repoMap.get(worktree.repoId),
-      options.defaultHostId
-    )
-    const blockKey = hostRepoKey(hostId, worktree.repoId)
-    const project = model.byHostRepo.get(blockKey)
-    if (!project) {
-      unfiled.push(worktree)
-      continue
-    }
-    if (!blockKeys.includes(blockKey)) {
-      blockKeys.push(blockKey)
-    }
-    const folderId = project.resolved.folderIdByWorktreeId.get(worktree.id)
-    if (!folderId) {
-      unfiled.push(worktree)
-      continue
-    }
-    const memberKey = `${blockKey}\u0000${folderId}`
-    const members = membersByBlockFolder.get(memberKey)
-    if (members) {
-      members.push(worktree)
-    } else {
-      membersByBlockFolder.set(memberKey, [worktree])
-    }
-  }
-
-  if (blockKeys.length === 0) {
-    appendWorktreeRows(result, worktrees, repoMap, lineageById, worktreeMap, baseOptions)
-    return
-  }
-
-  // Iterative depth-first pre-order: folder depth is unbounded by design, so a
-  // deep-but-valid persisted chain must never overflow the call stack.
-  const emitFolderBlock = (blockKey: string, project: SidebarWorktreeFolderProject): void => {
-    type Level = { folders: readonly WorktreeFolder[]; index: number; folderDepth: number }
-    const stack: Level[] = [
-      { folders: project.resolved.foldersByParentId.get(null) ?? [], index: 0, folderDepth: 0 }
+/** The window's folder model for the shared row planner; null when folders are off or unused. */
+export function useSidebarWorktreeFolderModel(args: {
+  worktrees: readonly Worktree[]
+  repos: readonly Repo[]
+  repoMap: ReadonlyMap<string, Repo>
+  settings: FolderSettings | undefined
+  lineageById: Record<string, WorktreeLineage>
+  worktreeMap: Map<string, Worktree>
+  defaultHostId: ExecutionHostId
+  runtimeStatusByEnvironmentId?: WorktreeFolderRuntimeStatusLookup | null
+}): SidebarWorktreeFolderModel | null {
+  const {
+    worktrees,
+    repos,
+    repoMap,
+    settings,
+    lineageById,
+    worktreeMap,
+    defaultHostId,
+    runtimeStatusByEnvironmentId
+  } = args
+  return useMemo(
+    () =>
+      resolveSidebarWorktreeFolders({
+        worktrees,
+        repos,
+        repoMap,
+        settings,
+        lineageById,
+        cyclicLineageIds: getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap),
+        defaultHostId,
+        runtimeStatusByEnvironmentId
+      }),
+    [
+      worktrees,
+      repos,
+      repoMap,
+      settings,
+      lineageById,
+      worktreeMap,
+      defaultHostId,
+      runtimeStatusByEnvironmentId
     ]
-    for (;;) {
-      const level = stack.at(-1)
-      if (!level) {
-        break
-      }
-      if (level.index >= level.folders.length) {
-        stack.pop()
-        continue
-      }
-      const folder = level.folders[level.index]
-      level.index += 1
-      const members = membersByBlockFolder.get(`${blockKey}\u0000${folder.id}`) ?? []
-      const collapsed = baseOptions.collapsedGroups.has(getWorktreeFolderGroupKey(folder.id))
-      result.push({
-        type: 'worktree-folder',
-        key: `worktree-folder:${project.hostId}:${baseOptions.sectionKey}:${folder.id}:0`,
-        folder,
-        repo: project.repo,
-        hostId: project.hostId,
-        sectionKey: baseOptions.sectionKey,
-        groupDepth: baseOptions.groupDepth,
-        folderDepth: level.folderDepth,
-        memberCount: members.length,
-        collapsed
-      })
-      if (collapsed) {
-        continue
-      }
-      if (members.length > 0) {
-        appendWorktreeRows(result, members, repoMap, lineageById, worktreeMap, {
-          ...baseOptions,
-          worktreeFolderDepth: level.folderDepth + 1
-        })
-      }
-      const children = project.resolved.foldersByParentId.get(folder.id)
-      if (children && children.length > 0) {
-        stack.push({ folders: children, index: 0, folderDepth: level.folderDepth + 1 })
-      }
-    }
-  }
-
-  for (const blockKey of blockKeys) {
-    const project = model.byHostRepo.get(blockKey)
-    if (project) {
-      emitFolderBlock(blockKey, project)
-    }
-  }
-  appendWorktreeRows(result, unfiled, repoMap, lineageById, worktreeMap, baseOptions)
+  )
 }

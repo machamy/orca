@@ -4,20 +4,32 @@ import { loadBrowserGuestUrl } from './load-browser-guest-url'
 import { createBrowserPageWebviewNavigationHandlers } from '../host-guest/browser-page-webview-navigation-handlers'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 
-const statRuntimePath = vi.fn(async () => ({ isDirectory: false }))
-const isRemoteRuntimeFileOperation = vi.fn(() => false)
+type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
+
+const statUserOpenedPath = vi.fn(async (..._args: unknown[]): Promise<PathStat> => ({
+  isDirectory: false,
+  escapesWorktree: false
+}))
 const openFile = vi.fn()
 const setActiveTabType = vi.fn()
 const setBrowserPageUrl = vi.fn()
 const updateBrowserPageState = vi.fn()
-const authorizeExternalPath = vi.fn(async () => undefined)
 
 let browserPagesByWorkspace: Record<string, BrowserPageState[]> = {}
 
-vi.mock('@/runtime/runtime-file-client', () => ({
-  statRuntimePath: (...args: unknown[]) => statRuntimePath(...(args as [])),
-  isRemoteRuntimeFileOperation: (...args: unknown[]) =>
-    isRemoteRuntimeFileOperation(...(args as []))
+vi.mock('@/lib/user-opened-local-path', () => ({
+  statUserOpenedPath: (...args: unknown[]) => statUserOpenedPath(...args)
+}))
+
+vi.mock('@/lib/file-owner-runtime-target', () => ({
+  requireRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    runtimeEnvironmentId: string | null | undefined
+  ) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
 }))
 
 vi.mock('@/store', () => ({
@@ -84,18 +96,16 @@ async function settle(): Promise<void> {
 describe('guest-originated navigation vs in-flight handoff probe', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    statRuntimePath.mockResolvedValue({ isDirectory: false })
-    isRemoteRuntimeFileOperation.mockReturnValue(false)
+    statUserOpenedPath.mockResolvedValue({ isDirectory: false, escapesWorktree: false })
     browserPagesByWorkspace = {
       'workspace-1': [{ id: 'page-1', url: 'https://example.com/app' } as BrowserPageState]
     }
-    Object.assign(window, { api: { fs: { authorizeExternalPath } } })
   })
 
   it('a guest link click while a probe is in flight cancels the late handoff', async () => {
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const handlers = createGuestNavigationHandlers(() => 'https://example.com/clicked')
     const loaded: string[] = []
@@ -111,7 +121,7 @@ describe('guest-originated navigation vs in-flight handoff probe', () => {
     // The user clicks a link in the still-visible old page: the guest navigates on its own.
     handlers.handleFullDidNavigate({ url: 'https://example.com/clicked', isMainFrame: true })
 
-    releaseStat({ isDirectory: false })
+    releaseStat({ isDirectory: false, escapesWorktree: false })
     await settle()
 
     expect(openFile).not.toHaveBeenCalled()
@@ -123,9 +133,9 @@ describe('guest-originated navigation vs in-flight handoff probe', () => {
     // did-start-navigation skips isInPlace and did-navigate never fires for a
     // pushState, so without a fence here the late probe steals focus into the
     // editor over the user's new SPA context.
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const handlers = createGuestNavigationHandlers(() => 'https://example.com/app/route')
     const loaded: string[] = []
@@ -141,7 +151,7 @@ describe('guest-originated navigation vs in-flight handoff probe', () => {
     // The still-visible old page pushStates on its own — a guest-originated navigation.
     handlers.handleDidNavigateInPage({ url: 'https://example.com/app/route', isMainFrame: true })
 
-    releaseStat({ isDirectory: false })
+    releaseStat({ isDirectory: false, escapesWorktree: false })
     await settle()
 
     expect(openFile).not.toHaveBeenCalled()
@@ -151,9 +161,9 @@ describe('guest-originated navigation vs in-flight handoff probe', () => {
 
   it('a subframe in-page navigation does not cancel the probe', async () => {
     // An iframe's pushState is not the user leaving the page.
-    let releaseStat!: (value: { isDirectory: boolean }) => void
-    statRuntimePath.mockImplementationOnce(
-      () => new Promise<{ isDirectory: boolean }>((resolve) => (releaseStat = resolve))
+    let releaseStat!: (value: PathStat) => void
+    statUserOpenedPath.mockImplementationOnce(
+      () => new Promise<PathStat>((resolve) => (releaseStat = resolve))
     )
     const handlers = createGuestNavigationHandlers(() => 'https://example.com/app')
     const loaded: string[] = []
@@ -168,7 +178,7 @@ describe('guest-originated navigation vs in-flight handoff probe', () => {
 
     handlers.handleDidNavigateInPage({ url: 'https://ads.example.net/frame', isMainFrame: false })
 
-    releaseStat({ isDirectory: false })
+    releaseStat({ isDirectory: false, escapesWorktree: false })
     await settle()
 
     expect(openFile).toHaveBeenCalled()

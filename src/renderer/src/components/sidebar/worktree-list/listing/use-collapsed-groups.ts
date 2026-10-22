@@ -1,60 +1,69 @@
 import { useMemo } from 'react'
+import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
+import { getWorktreeRevealCollapsedGroupKeys } from '../navigation/worktree-reveal-group-keys'
 import type { AppState } from '@/store/types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import { PINNED_GROUP_KEY, getLineageGroupKey } from '../grouping/group-keys'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
-import type { ProjectGroupingModel } from '../grouping/project-grouping'
-import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeGroupBy
+} from '../../../../../../shared/sidebar-list/row-types'
+import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
-import { getWorktreeFolderRevealGroupKeys } from '../navigation/worktree-folder-reveal'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
-import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
+import { getWorktreeFolderRevealGroupKeys } from '../navigation/worktree-folder-reveal'
 
 // While the agent send picker targets a workspace, force open every section that hides it.
 export function useEffectiveCollapsedGroups(args: {
+  occurrencePlan?: WorktreeOccurrencePlan<Worktree>
+  hostScopedGroups?: boolean
   collapsedGroups: Set<string>
   agentSendTargetWorktreeId: string | null
   groupBy: WorktreeGroupBy
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  worktrees: readonly Worktree[]
   visibleWorktrees: readonly Worktree[]
+  filterRepoIds?: readonly string[]
   repoMap: Map<string, Repo>
-  /** Fork: host-correct repo records for worktree-folder reveal expansion. */
-  repos: readonly Repo[]
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   prCache: AppState['prCache'] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  settings: AppState['settings']
   projectGroups: readonly ProjectGroup[]
   projectGrouping: ProjectGroupingModel
   folderWorkspaces: readonly FolderWorkspace[]
   defaultHostId: ExecutionHostId
+  /** Fork: worktree folders need host-correct repo records and the toggle. */
+  repos?: readonly Repo[]
+  settings?: AppState['settings']
 }): Set<string> {
   const {
+    occurrencePlan,
     collapsedGroups,
+    hostScopedGroups = false,
     agentSendTargetWorktreeId,
     groupBy,
     pinnedDisplayPolicy,
+    worktrees,
     visibleWorktrees,
+    filterRepoIds,
     repoMap,
-    repos,
     worktreeMap,
     worktreeLineageById,
     prCache,
     workspaceStatuses,
-    settings,
     projectGroups,
     projectGrouping,
     folderWorkspaces,
-    defaultHostId
+    defaultHostId,
+    repos,
+    settings
   } = args
   return useMemo(() => {
     if (!agentSendTargetWorktreeId) {
@@ -68,7 +77,7 @@ export function useEffectiveCollapsedGroups(args: {
         agentSendTargetWorktreeId,
         folderWorkspaces,
         projectGroups,
-        { groupBy, workspaceStatuses, defaultHostId }
+        { groupBy, workspaceStatuses, defaultHostId, hostScopedGroups }
       )
       if (folderKeys.length === 0) {
         return collapsedGroups
@@ -80,26 +89,29 @@ export function useEffectiveCollapsedGroups(args: {
       return nextForFolder
     }
     const next = new Set(collapsedGroups)
-    if (
-      pinnedDisplayPolicy === 'single-location' &&
-      isPinnedSectionWorktree(targetWorktree, visibleWorktrees, worktreeLineageById, worktreeMap)
-    ) {
-      next.delete(PINNED_GROUP_KEY)
-    } else {
-      for (const groupKey of getGroupKeysForWorktree(
-        groupBy,
-        targetWorktree,
-        repoMap,
-        prCache,
-        workspaceStatuses,
-        settings,
-        projectGroups,
-        projectGrouping
-      )) {
-        next.delete(groupKey)
-      }
-      // Fork: a collapsed worktree folder removes member rows outright, so the
-      // target's folder ancestor chain must open too (mirrors pending-reveal).
+    for (const groupKey of getWorktreeRevealCollapsedGroupKeys({
+      occurrencePlan,
+      worktree: targetWorktree,
+      worktrees,
+      visibleWorktrees,
+      filterRepoIds,
+      worktreeLineageById,
+      repoMap,
+      defaultHostId,
+      hostScopedGroups,
+      collapsedGroups,
+      groupBy,
+      pinnedDisplayPolicy,
+      prCache,
+      workspaceStatuses,
+      projectGroups,
+      projectGrouping
+    })) {
+      next.delete(groupKey)
+    }
+    // Fork: a collapsed worktree folder removes member rows outright, so the
+    // target's folder ancestor chain must open too (mirrors pending-reveal).
+    if (repos) {
       for (const groupKey of getWorktreeFolderRevealGroupKeys({
         worktree: targetWorktree,
         hostWorktreeMap: worktreeMap,
@@ -116,31 +128,27 @@ export function useEffectiveCollapsedGroups(args: {
         next.delete(groupKey)
       }
     }
-
-    for (const parent of getWorktreeLineageAncestors(
-      targetWorktree,
-      worktreeLineageById,
-      worktreeMap
-    )) {
-      next.delete(getLineageGroupKey(parent.id))
-    }
     return next
   }, [
     agentSendTargetWorktreeId,
+    occurrencePlan,
     collapsedGroups,
+    hostScopedGroups,
     groupBy,
     pinnedDisplayPolicy,
+    worktrees,
     visibleWorktrees,
+    filterRepoIds,
     prCache,
     projectGroups,
     projectGrouping,
     repoMap,
-    repos,
-    settings,
     workspaceStatuses,
     worktreeLineageById,
     worktreeMap,
     folderWorkspaces,
-    defaultHostId
+    defaultHostId,
+    repos,
+    settings
   ])
 }

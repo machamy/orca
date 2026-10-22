@@ -1,16 +1,13 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { useAppStore } from '@/store'
-import {
-  isRemoteRuntimeFileOperation,
-  readRuntimeFilePreview,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-client-target'
+import { readRuntimeFilePreview } from '@/runtime/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
@@ -118,7 +115,7 @@ export function loadBrowserGuestUrl({
     // its file:// documents are on the client disk, so its ownership (not the
     // workspace's) picks the probe host.
     const currentStore = useAppStore.getState()
-    const inferredRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+    const inferredRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
       currentStore,
       worktreeId
     )
@@ -188,21 +185,23 @@ async function probeBrowserPathHandoff(
     }
     const workspaceRootPath = getWorkspaceRootPath(store, worktreeId)
     const fileContext: RuntimeFileOperationArgs = {
-      settings: settingsForRuntimeOwner(store.settings, runtimeEnvironmentId),
+      target: requireRuntimeTargetForFileOwner(store, worktreeId, runtimeEnvironmentId),
       worktreeId,
       worktreePath: workspaceRootPath ?? undefined,
       connectionId: undefined
     }
-    if (!isRemoteRuntimeFileOperation(fileContext, editorRenderedPath)) {
-      await window.api.fs.authorizeExternalPath({ targetPath: editorRenderedPath })
-    }
-    const stat = await statRuntimePath(fileContext, editorRenderedPath)
+    const stat = await statUserOpenedPath(fileContext, editorRenderedPath)
     if (stat.isDirectory) {
       return null
     }
 
     let relativePath = editorRenderedPath
-    if (workspaceRootPath && isPathInsideWorktree(editorRenderedPath, workspaceRootPath)) {
+    // Why: a link out of the project keeps its absolute path, so it reads as user-named.
+    if (
+      workspaceRootPath &&
+      !stat.escapesWorktree &&
+      isPathInsideWorktree(editorRenderedPath, workspaceRootPath)
+    ) {
       relativePath =
         toWorktreeRelativePath(editorRenderedPath, workspaceRootPath) ?? editorRenderedPath
     }
@@ -282,7 +281,7 @@ export async function openBrowserPathInEditor(
   const commitHandoff = await probeBrowserPathHandoff(
     editorRenderedPath,
     worktreeId,
-    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)
   )
   if (!commitHandoff) {
     return false

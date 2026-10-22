@@ -1,9 +1,13 @@
 import type { StateCreator } from 'zustand'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { getActiveRuntimeTarget } from '../../runtime/runtime-client-target'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import type { AppState } from '../types'
 import { findRepoForHost, getRepoHostIdentity } from './repo-host-identity'
 import {
@@ -12,7 +16,6 @@ import {
   showWorktreeFolderHostUpdateToast,
   writeWorktreeFolderMembership
 } from './worktree-folder-membership'
-import { settingsForKnownRepoOwner } from './worktrees/listing/worktree-owner-settings'
 
 export type WorktreeFolderWriteOptions = {
   /** Names the owning host row when the same repo id exists on several hosts. */
@@ -73,7 +76,7 @@ export type WorktreeFolderSlice = {
 const MAX_WORKTREE_FOLDER_NAME_LENGTH = 200
 
 function newWorktreeFolderId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `worktree-folder-${Date.now()}-${Math.random()}`
+  return createBrowserUuid()
 }
 
 /** Siblings are ranked highest-first, so a new folder starts above the rest. */
@@ -128,8 +131,8 @@ export const createWorktreeFolderSlice: StateCreator<AppState, [], [], WorktreeF
   const environmentIdForRepoWrite = (repo: Repo): string | null => {
     // The already-resolved host-correct row decides routing; a bare-id re-lookup
     // could answer with a same-id row on another host.
-    const target = getActiveRuntimeTarget(settingsForKnownRepoOwner(get().settings, repo))
-    return target.kind === 'environment' ? target.environmentId : null
+    const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+    return host?.kind === 'runtime' ? host.environmentId : null
   }
 
   const mutationChains = new Map<string, Promise<boolean>>()

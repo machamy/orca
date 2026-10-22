@@ -3,18 +3,30 @@ import { retryBrowserTabLoad } from './retry-browser-page-load'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 
-const statRuntimePath = vi.fn(async () => ({ isDirectory: false }))
-const isRemoteRuntimeFileOperation = vi.fn(() => false)
+type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
+
+const statUserOpenedPath = vi.fn(async (..._args: unknown[]): Promise<PathStat> => ({
+  isDirectory: false,
+  escapesWorktree: false
+}))
 const openFile = vi.fn()
 const setBrowserPageUrl = vi.fn()
-const authorizeExternalPath = vi.fn(async () => undefined)
 
 let browserPagesByWorkspace: Record<string, BrowserPageState[]> = {}
 
-vi.mock('@/runtime/runtime-file-client', () => ({
-  statRuntimePath: (...args: unknown[]) => statRuntimePath(...(args as [])),
-  isRemoteRuntimeFileOperation: (...args: unknown[]) =>
-    isRemoteRuntimeFileOperation(...(args as []))
+vi.mock('@/lib/user-opened-local-path', () => ({
+  statUserOpenedPath: (...args: unknown[]) => statUserOpenedPath(...args)
+}))
+
+vi.mock('@/lib/file-owner-runtime-target', () => ({
+  requireRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    runtimeEnvironmentId: string | null | undefined
+  ) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
 }))
 
 vi.mock('@/store', () => ({
@@ -41,12 +53,8 @@ vi.mock('@/store', () => ({
 describe('retryBrowserTabLoad', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    statRuntimePath.mockResolvedValue({ isDirectory: false })
-    isRemoteRuntimeFileOperation.mockReturnValue(false)
+    statUserOpenedPath.mockResolvedValue({ isDirectory: false, escapesWorktree: false })
     browserPagesByWorkspace = {}
-    Object.assign(globalThis, {
-      window: { api: { fs: { authorizeExternalPath } } }
-    })
   })
 
   it('retries a failed load by assigning the attempted URL instead of reload()', () => {

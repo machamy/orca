@@ -3,9 +3,12 @@ import {
   isOpenCodeLegacySharedConfigDir
 } from '../../../opencode/legacy-shared-config-dir'
 import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
-import { resolveOpenCodeSourceConfigDir, restoreOrStripOverlayEnv } from './pi-agent'
+import { resolveOpenCodeSourceConfigDir } from './pi-agent'
+import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { resolveOpenCodeConfigDirectory } from '../../../../shared/opencode-config-directory'
+import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
 import type { BuildPtyHostEnvOptions } from './types'
 
 type OpenCodeSourceConfig = {
@@ -41,7 +44,7 @@ export function applyOpenCodeStatusPluginEnv(
   config: OpenCodeSourceConfig,
   options: Pick<
     BuildPtyHostEnvOptions,
-    'launchAgent' | 'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'isWsl'
+    'launchAgent' | 'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'isWsl' | 'shellPath'
   >,
   command: string | undefined
 ): 'opencode' | 'opencode2' | null {
@@ -69,7 +72,13 @@ export function applyOpenCodeStatusPluginEnv(
   env.ORCA_OPENCODE_AGENT = agent
   // WSL owns its config writes; only the guest overlay may enter a WSL pane.
   if (!options.isWsl) {
-    Object.assign(env, service.buildPtyEnv(id, config.directory))
+    const executionEnv = { ...process.env, ...env }
+    const shellConfigHome = readSessionShellStartupEnvVar('XDG_CONFIG_HOME', env, options.shellPath)
+    const defaultConfigDir = resolveOpenCodeConfigDirectory({
+      ...executionEnv,
+      XDG_CONFIG_HOME: shellConfigHome ?? executionEnv.XDG_CONFIG_HOME
+    })
+    Object.assign(env, service.buildPtyEnv(id, config.directory, defaultConfigDir))
   }
   if (env.OPENCODE_CONFIG_DIR) {
     // Shell startup can re-export the default; preserve this pane's overlay and original source.

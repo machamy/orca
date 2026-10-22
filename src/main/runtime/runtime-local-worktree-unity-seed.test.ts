@@ -62,13 +62,10 @@ describe('autoSeedUnityAfterLocalWorktreeCreate', () => {
  * no caller is exactly what this guards against.
  */
 describe('worktree create still invokes the Unity auto-seed', () => {
-  const createSource = readFileSync(
-    join(__dirname, 'orca-runtime-create-managed-worktree.ts'),
-    'utf8'
-  )
+  const createSource = readFileSync(join(__dirname, 'workspaces', 'workspace-creation.ts'), 'utf8')
 
   it('imports the fork seed module', () => {
-    expect(createSource).toContain("from './runtime-local-worktree-unity-seed'")
+    expect(createSource).toContain("from '../runtime-local-worktree-unity-seed'")
   })
 
   it('calls it after a local worktree is materialized', () => {

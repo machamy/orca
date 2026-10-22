@@ -10,11 +10,24 @@ import { FORK_CONTRACT_TESTS } from './fork-contract-tests.mjs'
  * Built by spreading the base config rather than mergeConfig: mergeConfig
  * CONCATENATES `include` arrays, which silently turns this gate back into the
  * full suite.
+ *
+ * Why the projects override: the base config runs per-runtime projects that each
+ * carry their own `include`, so a top-level include alone still ran every suite.
  */
+const nodeProjects = (baseConfig.test?.projects ?? []).flatMap((project) =>
+  typeof project === 'object' &&
+  project !== null &&
+  'test' in project &&
+  project.test?.name === 'node'
+    ? [{ ...project, test: { ...project.test, include: FORK_CONTRACT_TESTS } }]
+    : []
+)
+
 export default defineConfig({
   ...baseConfig,
   test: {
     ...baseConfig.test,
-    include: FORK_CONTRACT_TESTS
+    include: FORK_CONTRACT_TESTS,
+    projects: nodeProjects
   }
 })

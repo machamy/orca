@@ -2,7 +2,10 @@ import React from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
-import type { WorktreeFolderRow, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  WorktreeFolderRow,
+  WorktreeGroupBy
+} from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getWorktreeFolderRowContentIndent } from './indentation'
 

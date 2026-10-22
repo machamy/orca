@@ -6,9 +6,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
 import { useAppStore } from '@/store'
-import type { WorktreeFolderRow } from './worktree-list/grouping/row-types'
+import type { WorktreeFolderRow } from '../../../../shared/sidebar-list/row-types'
 import { WorktreeFolderRowMenu } from './WorktreeFolderRowMenu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './WorktreeContextMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 const initialState = useAppStore.getState()
 

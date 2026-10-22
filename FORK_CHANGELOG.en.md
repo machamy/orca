@@ -24,6 +24,48 @@ source.
 
 ---
 
+## machamy.20 — upstream `1.4.237` · 2026-10-22
+
+Merges upstream **1.4.220 → 1.4.237** (3,021 commits). No new fork features; the fork's
+features are re-seated on top of the parts upstream restructured.
+
+### Upstream merge (3,021 commits, `1.4.220` → `1.4.237`)
+- 1,251 fixes · 307 features. The 1.4.237 tag carries only its release marker beyond main, so
+  everything in the tag is included.
+- Highlights: built-in browser new-tab page, address-bar suggestions, per-site zoom and appearance,
+  camera/mic/location prompts; an `Auto` agent permission mode; Codex skills in the Chat UI;
+  Antigravity chats; adding Claude/Codex accounts on a paired server; `orca terminal set-pane-title`;
+  guarded file writes that refuse to overwrite a file changed elsewhere.
+- Tooling moved to TypeScript 7 · Vite 8 · Vitest 5.
+
+### Fork-side work
+92 conflicts, plus 8 files upstream moved or deleted.
+
+- **Sidebar list**: upstream moved the row builder to `src/shared/sidebar-list` and replaced lineage
+  nesting with an occurrence plan. Worktree-folder rows are rebuilt on it
+  (`shared/sidebar-list/worktree-folder-rows.ts`); only membership resolution stays in the window.
+  A lineage subtree follows its root's folder as a whole.
+- **Default-checkout predicates**: default-checkout-first ordering, hide-default-branch, and the
+  sleeping-sweep exemption moved into upstream's shared modules; the rule that the repo-path checkout
+  stays the default after an in-place switch is re-applied there.
+- **Runtime class chain**: upstream regrouped it by folder; the default-worktree commands link is
+  re-inserted. Identity migration now carries the host-qualified target.
+- **Sleep**: upstream changed the result shape, so the default-switch sleep (keeps browser records)
+  is its own function.
+- **Cold-restore resume**: the duplicate-resume claim and post-resume bookkeeping now live inside
+  upstream's single resume spawner, alongside its hidden-pane deferral.
+- **Shutdown layout capture**: upstream now builds from the stored tree, which subsumes the fork's
+  split-shrink fix; upstream's version is used as is.
+- **Markdown preview**: upstream added GitHub callouts and remark-breaks back; the fork keeps
+  GitHub's own alert markup and soft-break joining.
+- **Browser → editor handoff**: updated to upstream's file-access API (owner target, path checks).
+- **Runtime capabilities**: upstream split them by area; the fork's two moved to
+  `fork-runtime-capabilities.ts`.
+- **Fork test gate**: vitest now runs per-runtime projects, which had turned the gate into the full
+  suite; fixed.
+
+---
+
 ## machamy.19 — upstream `1.4.220` · 2026-10-04
 
 Upstream cut **1.4.220** the day machamy.18 was installed, so this merges the remaining

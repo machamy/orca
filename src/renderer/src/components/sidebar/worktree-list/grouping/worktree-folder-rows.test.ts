@@ -10,8 +10,12 @@ import { worktree as worktreeFixture } from '../../worktree-list-groups-test-fix
 import { getRenderRowOptionId } from '../navigation/active-descendant-option'
 import { buildRenderableRows } from '../listing/renderable-rows'
 import { getRenderRowKey } from '../listing/render-row'
-import { buildRows } from './build-rows'
-import type { Row, WorktreeFolderRow, WorktreeRow } from './row-types'
+import { buildRows } from './build-rows.test-fixture'
+import type {
+  Row,
+  WorktreeFolderRow,
+  WorktreeRow
+} from '../../../../../../shared/sidebar-list/row-types'
 import { getWorktreeFolderGroupKey } from './worktree-folder-rows'
 
 const repo1: Repo = {
@@ -97,6 +101,7 @@ function build(args: {
     undefined,
     undefined,
     undefined,
+    [],
     args.repos,
     args.runtimeStatusByEnvironmentId
   )
@@ -464,7 +469,10 @@ describe('worktree-folder-rows source encoding', () => {
   it('holds no raw NUL byte', async () => {
     const { readFileSync } = await import('node:fs')
     const { join } = await import('node:path')
-    const source = readFileSync(join(import.meta.dirname, 'worktree-folder-rows.ts'), 'utf8')
+    const source = readFileSync(
+      join(import.meta.dirname, '../../../../../../shared/sidebar-list/worktree-folder-rows.ts'),
+      'utf8'
+    )
     expect(source.includes(String.fromCharCode(0))).toBe(false)
     expect(source).toContain(`${String.fromCharCode(92)}u0000`)
   })

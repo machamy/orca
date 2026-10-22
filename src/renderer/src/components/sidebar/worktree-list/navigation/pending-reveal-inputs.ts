@@ -1,3 +1,4 @@
+import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
@@ -7,25 +8,24 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { RenderRow } from '../listing/render-row'
-import { getWorktreeLineageGroupKey } from '../grouping/group-keys'
-import type { ProjectGroupingModel } from '../grouping/project-grouping'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
-import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
-import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import {
-  getHostScopedWorktreeLineageInputs,
-  getWorktreeLineageAncestors
-} from '../../worktree-lineage-projection'
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import type { RenderRow } from '../listing/render-row'
+import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeGroupBy
+} from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
-import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
+import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 import { getWorktreeFolderRevealGroupKeys } from './worktree-folder-reveal'
 
 export const MAX_REVEAL_RETRIES = 8
 
 export type PendingSidebarRevealArgs = {
+  occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
   clearPendingRevealWorktreeId: () => void
@@ -38,7 +38,7 @@ export type PendingSidebarRevealArgs = {
   folderWorkspaces: readonly FolderWorkspace[]
   repoMap: Map<string, Repo>
   /** Fork: host-correct repo records for worktree-folder reveal expansion. */
-  repos: readonly Repo[]
+  repos?: readonly Repo[]
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   collapsedGroups: Set<string>
@@ -63,6 +63,9 @@ export function expandGroupsForWorktreeReveal(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): void {
+  const hostScopedGroups = args.renderRows.some(
+    (row) => row.type === 'host-header' || (row.type === 'header' && row.collapseKey !== undefined)
+  )
   const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
     worktreeId,
     args.folderWorkspaces,
@@ -70,7 +73,9 @@ export function expandGroupsForWorktreeReveal(
     {
       groupBy: args.groupBy,
       workspaceStatuses: args.workspaceStatuses,
-      defaultHostId: args.defaultHostId
+      defaultHostId: args.defaultHostId,
+      hostScopedGroups,
+      executionHostId
     }
   )
   if (folderGroupKeys.length > 0) {
@@ -89,73 +94,33 @@ export function expandGroupsForWorktreeReveal(
   if (!targetWorktree) {
     return
   }
-  const targetRepo = args.repoMap.get(targetWorktree.repoId)
-  const targetHostId = getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)
-  const hostGroupKey = `host:${targetHostId}`
-  if (args.collapsedGroups.has(hostGroupKey)) {
-    args.toggleGroup(hostGroupKey)
-  }
-
-  const hostLineage = getHostScopedWorktreeLineageInputs(
-    args.worktrees,
-    args.worktreeLineageById,
-    executionHostId
-  )
-  for (const parent of getWorktreeLineageAncestors(
-    targetWorktree,
-    hostLineage.lineageById,
-    hostLineage.worktreeMap
-  )) {
-    const lineageGroupKey = getWorktreeLineageGroupKey(parent)
-    if (args.collapsedGroups.has(lineageGroupKey)) {
-      args.toggleGroup(lineageGroupKey)
-    }
-  }
-
-  const revealsInPinnedSection =
-    args.pinnedDisplayPolicy === 'single-location' &&
-    isPinnedSectionWorktree(
-      targetWorktree,
-      args.worktrees,
-      args.worktreeLineageById,
-      args.worktreeMap
-    )
-  const groupKeys = revealsInPinnedSection
-    ? getPinnedWorktreeRevealCollapsedGroupKeys({
-        worktree: targetWorktree,
-        collapsedGroups: args.collapsedGroups,
-        inPinnedSection: true
-      })
-    : getGroupKeysForWorktree(
-        args.groupBy,
-        targetWorktree,
-        args.repoMap,
-        args.prCache,
-        args.workspaceStatuses,
-        args.settings,
-        args.projectGroups,
-        args.projectGrouping
-      )
-  for (const groupKey of groupKeys) {
-    if (args.collapsedGroups.has(groupKey)) {
-      args.toggleGroup(groupKey)
-    }
+  for (const groupKey of getWorktreeRevealCollapsedGroupKeys({
+    ...args,
+    worktree: targetWorktree,
+    hostScopedGroups
+  })) {
+    args.toggleGroup(groupKey)
   }
   // Fork: a collapsed worktree folder hides member rows outright, so the target's
-  // folder ancestor chain must open too — the pinned copy renders outside folders.
-  if (!revealsInPinnedSection) {
-    for (const groupKey of getWorktreeFolderRevealGroupKeys({
-      worktree: targetWorktree,
-      hostWorktreeMap: hostLineage.worktreeMap,
-      hostLineageById: hostLineage.lineageById,
-      repos: args.repos,
-      settings: args.settings,
-      groupBy: args.groupBy,
-      hostId: targetHostId
-    })) {
-      if (args.collapsedGroups.has(groupKey)) {
-        args.toggleGroup(groupKey)
-      }
+  // folder ancestor chain must open too.
+  if (!args.repos) {
+    return
+  }
+  for (const groupKey of getWorktreeFolderRevealGroupKeys({
+    worktree: targetWorktree,
+    hostWorktreeMap: args.worktreeMap,
+    hostLineageById: args.worktreeLineageById,
+    repos: args.repos,
+    settings: args.settings,
+    groupBy: args.groupBy,
+    hostId: getWorktreeExecutionHostId(
+      targetWorktree,
+      args.repoMap.get(targetWorktree.repoId),
+      args.defaultHostId
+    )
+  })) {
+    if (args.collapsedGroups.has(groupKey)) {
+      args.toggleGroup(groupKey)
     }
   }
 }

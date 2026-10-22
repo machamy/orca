@@ -7,6 +7,7 @@ import { getAgentModelBadgeSearchEntry } from './agent-model-badge-search-entry'
 import { getBrowserMarkdownHandoffSearchEntry } from './browser-markdown-handoff-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -186,7 +187,11 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     getAgentModelBadgeSearchEntry(),
     // Worktree folders: row held back this release — keep it out of the global
     // catalog too, or search navigates to a pane with no such control.
-    getEphemeralVmsSearchEntry()
+    getEphemeralVmsSearchEntry(),
+    // Why: only a Windows desktop shows this toggle, so only there may search find it.
+    ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
+      ? [getWslHostsExperimentalSearchEntry()]
+      : [])
   ]
 )
 

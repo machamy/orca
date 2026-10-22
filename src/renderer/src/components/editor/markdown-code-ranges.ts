@@ -4,48 +4,10 @@
  * structure.
  */
 
+import { getMarkdownFenceRanges } from './markdown-fence-scanner'
+
 export function isInsideRange(index: number, ranges: [number, number][]): boolean {
   return ranges.some(([start, end]) => index >= start && index < end)
-}
-
-function markdownFenceRanges(content: string): [number, number][] {
-  const ranges: [number, number][] = []
-  let offset = 0
-  let openFence: { closingPattern: RegExp; start: number } | null = null
-
-  for (const lineMatch of content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)) {
-    const line = lineMatch[0]
-    if (line === '') {
-      break
-    }
-
-    const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
-    if (openFence) {
-      // Built once per fence: rebuilding it per line recompiled the same regex for every fenced line.
-      if (openFence.closingPattern.test(lineText)) {
-        ranges.push([openFence.start, offset + line.length])
-        openFence = null
-      }
-    } else {
-      const openingFenceMatch = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)
-      if (openingFenceMatch?.[1]) {
-        openFence = {
-          closingPattern: new RegExp(
-            `^ {0,3}${openingFenceMatch[1][0]}{${openingFenceMatch[1].length},}\\s*$`
-          ),
-          start: offset
-        }
-      }
-    }
-
-    offset += line.length
-  }
-
-  if (openFence) {
-    ranges.push([openFence.start, content.length])
-  }
-
-  return ranges
 }
 
 // CommonMark counts indentation in columns, with tab stops of 4.
@@ -215,7 +177,11 @@ function markdownInlineCodeRanges(
 }
 
 export function markdownCodeRanges(content: string): [number, number][] {
-  const fenceRanges = markdownFenceRanges(content)
+  // Why the shared scanner: fences must end where the editor parser ends them.
+  const fenceRanges = getMarkdownFenceRanges(content).map(([start, end]): [number, number] => [
+    start,
+    end
+  ])
   const blockRanges = [...fenceRanges, ...markdownIndentedCodeRanges(content, fenceRanges)]
   return [...blockRanges, ...markdownInlineCodeRanges(content, blockRanges)]
 }

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { WORKTREE_METHODS } from './worktree'
+import { DEFAULT_SET_METHOD } from './worktree-default-set-method'
 
 describe('worktree.defaultSet RPC', () => {
   it('routes the selected worktree and defaults the follow/notify flags off', async () => {
     const runtime = {
       setRuntimeDefaultWorktree: vi.fn().mockResolvedValue({ repoId: 'repo-1' })
     }
-    const method = WORKTREE_METHODS.find((candidate) => candidate.name === 'worktree.defaultSet')
+    const method = DEFAULT_SET_METHOD
 
     expect(method).toBeDefined()
     await expect(
@@ -24,7 +24,7 @@ describe('worktree.defaultSet RPC', () => {
       setRuntimeDefaultWorktree: vi.fn().mockResolvedValue({ repoId: 'repo-1' }),
       requestUiDefaultWorktreeSwitch: vi.fn()
     }
-    const method = WORKTREE_METHODS.find((candidate) => candidate.name === 'worktree.defaultSet')
+    const method = DEFAULT_SET_METHOD
 
     await expect(
       method?.handler({ worktree: 'active', followAgents: true }, {
@@ -43,7 +43,7 @@ describe('worktree.defaultSet RPC', () => {
     const runtime = {
       setRuntimeDefaultWorktree: vi.fn().mockResolvedValue({ repoId: 'repo-1' })
     }
-    const method = WORKTREE_METHODS.find((candidate) => candidate.name === 'worktree.defaultSet')
+    const method = DEFAULT_SET_METHOD
 
     await method?.handler({ worktree: 'id:repo-1::/repo', followAgents: true }, {
       runtime
@@ -61,7 +61,7 @@ describe('worktree.defaultSet RPC', () => {
         .fn()
         .mockResolvedValue({ requested: true, repoId: 'repo-1', worktreeId: 'wt-1' })
     }
-    const method = WORKTREE_METHODS.find((candidate) => candidate.name === 'worktree.defaultSet')
+    const method = DEFAULT_SET_METHOD
 
     await method?.handler(
       { worktree: 'active', followAgents: true, notifyAgents: true, uiFlow: true },
@@ -78,7 +78,7 @@ describe('worktree.defaultSet RPC', () => {
     const runtime = {
       setRuntimeDefaultWorktree: vi.fn().mockResolvedValue({ repoId: 'repo-1' })
     }
-    const method = WORKTREE_METHODS.find((candidate) => candidate.name === 'worktree.defaultSet')
+    const method = DEFAULT_SET_METHOD
 
     await method?.handler({ worktree: 'active', includeUntracked: false }, { runtime } as never)
     expect(runtime.setRuntimeDefaultWorktree).toHaveBeenCalledWith('active', {

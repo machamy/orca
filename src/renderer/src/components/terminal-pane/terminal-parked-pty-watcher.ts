@@ -1,6 +1,6 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
@@ -63,14 +63,16 @@ export function startParkedPtyWatcher(args: {
     return
   }
   const handlePtyExit = (code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
+    // Why first: a daemon restart's replacement starts only when the pane next connects, so the
+    // dead process's title (a 'working' agent pins worktree status) must not wait for it.
+    useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
     if (isPtyExitReplacedByRestart(ptyId)) {
       // Why: the pane lives on under its replacement PTY; only this watcher's subscription ends.
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
       return
     }
-    useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
-    // Why this comes first: the sidecar runs for UNMOUNTED panes and, unlike the
+    // Fork, why before the exit classification: the sidecar runs for UNMOUNTED panes and, unlike the
     // mounted exit handler, is never filtered through the suppressed-exit set —
     // `deliverPtyExitToHandlers` calls it unconditionally. So a default-worktree
     // switch's own sleep kills arrived here and were treated as real exits: the

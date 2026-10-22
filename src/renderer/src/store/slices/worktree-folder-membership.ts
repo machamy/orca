@@ -7,14 +7,12 @@ import {
 } from '../../../../shared/execution-host'
 import { WORKTREE_FOLDERS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { translate } from '@/i18n/i18n'
-import {
-  getActiveRuntimeTarget,
-  runtimeEnvironmentSupportsCapability
-} from '../../runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AppState } from '../types'
 import { applyWorktreeUpdates } from './worktree-helpers'
 import { applyDetectedWorktreeUpdates } from './worktrees/listing/detected-worktree-meta'
-import { trySettingsForWorktreeOwner } from './worktrees/listing/worktree-owner-settings'
+import { tryRuntimeTargetForWorktreeOwner } from './worktrees/listing/worktree-owner-target'
 import { persistWorktreeMeta } from './worktrees/metadata/worktree-meta-persist'
 
 type MembershipState = Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>
@@ -157,17 +155,16 @@ export async function writeWorktreeFolderMembership(
   const state = get()
   const capabilityByEnvironment = new Map<string, boolean>()
   const allowed = new Map<string, string | undefined>()
-  const ownerSettingsById = new Map<string, AppState['settings']>()
+  const ownerTargetById = new Map<string, RuntimeClientTarget>()
   let blocked = false
   let unresolvedOwner = false
   for (const [worktreeId, folderId] of entries) {
     // Null = ambiguous/unknown owner route; refuse rather than guessing a host.
-    const ownerSettings = trySettingsForWorktreeOwner(state, worktreeId)
-    if (ownerSettings === null) {
+    const target = tryRuntimeTargetForWorktreeOwner(state, worktreeId)
+    if (target === null) {
       unresolvedOwner = true
       continue
     }
-    const target = getActiveRuntimeTarget(ownerSettings)
     if (target.kind === 'environment') {
       let supported = capabilityByEnvironment.get(target.environmentId)
       if (supported === undefined) {
@@ -179,7 +176,7 @@ export async function writeWorktreeFolderMembership(
         continue
       }
     }
-    ownerSettingsById.set(worktreeId, ownerSettings)
+    ownerTargetById.set(worktreeId, target)
     allowed.set(worktreeId, folderId)
   }
   if (blocked) {
@@ -204,10 +201,12 @@ export async function writeWorktreeFolderMembership(
   await Promise.all(
     [...allowed].map(async ([worktreeId, folderId]) => {
       try {
+        const target = ownerTargetById.get(worktreeId)
+        if (!target) {
+          throw new Error('worktree_folder_owner_unresolved')
+        }
         // Present-but-undefined is the wire signal for "unfile", all the way down.
-        await persistWorktreeMeta(ownerSettingsById.get(worktreeId) ?? get().settings, worktreeId, {
-          worktreeFolderId: folderId
-        })
+        await persistWorktreeMeta(target, worktreeId, { worktreeFolderId: folderId })
       } catch (err) {
         console.error('Failed to persist worktree folder membership:', err)
         failedIds.push(worktreeId)

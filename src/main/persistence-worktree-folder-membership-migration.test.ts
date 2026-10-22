@@ -3,8 +3,11 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { testState, createStore } from './persistence-test-harness'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 import { mergeWorktree } from './ipc/worktree-metadata-merge'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
+
+const localTarget = (id: string) => hostWorktreeTarget({ id, hostId: 'local' })
 
 // Stub the ~/.ssh/config parser so the Store never reads the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -78,9 +81,12 @@ describe('worktree folder membership across worktree identity changes', () => {
   it('follows a worktree through a rename', async () => {
     const store = await createStore()
     const renamed = 'repo1::/ws/feature-a-renamed'
-    store.setWorktreeMeta(SIDE, { displayName: 'feature-a', worktreeFolderId: 'folder-a' })
+    store.setWorktreeMeta(localTarget(SIDE), {
+      displayName: 'feature-a',
+      worktreeFolderId: 'folder-a'
+    })
 
-    store.migrateWorktreeIdentity(SIDE, renamed)
+    store.migrateWorktreeIdentity(localTarget(SIDE), renamed)
 
     expect(store.getWorktreeMeta(SIDE)).toBeUndefined()
     expect(store.getWorktreeMeta(renamed)?.worktreeFolderId).toBe('folder-a')
@@ -88,13 +94,16 @@ describe('worktree folder membership across worktree identity changes', () => {
 
   it('follows the workspace through a default switch, displaced one unfiled', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(DEFAULT, { displayName: 'repo1' })
-    store.setWorktreeMeta(SIDE, { displayName: 'feature-a', worktreeFolderId: 'folder-a' })
+    store.setWorktreeMeta(localTarget(DEFAULT), { displayName: 'repo1' })
+    store.setWorktreeMeta(localTarget(SIDE), {
+      displayName: 'feature-a',
+      worktreeFolderId: 'folder-a'
+    })
 
     // DEFAULT -> TEMP, SIDE -> DEFAULT, TEMP -> SIDE (what RuntimeDefaultWorktree emits).
-    store.migrateWorktreeIdentity(DEFAULT, TEMP)
-    store.migrateWorktreeIdentity(SIDE, DEFAULT)
-    store.migrateWorktreeIdentity(TEMP, SIDE)
+    store.migrateWorktreeIdentity(localTarget(DEFAULT), TEMP)
+    store.migrateWorktreeIdentity(localTarget(SIDE), DEFAULT)
+    store.migrateWorktreeIdentity(localTarget(TEMP), SIDE)
 
     // The filed workspace took the default checkout's id and kept its folder.
     expect(store.getWorktreeMeta(DEFAULT)?.displayName).toBe('feature-a')
@@ -107,9 +116,12 @@ describe('worktree folder membership across worktree identity changes', () => {
 
   it('clears membership when the update carries an explicit undefined', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(SIDE, { displayName: 'feature-a', worktreeFolderId: 'folder-a' })
+    store.setWorktreeMeta(localTarget(SIDE), {
+      displayName: 'feature-a',
+      worktreeFolderId: 'folder-a'
+    })
 
-    store.setWorktreeMeta(SIDE, { worktreeFolderId: undefined })
+    store.setWorktreeMeta(localTarget(SIDE), { worktreeFolderId: undefined })
 
     expect(store.getWorktreeMeta(SIDE)?.worktreeFolderId).toBeUndefined()
     expect(store.getWorktreeMeta(SIDE)?.displayName).toBe('feature-a')
@@ -117,7 +129,10 @@ describe('worktree folder membership across worktree identity changes', () => {
 
   it('projects membership onto the merged worktree, and absent reads as unfiled', async () => {
     const store = await createStore()
-    store.setWorktreeMeta(SIDE, { displayName: 'feature-a', worktreeFolderId: 'folder-a' })
+    store.setWorktreeMeta(localTarget(SIDE), {
+      displayName: 'feature-a',
+      worktreeFolderId: 'folder-a'
+    })
 
     const filed = mergeWorktree('repo1', gitInfo('/ws/feature-a'), store.getWorktreeMeta(SIDE))
     const unknown = mergeWorktree('repo1', gitInfo('/ws/feature-b'), undefined)

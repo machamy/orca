@@ -31,44 +31,48 @@ let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 let agentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockInlineAgentRows: DashboardAgentRowData[] = []
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      browserTabsByWorktree: {},
-      agentActivityDisplayMode,
-      createBrowserTab: vi.fn(),
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache,
-      issueCache,
-      linearIssueCache: {},
-      openModal,
-      openTaskPage,
-      projectGroups,
-      ptyIdsByTabId: {},
-      recordFeatureInteraction,
-      remoteBranchConflictByWorktreeId: {},
-      setRemoteBrowserPageHandle: vi.fn(),
-      replaceWorkspacePortScans,
-      setWorkspacePortScanRefreshing,
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      tabsByWorktree: {},
-      updateWorktreeMeta,
-      // Fork: the Unity sidebar tint. The probe is pre-answered 'yes' so these
-      // cases test the per-surface opt-in, not the probe.
-      unityProjectRepoProbeByRepoId: { 'repo-1': { path: '/repo', state: 'yes' } },
-      unityTintSidebarPreviewByRepoId: {},
-      probeUnityProjectRepo: vi.fn(),
-      worktreesByRepo: {},
-      workspacePortScan,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    browserTabsByWorktree: {},
+    agentActivityDisplayMode,
+    createBrowserTab: vi.fn(),
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache,
+    issueCache,
+    linearIssueCache: {},
+    openModal,
+    openTaskPage,
+    projectGroups,
+    ptyIdsByTabId: {},
+    recordFeatureInteraction,
+    remoteBranchConflictByWorktreeId: {},
+    setRemoteBrowserPageHandle: vi.fn(),
+    replaceWorkspacePortScans,
+    setWorkspacePortScanRefreshing,
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    updateWorktreeMeta,
+    // Fork: the Unity sidebar tint. The probe is pre-answered 'yes' so these
+    // cases test the per-surface opt-in, not the probe.
+    unityProjectRepoProbeByRepoId: { 'repo-1': { path: '/repo', state: 'yes' } },
+    unityTintSidebarPreviewByRepoId: {},
+    probeUnityProjectRepo: vi.fn(),
+    worktreesByRepo: {},
+    workspacePortScan,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState
     })
-}))
+  }
+})
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children, openDelay }: { children: ReactNode; openDelay?: number }) => (
@@ -97,10 +101,6 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' })
-}))
-
 vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'active'
 }))
@@ -126,7 +126,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -189,27 +188,6 @@ function expectIdentityBodyIsHoverTrigger(markup: string): void {
   expect(triggerTag).toContain('data-hover-card-trigger=""')
   expect(triggerTag).toContain('group/worktree-card')
 }
-
-describe('WorktreeCard Unity tint surface opt-in', () => {
-  it('draws no Unity colour unless the surface asked for it', async () => {
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-    // The kanban tile and the folder-workspace panel render exactly this way:
-    // the treatments are sidebar-row geometry, and neither surface offers the
-    // context menu that would change or clear the colour.
-    const markup = renderToStaticMarkup(
-      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
-    )
-    expect(markup).not.toContain('data-worktree-unity-tint')
-  })
-
-  it('draws it for a sidebar row, which opts in', async () => {
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-    const markup = renderToStaticMarkup(
-      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} showUnityTint />
-    )
-    expect(markup).toContain('data-worktree-unity-tint-mode="bar"')
-  })
-})
 
 describe('WorktreeCard compact hover details', () => {
   beforeEach(() => {
@@ -321,7 +299,7 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('data-hover-open-delay="100"')
     expectIdentityBodyIsHoverTrigger(markup)
     expect(markup).toContain('Issue #123')
-    expect(markup).toContain('Linear ENG-123')
+    expect(markup).toContain('ENG-123 · Linear')
     expect(markup).toContain('Reviewer handoff note')
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')
@@ -581,7 +559,7 @@ describe('WorktreeCard compact hover details', () => {
     const surfaceTag = markup.match(/<div[^>]*data-worktree-card-surface="true"[^>]*>/)?.[0]
     expect(surfaceTag).toBeDefined()
     expect(surfaceTag).not.toContain('data-hover-card-trigger=""')
-    expect(markup).not.toContain('data-worktree-lineage-children=""')
+    expect(markup).toContain('data-worktree-lineage-children=""')
     expect(childIndex).toBeGreaterThanOrEqual(0)
   })
 

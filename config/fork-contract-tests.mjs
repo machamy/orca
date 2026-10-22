@@ -79,7 +79,7 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/sidebar/worktree-list/drag/use-default-switch-drop-commit.test.tsx',
   'src/renderer/src/components/sidebar/worktree-list/navigation/worktree-folder-reveal.test.ts',
   'src/renderer/src/components/sidebar/worktree-list/viewport/worktree-folder-row-estimate.test.ts',
-  'src/renderer/src/components/sidebar/worktree-list/grouping/section-order.default-checkout.test.ts',
+  'src/shared/sidebar-list/section-order.default-checkout.test.ts',
   'src/renderer/src/components/sidebar/worktree-list/rows/indentation.test.ts',
   'src/renderer/src/components/sidebar/worktree-list/listing/use-collapsed-groups.test.tsx',
   'src/renderer/src/components/sidebar/worktree-list/grouping/worktree-folder-rows.test.ts',
@@ -146,13 +146,12 @@ export const FORK_CARRYING_TESTS = [
   'src/renderer/src/components/terminal-pane/terminal-shutdown-layout-capture.test.ts',
   'src/renderer/src/components/worktree-jump-palette-sleeping-filter.test.ts',
   'src/renderer/src/hooks/worktree-change-refresh-queue.test.ts',
-  'src/renderer/src/lib/language-detect.test.ts',
+  'src/shared/editor-language/editor-language-detect.test.ts',
   'src/renderer/src/store/slices/store-sleep-pane-hibernation.test.ts',
   'src/renderer/src/store/slices/store-sleep-runtime-convergence.test.ts',
   'src/shared/constants.test.ts',
   'src/shared/cross-platform-path.test.ts',
-  'src/shared/git-binary-compatibility.test.ts',
-  'src/shared/wsl-exec-mode-separator.test.ts'
+  'src/shared/git-binary-compatibility.test.ts'
 ]
 
 export const FORK_CONTRACT_TESTS = [...FORK_ADDED_TESTS, ...FORK_CARRYING_TESTS]

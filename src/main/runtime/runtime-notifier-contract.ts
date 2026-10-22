@@ -1,6 +1,17 @@
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabViewerRule,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
@@ -12,8 +23,6 @@ import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
-  RuntimeMarkdownReadTabResult,
-  RuntimeMarkdownSaveTabResult,
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation,
@@ -30,10 +39,14 @@ export type RuntimeNotifier = {
   worktreesChanged(
     repoId: string,
     renamed?: { oldWorktreeId: string; newWorktreeId: string },
-    /** Fork (default-worktree switch): id re-keys the renderer must apply before it re-reads state. */
-    migrations?: readonly RuntimeWorktreeIdentityMigration[],
-    /** Fork: the swap only moved the shield, so the renderer can skip a full reload. */
-    shieldOnly?: boolean
+    options?: {
+      // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
+      invalidateGitScans?: boolean
+      /** Fork (default-worktree switch): id re-keys the renderer must apply before it re-reads state. */
+      migrations?: readonly RuntimeWorktreeIdentityMigration[]
+      /** Fork: the swap only moved the shield, so the renderer can skip a full reload. */
+      shieldOnly?: boolean
+    }
   ): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   /** Fork: ask the renderer whether new worktrees of this Unity repo should get the
@@ -53,7 +66,8 @@ export type RuntimeNotifier = {
     worktreeId: string,
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    defaultTabs?: CreateWorktreeResult['defaultTabs'],
+    providesInitialSurface?: boolean
   ): void
   createTerminal(
     worktreeId: string,
@@ -75,9 +89,13 @@ export type RuntimeNotifier = {
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
+      targetGroupId?: string
+      afterTabId?: string
+      shellOverride?: string
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      agentLaunchViewer?: AgentLaunchTabViewerRule
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -93,6 +111,12 @@ export type RuntimeNotifier = {
     | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
     | void
+  /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
+  publishAgentLaunchTab?(
+    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
+  ): Promise<AgentLaunchTabPublished>
+  /** A launch pane's fate, for the window to keep on its tab or act on. */
+  agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
@@ -111,8 +135,13 @@ export type RuntimeNotifier = {
       newLeafId?: string
     }
   ): void
-  renameTerminal(tabId: string, title: string | null): void
+  /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
+  renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
+  /** False when the window could not be reached; absent on notifiers that predate pane titles. */
+  setPaneTitle?(tabId: string, leafId: string, title: string | null): boolean
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
+  /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
+  revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
@@ -125,8 +154,11 @@ export type RuntimeNotifier = {
     filePath: string,
     relativePath: string,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    position?: RuntimeFileOpenPosition
   ): void
+  /** Layout-owner builds: shows a tab main already wrote for a file it opened. */
+  revealEditorTab?(reveal: RuntimeEditorTabReveal): void
   openDiff?(
     worktreeId: string,
     filePath: string,
@@ -135,13 +167,6 @@ export type RuntimeNotifier = {
     runtimeEnvironmentId?: string | null,
     navigation?: RuntimeNavigationTarget
   ): void
-  readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
-  saveMobileMarkdownTab?(
-    worktreeId: string,
-    tabId: string,
-    baseVersion: string,
-    content: string
-  ): Promise<RuntimeMarkdownSaveTabResult>
   /** Closes the whole tab. */
   closeTerminal(tabId: string): void
   /** Drops one split pane main already closed; never closes its tab. */

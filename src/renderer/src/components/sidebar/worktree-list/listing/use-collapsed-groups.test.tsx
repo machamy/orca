@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { worktree as worktreeFixture } from '../../worktree-list-groups-test-fixtures'
-import type { ProjectGroupingModel } from '../grouping/project-grouping'
+import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 
 const repo1: Repo = {
@@ -44,6 +44,7 @@ function effectiveGroups(args: {
       agentSendTargetWorktreeId: args.agentSendTargetWorktreeId,
       groupBy: 'none',
       pinnedDisplayPolicy: 'duplicate-in-groups',
+      worktrees: args.worktrees,
       visibleWorktrees: args.worktrees,
       repoMap: new Map([['repo1', repo1]]),
       repos: [repo1],

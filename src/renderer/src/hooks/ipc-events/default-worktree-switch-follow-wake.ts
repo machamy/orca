@@ -133,6 +133,8 @@ function rekeyOpenEditorTabsThroughSwap(
       toPath: step.toPath,
       worktreePath: step.toPath,
       worktreeId: step.worktreeId,
+      // The switch runs only on this app's local checkouts.
+      owner: { runtimeEnvironmentId: null, sshHostId: null, worktreeId: step.worktreeId },
       includeRefScopedDiffTabs: true
     })
     if (!rekeyed.ok) {

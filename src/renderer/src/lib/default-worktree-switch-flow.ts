@@ -29,7 +29,7 @@ import {
   mountSwitchedWorktreeTabsInBatches,
   wakeSleepingAgentsForWorktreeInBackground
 } from '@/lib/wake-sleeping-agents-in-background'
-import { runSleepWorktrees } from '@/components/sidebar/sleep-worktree-flow'
+import { runSleepWorktreesForDefaultSwitch } from '@/components/sidebar/sleep-worktree-flow'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { cancelFollowSwitchPaneRespawn } from '@/lib/default-worktree-switch-pane-respawn'
 import { armWorktreeIdentityGrace } from '@/store/worktree-identity-grace'
@@ -209,9 +209,7 @@ export async function runDefaultWorktreeSwitchFlow(
         }
       }
     }, HEARTBEAT_INTERVAL_MS)
-    const { failedWorktreeIds } = await runSleepWorktrees(swappedIds, {
-      preserveBrowserState: true
-    })
+    const { failedWorktreeIds } = await runSleepWorktreesForDefaultSwitch(swappedIds)
     if (options.agentsFollow) {
       // TEMP mode-B diagnostics: how many slept records the sleep just
       // captured per side — 0 here means the wake has nothing to resume.

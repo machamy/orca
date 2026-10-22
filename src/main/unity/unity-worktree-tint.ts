@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { isUnityTintOptOut, pickUnityWorktreeTint } from '../../shared/unity-worktree-tint-palette'
 import type { UnityWorktreeTint } from '../../shared/unity-worktree-tint-palette'
 

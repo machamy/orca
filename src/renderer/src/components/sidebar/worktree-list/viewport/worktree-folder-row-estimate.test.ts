@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorktreeFolderRow } from '../grouping/row-types'
+import type { WorktreeFolderRow } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import { getRenderRowKey } from '../listing/render-row'
 import {
