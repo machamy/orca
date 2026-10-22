@@ -934,10 +934,14 @@ async function packageMacTerminalHost(appPath, context) {
       signMacStandaloneHelper(path, 'terminal host', context.packager, entitlements)
   })
   // Only a local build may skip a slice this host cannot run; a shipped slice must serve a PTY.
-  await verifyPackagedMacTerminalHostBoots(appPath, {
-    arch,
-    required: isMacRelease || process.env.CI === 'true'
-  })
+  const bootRequired = isMacRelease || process.env.CI === 'true'
+  // Fork: a local x64 slice under Rosetta needs ~30s to hand out its token, past the boot
+  // deadline, so local builds verify only the native slice (release and CI still check both).
+  if (!bootRequired && arch !== process.arch) {
+    console.log(`[verify-packaged-daemon-entry] skipped ${arch} terminal host boot on local build`)
+  } else {
+    await verifyPackagedMacTerminalHostBoots(appPath, { arch, required: bootRequired })
+  }
   await verifyMacTerminalHost({
     appPath,
     arch,
