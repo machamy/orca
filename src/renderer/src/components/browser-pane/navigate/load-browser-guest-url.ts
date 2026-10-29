@@ -1,6 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../../shared/terminal-links'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { useAppStore } from '@/store'

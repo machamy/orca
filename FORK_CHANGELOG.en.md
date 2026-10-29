@@ -24,12 +24,50 @@ source.
 
 ---
 
+## machamy.21 — upstream `1.4.244` · 2026-10-29
+
+Merges upstream **1.4.237 → 1.4.244** (2,049 commits). No new fork features.
+
+### Upstream merge (2,049 commits, `1.4.237` → `1.4.244`)
+
+- 1,032 fixes · 138 features. The 293 `main` commits after the 1.4.244 tag came along too.
+- Notable: Chrome Web Store extensions in the built-in browser, edit queued messages in the chat
+  composer, "Close tab" on a single-pane terminal's context menu, "Copy file path" in the link popover,
+  `orca worktree create --branch`, "Quit and Stop All Sessions" in the app menu and tray, German, Turkish,
+  Russian and Traditional Chinese UI, saving large remote files, paging big remote folders and previewing
+  remote images/PDF/audio/video, Groovy/CUDA/Glimmer highlighting, one Theme list for app and terminal.
+- Workspace sleep moved into the main process. The window follows main's sleep notices, and main
+  resumes the slept agents.
+
+### What the fork re-touched
+
+63 conflicts.
+
+- **Sleep (default-worktree switch)**: with sleep in main, the switch's keep-browser-records rule now
+  rides the window's sleep-notice handling (`default-worktree-switch-browser-keep.ts`).
+- **"Open in VS Code"**: upstream now falls back to the `code` CLI inside the app bundle itself, so the
+  fork module that did the same was removed. Its Cursor fallback went with it.
+- **File preview → editor handoff**: upstream rewrote how a preview opens; the handoff and its fallback
+  open sit on top again.
+- **Cold-restore resume**: upstream added "attach to the pane main resumed" first; the fork's
+  duplicate-resume gate follows it, moved into its own module.
+- **Terminal ownership**: upstream centralized the check; the fork's "exclude migrated terminals"
+  condition is appended to its result.
+- **CLI terminal help**: upstream's new text (`orca terminal read --screen` etc.) moved into the
+  fork's split file.
+- **Unity shortcut titles**: added "Open in Unity" / "Open in Rider" to upstream's shortcut title table.
+- Split some fork code into separate files to stay under the line limits (model-badge route class,
+  UI event types, card extra-rows hook).
+
+---
+
 ## machamy.20 — upstream `1.4.237` · 2026-10-22
 
 Merges upstream **1.4.220 → 1.4.237** (3,021 commits). No new fork features; the fork's
 features are re-seated on top of the parts upstream restructured.
 
 ### Upstream merge (3,021 commits, `1.4.220` → `1.4.237`)
+
 - 1,251 fixes · 307 features. The 1.4.237 tag carries only its release marker beyond main, so
   everything in the tag is included.
 - Highlights: built-in browser new-tab page, address-bar suggestions, per-site zoom and appearance,
@@ -39,6 +77,7 @@ features are re-seated on top of the parts upstream restructured.
 - Tooling moved to TypeScript 7 · Vite 8 · Vitest 5.
 
 ### Fork-side work
+
 92 conflicts, plus 8 files upstream moved or deleted.
 
 - **Sidebar list**: upstream moved the row builder to `src/shared/sidebar-list` and replaced lineage
@@ -72,6 +111,7 @@ Upstream cut **1.4.220** the day machamy.18 was installed, so this merges the re
 **157 commits**. No new fork features.
 
 ### Upstream merge (157 commits, `1.4.219` → `1.4.220`)
+
 - fix 43 · feat 10. Everything in the 1.4.220 tag is in, including its tag-only packaging fix
   (#25128, Windows/Linux).
 - Notable: linking GitHub PRs and GitLab issues/MRs from `orca worktree create/set` (`--pr`,
@@ -80,6 +120,7 @@ Upstream cut **1.4.220** the day machamy.18 was installed, so this merges the re
   reused git queries (#24923), opening CSV/TSV from the OS, and Jcode agent support.
 
 ### What the fork adjusted
+
 7 conflicts.
 
 - **Hook server**: upstream added a "status hooks off" gate. The fork's statusline
@@ -93,6 +134,7 @@ Upstream cut **1.4.220** the day machamy.18 was installed, so this merges the re
   default-worktree-switch notes.
 
 ### Verification
+
 - Fork contract suite **131 files / 1,712 tests** pass. Typecheck and lint 0 errors.
 
 ## machamy.18 — upstream `1.4.219` · 2026-10-03
@@ -100,6 +142,7 @@ Upstream cut **1.4.220** the day machamy.18 was installed, so this merges the re
 Catches up **720 upstream commits** to the latest release, **1.4.219**. No new fork features.
 
 ### Upstream merge (720 commits, `1.4.212` → `1.4.219`)
+
 - fix 373 · test 86 · feat 69 · perf 52. What matters most for this fork:
   - **Codex**: runs in Orca terminals without Codex 0.157+'s shared background server
     (#23900). Opening a terminal no longer **strips or reverts hooks in the real `~/.codex`**
@@ -118,6 +161,7 @@ Catches up **720 upstream commits** to the latest release, **1.4.219**. No new f
   Freebuff agent support and mid-turn message cards in Chat UI.
 
 ### What the fork adjusted
+
 Resolved 30 conflicts (20 + 10 across two passes).
 
 - **Title-derived agent rows now use upstream's implementation.** #23948 solves the same
@@ -138,6 +182,7 @@ Resolved 30 conflicts (20 + 10 across two passes).
   and the removed agent-trust IPC registration.
 
 ### Verification
+
 - Fork contract suite **130 files / 1,686 tests** pass. Typecheck and lint 0 errors.
 
 ## machamy.17 — upstream `1.4.212` · 2026-09-28
@@ -145,6 +190,7 @@ Resolved 30 conflicts (20 + 10 across two passes).
 No upstream merge. Makes the model/effort badge actually follow the agent.
 
 ### The badge reads model and effort from the statusline
+
 - **The badge could not follow a mid-session model switch.** machamy.12 assumed Claude
   puts model and effort on every tool hook; the official SDK types show hooks carry
   **effort only** (the model arrives once, on SessionStart). So the model came from the
@@ -165,6 +211,7 @@ No upstream merge. Makes the model/effort badge actually follow the agent.
 - macOS and Linux only. Windows and remote (SSH) panes keep reading hooks and the frame.
 
 ### "Open in VS Code" did nothing useful
+
 - Orca opens VS Code with the `code` command, which only exists once VS Code's "Shell Command:
   Install 'code' command in PATH" has been run; without it, opening failed with "Could not open
   workspace folder" even though the app was installed.
@@ -176,6 +223,7 @@ No upstream merge. Makes the model/effort badge actually follow the agent.
 No upstream merge. One feature for reading wide preview tables.
 
 ### Resizable preview table columns (remembered per file)
+
 - Hover the **right edge of a header cell** in a preview table: the cursor turns ↔ and a
   blue line shows. Drag to resize that column; **double-click** the edge to return it to
   automatic width.
@@ -195,6 +243,7 @@ So the build was mostly newer than 1.4.212 yet still labeled `1.4.197`. This rev
 up `main` again and labels the base with the latest release tag.
 
 ### Upstream merge (66 commits, label `1.4.197` → `1.4.212`)
+
 - fix 41 · refactor 4 · feat 3. **The one substantive fix that only 1.4.212 had, the Codex
   0.157+ startup failure (#22878, a socket path too long in Orca-managed homes), is in.**
   The rest of the 1.4.212 tag's difference is version bumps, release CI and a
@@ -215,6 +264,7 @@ up `main` again and labels the base with the latest release tag.
   now reads the Windows process table directly.
 
 ### Verification
+
 - Fork contract suite **122 files / 1,573 tests** and the merge-affected areas **1,432
   files / 13,112 tests** pass. Typecheck and lint 0 errors.
 
@@ -226,6 +276,7 @@ switch stays: it was not what conflicted — its share of the 11 conflicted file
 touched was a line or two each.
 
 ### Markdown preview that looks like GitHub (follow-up to machamy.13's preview)
+
 - **The body uses GitHub's styles.** Light is `#ffffff` with `#1f2328` text; dark is GitHub's
   dark default, `#0d1117` with `#f0f6fc`. 16px body at 1.5 line height, rules under h1/h2,
   inline code chips, `#f6f8fa` code blocks, bordered and striped tables, a left bar on
@@ -258,6 +309,7 @@ touched was a line or two each.
   ids went nowhere. Like GitHub, it now also tries the prefixed id.
 
 ### Upstream merge (1,307 commits, `1.4.197` unchanged)
+
 - By type: fix 602 · **perf 224** · feat 166 · test 87 · refactor 64.
 - By area: **mobile 208** · native chat 97 · relay 63 · terminal 54 · runtime 37 ·
   orchestration 22 · browser 21 · editor 20 · agent status 19 · sidebar 13.
@@ -273,6 +325,7 @@ touched was a line or two each.
   the sidebar menu.
 
 ### What the fork adjusted
+
 Resolved 25 conflicts. Upstream again dissolved files into facades
 (`src/shared/rpc-contract/*`); fork edits were transplanted into the new modules:
 
@@ -306,6 +359,7 @@ Resolved 25 conflicts. Upstream again dissolved files into facades
   expect that.
 
 ### Verification
+
 - Fork contract suite **120 files / 1,517 tests** pass. Typecheck 0 errors, lint on
   changed files 0 errors, no `max-lines` disables added.
 
@@ -314,6 +368,7 @@ Resolved 25 conflicts. Upstream again dissolved files into facades
 Makes reviewing code and reading docs easier. No upstream merge.
 
 ### Markdown preview is back in the toggle, and is the default view
+
 - The rich editor refuses raw HTML, prose generics (`List<Foo>`) and anything over
   50k characters; such docs dead-ended at "editable only in code mode". The renderer
   was never missing — upstream moved preview to a **separate tab** in #849 and dropped
@@ -330,6 +385,7 @@ Makes reviewing code and reading docs easier. No upstream merge.
   exactly as on GitHub. Backticks keep it.
 
 ### Source Control filter: by extension, with a review preset
+
 - The filter was a path substring, so `.cs` dragged in `Foo.cs.meta`, `Foo.csproj`
   and `style.css`, and several extensions could not be asked for at once. Tokens
   written as extensions (`.cs .json .md`, `*.cs`, `.cs.meta`) now match the path's
@@ -339,6 +395,7 @@ Makes reviewing code and reading docs easier. No upstream merge.
   reviewing agent output; a second click clears it.
 
 ### Verification
+
 - Fork gate **120 files / 1,468 tests** green; typecheck and lint 0.
 - Two rendered-app checks: a seven-extension fixture through the filter, and a doc the
   rich editor refuses (raw HTML, prose generics, >50k chars) opening in the GitHub-style
@@ -351,6 +408,7 @@ Fixes machamy.11's badge appearing on some agent panes and not others. Digging
 into it found a defect **a layer below the badge**.
 
 ### Orca was discarding Claude's model and effort
+
 - Claude puts the model in use and the effort applied to the current turn on
   **every tool-use hook** (PreToolUse, PostToolUse, Stop, …) — as
   `model: { id, display_name }` and `effort: { level }` (effort is also exposed as
@@ -368,6 +426,7 @@ Both values are now read off the hook and carried on the status row
 dated id — the name the user picked in `/model`.
 
 ### Badge precedence corrected
+
 - **The reported status row now wins for both model and effort.** It refreshes on
   every tool-use hook, so a mid-session `/model` or `/effort` is picked up on the
   next tool call.
@@ -378,6 +437,7 @@ dated id — the name the user picked in `/model`.
   surface that reads that row learns the Claude session's model too.
 
 ### Unity auto-seed had been dead since machamy.9
+
 - The call that CoW-clones the default checkout's `Library` into a fresh worktree
   used to live at `orca-runtime.ts:24937`. The machamy.9 merge took upstream's
   split of that file (40,904 → 58 lines) and **the call went with it.** The seeder
@@ -391,6 +451,7 @@ dated id — the name the user picked in `/model`.
   swallows it turns the gate red.
 
 ### The webview server's `node_modules` — solved with no fork code
+
 - Every worktree was missing `web/node_modules` (~419MB) and needed a fresh
   `npm install`. Upstream already has the answer: a repo-root **`.worktreeinclude`**
   listing gitignored paths to copy into each new worktree — by **APFS CoW clone**
@@ -403,6 +464,7 @@ dated id — the name the user picked in `/model`.
   ```
 
 ### Verification
+
 - 3 new unit files (12 field-reader, 3 ingestion, 5 seed-call-site cases) registered
   in the fork gate: **117 files / 1,445 tests** green. Runtime suite: 1,259 green. Typecheck 0, lint 0.
 - The ingestion test feeds real hook payloads and asserts a **mid-session model
@@ -418,6 +480,7 @@ No upstream merge. One fork feature: **every agent pane names the model and
 reasoning effort it is running, in one of its corners.**
 
 ### Model and effort badge
+
 - A pill like `Opus · High` sits in a corner of **each agent pane** — Claude and
   Codex alike. Per pane rather than per tab, so a split showing Claude beside
   Codex names both instead of only the focused one.
@@ -429,7 +492,9 @@ reasoning effort it is running, in one of its corners.**
   split/close cluster, so a top corner sits on chrome the user reaches for.
 
 ### What entitles it to claim a value
+
 Three sources, strongest first, because they carry different proof:
+
 1. **Claude's own TUI header frame** — the only source carrying effort (it reuses
    the parser upstream already had).
 2. **The agent's reported status row** (`AgentStatusEntry.model`) — model only.
@@ -443,6 +508,7 @@ usually lands there. Showing an unverified value as fact is a lie the user canno
 check, so a confirmed model beside a guessed effort still downgrades the pill.
 
 ### Verification
+
 - 20 new unit tests across 3 files, registered in the fork contract gate:
   **116 files / 1,426 tests** green. Typecheck (node, web, cli) 0 errors, lint 0.
 - Two Playwright checks in the rendered app: the badge lands inside the pane it
@@ -460,6 +526,7 @@ wave had already passed in machamy.9. This upstream batch is mostly **fixes (237
 and performance (136)** rather than new capability.
 
 ### Upstream merge (561 commits, `1.4.178-rc.2` → `1.4.197`)
+
 - Commits by area: **SSH 43** · native chat 32 · **relay 23** · terminal 19 ·
   renderer 18 · cloud 14 · Windows 13 · **mobile 10** · worktrees 9 · sidebar 9 ·
   orchestration 9 · i18n 9.
@@ -475,6 +542,7 @@ and performance (136)** rather than new capability.
   signed out, relay cell crash-rate alerts, dynamic NAT port allocation.
 
 ### What the fork had to change
+
 Twelve conflicts were resolved and the fork contract gate reported **zero
 failures**, meaning no fork behavior was lost. What remains is follow-up to
 upstream's moves:
@@ -492,6 +560,7 @@ upstream's moves:
   Chromium error-page fixture carries the `worktreeId` the fork requires.
 
 ### One test upstream broke with its own fixture
+
 - `orchestration-cli-subprocess` came up red. It looked like a merge regression at
   first, but a clean upstream `main` fails identically — #16904's new
   `stable_pane_required` guard disagrees with upstream's own fixture. Upstream CI
@@ -500,6 +569,7 @@ upstream's moves:
   touched** and the assertions are unchanged.
 
 ### Verification
+
 - Fork contract suite: **113 files / 1,406 tests** green. Sidebar-related suites:
   321 files / 2,735 tests green. Typecheck (node, web, cli) 0 errors, lint 0
   errors, no new `max-lines` disables.
@@ -520,6 +590,7 @@ problems machamy.8 surfaced — the Unity shortcuts and the window-focus lookup 
 are fixed.
 
 ### Unity shortcuts moved
+
 - **`⌘⌥U` opens Unity, `⌘⌥⇧R` opens Rider.** machamy.8's `⌃⌥U`/`⌃⌥R` are
   withdrawn for two reasons: `⌃⌥U` is Rectangle's top-left-quarter tiling
   default, so the chord **resized windows** instead of opening Unity; and the
@@ -530,6 +601,7 @@ are fixed.
   Settings → Shortcuts.
 
 ### Unity refocus: Hub mistaken for the editor
+
 - When a project is launched from Hub, **the Hub process carries the same
   `-projectPath`**, so the "already open" lookup could return Hub's pid —
   raising Hub's window, or naming the wrong pid in the failure popup. The cause
@@ -541,6 +613,7 @@ are fixed.
   clone the cache.
 
 ### Upstream merge (912 commits)
+
 - By area: terminal 49 · renderer 43 · **mobile 31** · native-chat 22 ·
   worktree 20 · git 19 · browser 18 · Windows 17 · WSL 14 · runtime 14 · SSH 13 ·
   Codex 13 · **relay 12**.
@@ -556,11 +629,12 @@ are fixed.
   and was re-ported into upstream's new modules.
 
 ### What the merge swallowed (the fork gate caught all of it)
+
 After the 55 conflicts were resolved, the contract suite failed in 18 places —
 none of which a typecheck would have caught.
 
 - `retainSurface` on both the sleep and hibernation kills (the point is that it
-  is a flag *separate* from `keepHistory`; upstream's modules kept only the latter)
+  is a flag _separate_ from `keepHistory`; upstream's modules kept only the latter)
 - the whole `clearDeadLeafPtyBindings` action
 - the entire cold-restore resume-claim path — which also exposed two sibling
   tests that had been passing vacuously with nothing left to skip
@@ -575,12 +649,14 @@ none of which a typecheck would have caught.
   git's main-worktree flag follows the displaced side after an in-place switch)
 
 ### What upstream caught in the fork
+
 - Three Unity files added in machamy.8 imported `node:child_process` directly.
   Upstream brought a ratchet test that watches for exactly this, and it was
   right: they now go through the shared `runProcess`/`spawnProcess`, which pins
   `windowsHide`, refuses `shell: true`, and encodes `.cmd`/`.bat` arguments.
 
 ### Verification
+
 - Fork contract suite **113 files / 1,403 tests** green. Typecheck (node, web,
   cli) clean, lint clean, no new `max-lines` suppression (six files were split
   at real seams instead).
@@ -592,13 +668,14 @@ none of which a typecheck would have caught.
 
 ## machamy.8 — on upstream `1.4.178-rc.2` · 2026-08-28
 
-A revision about how documents and Unity get *opened*. Markdown that used to render
+A revision about how documents and Unity get _opened_. Markdown that used to render
 as raw source in the embedded browser now opens in the editor's rich view, documents
 with `<details>` folds keep rich mode, an already-running Unity is brought to the
 front instead of launched twice, and Unity/Rider open from keyboard shortcuts. The
 worktree-folders feature ships as dormant code, locked away this revision.
 
 ### Browser markdown → editor handoff
+
 - Opening `.md`/`.mdx`/`.markdown`/`.ipynb` in the embedded browser (address bar,
   the file explorer's "Open in Orca Browser", tab restore, retry — every entry
   point) lands in the editor's rich view instead of Chromium's raw source. Every
@@ -619,6 +696,7 @@ worktree-folders feature ships as dormant code, locked away this revision.
   (`.ipynb` handoff predates the fork and stays on). Default: on.
 
 ### Rich mode for `<details>` documents
+
 - A document whose only "unsupported" HTML is `<details>`/`<summary>` no longer
   falls back to code-only mode. The cause: saving stamped a class onto the opening
   tag, failing the byte-preservation check — the tag is now re-emitted verbatim
@@ -631,6 +709,7 @@ worktree-folders feature ships as dormant code, locked away this revision.
   wasn't loosened.
 
 ### Unity: focus the running editor instead of launching another
+
 - "Open in Unity" now detects an editor already running on the project and raises
   its window instead of spawning a second `-projectPath` process. Detection matches
   editor processes only — a `-batchMode` AssetImportWorker on the same path is not
@@ -646,6 +725,7 @@ worktree-folders feature ships as dormant code, locked away this revision.
   gate is re-checked right before spawn so a live `Library` never races the seeder.
 
 ### Unity/Rider shortcuts
+
 - `⌘⌥U` opens Unity, `⌘⌥⇧R` opens Rider (Rider's default binding is macOS-only —
   discovery is macOS-only, so elsewhere the chord would swallow keys for nothing).
   Rebindable in Settings → Shortcuts.
@@ -655,6 +735,7 @@ worktree-folders feature ships as dormant code, locked away this revision.
   yields to a plugin that claimed the chord, and refuses a worktree mid-deletion.
 
 ### Worktree folders — aboard, but locked
+
 - Filing worktrees into named sidebar folders is complete in code (rendering,
   create/rename/nest/delete, worktree→folder conversion, old-host protection) but
   **cannot be enabled this revision** — the experimental settings row is not
@@ -663,6 +744,7 @@ worktree-folders feature ships as dormant code, locked away this revision.
   experimental toggle, default off.
 
 ### Verification
+
 - The fork contract suite grew from 956 to **1,298 tests** (109 contract files),
   and the manifest guard — asserting every listed file still exists — finally runs
   inside the gate; before this it could not catch the list silently shrinking.
@@ -716,7 +798,7 @@ bookkeeping — so the upstream files now touch the fork through a single import
 and call each.
 
 **Packaging: `.claude/` excluded from app.asar.** It held whole agent worktree
-checkouts (+76MB observed), but the real hazard is that it is written *during* a
+checkouts (+76MB observed), but the real hazard is that it is written _during_ a
 build: the mac build packs x64 and arm64 from one file scan, so a file that
 changes size in between shifts every later asar offset and the arm64 app dies
 with no log output.
@@ -756,13 +838,14 @@ canonical changelog for the full account.
 Example local build: `1.4.169-rc.0.machamy.1.local.<ts>.cd3aacff7`
 
 ### Added
+
 - **Make Default Worktree.** Promote a sub-worktree to the repo's default checkout
   by **swapping the two worktrees' branches in place** — the selected branch checks
   out at the repo path, the old default at the selected worktree. No directories
   move, so git's main worktree (the `.git` holder) stays at the repo path and
   GitHub Desktop pointed at the repo folder shows the promoted branch. Uncommitted
-  + staged + untracked changes follow their branch; ignored files stay put. Drag a
-  worktree onto the **Default** card, or `orca worktree default set --worktree <selector>`.
+  - staged + untracked changes follow their branch; ignored files stay put. Drag a
+    worktree onto the **Default** card, or `orca worktree default set --worktree <selector>`.
 - **"Agents follow their branch" toggle** (default off). Sleeps both worktrees,
   swaps their slept session content + Claude transcripts, and resumes each agent
   where its branch now lives. git's main worktree still stays at the repo path;
@@ -771,12 +854,14 @@ Example local build: `1.4.169-rc.0.machamy.1.local.<ts>.cd3aacff7`
   change after a switch.
 
 ### Changed
+
 - Sidebar **default/primary** signals — star badge, repo-group sort anchor, Cmd+J
   chip, hide-default-branch filter, hide-sleeping exemption, and delete/project-
   removal guards — now key on the **repo path**, not git's `isMainWorktree`, so the
   correct row reads as "default" after a switch (no more two "defaults").
 
 ### Fixed
+
 - **Branch-swap data safety** (found via adversarial real-git testing):
   partial stash-capture no longer strands the first worktree's uncommitted work in
   a dangling stash; a non-zero post-checkout hook no longer leaves a worktree
@@ -806,28 +891,29 @@ Example local build: `1.4.169-rc.0.machamy.1.local.<ts>.cd3aacff7`
 > had leaked into commit messages and test fixtures. The summary column is still
 > the original commit subjects, so what landed when is still readable.
 
-| hash | summary |
-|------|---------|
-| `b4270893` | feat(worktree): default-worktree switch with agent-safe hardening |
-| `b4270893` | fix(build): retry packaged daemon-entry boot on post-pack dlopen contention |
-| `b4270893` | fix(sidebar): key default-workspace UI on the repo path, not git isMainWorktree |
-| `b4270893` | refactor(worktree): make default switch a branch swap, keeping git main in place |
-| `b4270893` | fix(worktree): harden branch swap against data loss and stuck-state edge cases |
-| `b4270893` | feat(worktree): add "agents follow" and "notify" toggles to default switch |
-| `b4270893` | fix(worktree): surface followed agents and avoid detached HEAD on switch |
-| `b4270893` | fix(worktree): resume followed agents after a default switch instead of closing their tabs |
-| `b4270893` | fix(worktree): re-seed follow-switch sleeping records lost to swap-window churn |
-| `b4270893` | fix(worktree): stop mounted panes from consuming follow-switch records at sleep |
-| `b4270893` | fix(worktree): re-home open editor tabs when agents follow a default switch |
-| `b4270893` | fix(worktree): carry every workspace window through the follow switch |
-| `b4270893` | fix(worktree): codex follow support + remaining per-workspace state remaps |
+| hash       | summary                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| `b4270893` | feat(worktree): default-worktree switch with agent-safe hardening                           |
+| `b4270893` | fix(build): retry packaged daemon-entry boot on post-pack dlopen contention                 |
+| `b4270893` | fix(sidebar): key default-workspace UI on the repo path, not git isMainWorktree             |
+| `b4270893` | refactor(worktree): make default switch a branch swap, keeping git main in place            |
+| `b4270893` | fix(worktree): harden branch swap against data loss and stuck-state edge cases              |
+| `b4270893` | feat(worktree): add "agents follow" and "notify" toggles to default switch                  |
+| `b4270893` | fix(worktree): surface followed agents and avoid detached HEAD on switch                    |
+| `b4270893` | fix(worktree): resume followed agents after a default switch instead of closing their tabs  |
+| `b4270893` | fix(worktree): re-seed follow-switch sleeping records lost to swap-window churn             |
+| `b4270893` | fix(worktree): stop mounted panes from consuming follow-switch records at sleep             |
+| `b4270893` | fix(worktree): re-home open editor tabs when agents follow a default switch                 |
+| `b4270893` | fix(worktree): carry every workspace window through the follow switch                       |
+| `b4270893` | fix(worktree): codex follow support + remaining per-workspace state remaps                  |
 | `b4270893` | feat(worktree): drive the full default-switch flow from the CLI (--follow-agents --ui-flow) |
-| `b4270893` | fix(cli): register the default-switch booleans so --follow-agents actually transmits |
-| `b4270893` | test(worktree): mode-B follow-switch E2E harness driving the live app via CLI |
-| `b4270893` | fix(worktree): show followed agents in the sidebar immediately after a switch |
-| `b4270893` | feat(worktree): show a moving-agents indicator during the default switch |
+| `b4270893` | fix(cli): register the default-switch booleans so --follow-agents actually transmits        |
+| `b4270893` | test(worktree): mode-B follow-switch E2E harness driving the live app via CLI               |
+| `b4270893` | fix(worktree): show followed agents in the sidebar immediately after a switch               |
+| `b4270893` | feat(worktree): show a moving-agents indicator during the default switch                    |
 
 ### Verification status
+
 - **E2E-verified against the live app** (`config/scripts/mode-b-follow-e2e.mjs`,
   CLI-driven): claude+codex simultaneously, round-trip resume with the SAME
   provider sessions — 5 consecutive iterations (10 swaps) all green. Sidebar

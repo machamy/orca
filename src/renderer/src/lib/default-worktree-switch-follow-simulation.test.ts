@@ -407,33 +407,20 @@ describe('mode-B follow switch: renderer store simulation', () => {
     expect(s.sleepingAgentSessionsByPaneKey[PANE_KEY_SEL]?.worktreeId).toBe(DEFAULT_ID)
   })
 
-  it('EMPIRICAL: demoted (non-active) worktree launches a fresh resume tab and requests a targeted background mount', async () => {
+  it('EMPIRICAL: demoted worktree launches no window-side resume — its workspace-sleep record waits for main', async () => {
     seedModeBPostSleepState()
     applyFollowMigrations()
     await runFollowWakeTail()
 
     const s = useAppStore.getState()
-    // r::/sel now owns tab-repo + its record; the worktree is NOT active, so the
-    // record is not pane-owned and the generic resume launches a fresh tab.
+    // Upstream: a workspace sleep's record whose tab survives is main's to resume when the pane
+    // opens (main-resumed-sleep-pane.ts), so the generic wake neither launches nor mounts for it.
     const selTabs = s.tabsByWorktree[SEL_ID] ?? []
     const launched = selTabs.filter((tab) => tab.id !== TAB_REPO)
     const selMounts = mountRequests.filter((req) => req.worktreeId === SEL_ID)
-    console.log('[follow-simulation] demoted worktree outcome:', {
-      launchedTabIds: launched.map((tab) => tab.id),
-      pendingStartups: launched.map((tab) => s.pendingStartupByTabId[tab.id]?.command),
-      mountRequests: selMounts,
-      toasts: toastCalls
-    })
-    expect(launched).toHaveLength(1)
-    const launchedTab = launched[0]!
-    expect(launchedTab.launchAgent).toBe('claude')
-    // The queued startup resumes the ORIGINAL default worktree's session id.
-    expect(s.pendingStartupByTabId[launchedTab.id]?.command).toContain('sess-repo')
-    // suppressNavigation launch -> background mount targeted at the new tab.
-    expect(selMounts).toEqual([{ worktreeId: SEL_ID, tabIds: [launchedTab.id] }])
-    // Old record consumed by the launch.
-    expect(s.sleepingAgentSessionsByPaneKey[PANE_KEY_REPO]).toBeUndefined()
-    // Original (slept) tab row survives alongside the fresh resume tab.
+    expect(launched).toEqual([])
+    expect(selMounts).toEqual([])
+    expect(s.sleepingAgentSessionsByPaneKey[PANE_KEY_REPO]?.worktreeId).toBe(SEL_ID)
     expect(selTabs.some((tab) => tab.id === TAB_REPO)).toBe(true)
   })
 
@@ -506,10 +493,7 @@ describe('mode-B follow switch: renderer store simulation', () => {
     // both layers claim "the other one will resume it" -> nobody does.
   })
 
-  it('EMPIRICAL control: without prior activation, BOTH worktrees launch background resume tabs', async () => {
-    // Shows the resume path itself works when nothing is pane-owned: if
-    // setActiveWorktree(promoted) were NOT called first, both sides would take
-    // the fresh-tab launch path.
+  it('EMPIRICAL control: without prior activation the generic wake still leaves both records to main', async () => {
     seedModeBPostSleepState()
     applyFollowMigrations()
     const spy = attachWakeEventSpy()
@@ -520,16 +504,11 @@ describe('mode-B follow switch: renderer store simulation', () => {
     spy.detach()
 
     const s = useAppStore.getState()
-    const launchedDefault = (s.tabsByWorktree[DEFAULT_ID] ?? []).filter((tab) => tab.id !== TAB_SEL)
-    const launchedSel = (s.tabsByWorktree[SEL_ID] ?? []).filter((tab) => tab.id !== TAB_REPO)
-    console.log('[follow-simulation] no-activation control:', {
-      launchedDefault: launchedDefault.map((tab) => tab.id),
-      launchedSel: launchedSel.map((tab) => tab.id),
-      mountRequests
-    })
-    expect(launchedDefault).toHaveLength(1)
-    expect(launchedSel).toHaveLength(1)
-    expect(mountRequests.map((req) => req.worktreeId).sort()).toEqual([DEFAULT_ID, SEL_ID])
+    expect((s.tabsByWorktree[DEFAULT_ID] ?? []).filter((tab) => tab.id !== TAB_SEL)).toEqual([])
+    expect((s.tabsByWorktree[SEL_ID] ?? []).filter((tab) => tab.id !== TAB_REPO)).toEqual([])
+    expect(mountRequests).toEqual([])
+    expect(s.sleepingAgentSessionsByPaneKey[PANE_KEY_SEL]?.worktreeId).toBe(DEFAULT_ID)
+    expect(s.sleepingAgentSessionsByPaneKey[PANE_KEY_REPO]?.worktreeId).toBe(SEL_ID)
   })
 
   it('FIX: migration remaps expandedDirs and closed-editor snapshot paths into the new home', () => {

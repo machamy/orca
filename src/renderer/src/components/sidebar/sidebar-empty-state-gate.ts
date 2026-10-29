@@ -1,16 +1,6 @@
 /**
- * Whether active filters have hidden every sidebar row, so the Clear Filters
- * empty state should win over any remaining headers.
- *
- * Split out of WorktreeList so the row kinds it counts are testable: folder
- * workspaces were missing from this gate, which meant an account whose only
- * workspaces were folder workspaces lost them to the empty state as soon as any
- * filter — including host scope — was active (#15362).
- *
- * Fork: worktree-folder rows are deliberately NOT an input. They are chrome, not
- * content — when filters hide every worktree, leftover folder rows must not
- * suppress the Clear Filters empty state (they cannot even emit then: folder
- * rows only render inside sections that still contain member worktrees).
+ * Count folder workspaces too; active filters must not replace surviving rows with an empty state.
+ * Fork: worktree-folder rows are chrome, not content — they must not suppress the Clear Filters state.
  */
 export function shouldFiltersHideAllRows(counts: {
   hasFilters: boolean

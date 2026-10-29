@@ -13,6 +13,7 @@ import { remarkGithubAlerts } from './markdown-github-alerts'
 // Fork: alerts render as GitHub's own `markdown-alert` markup (remarkGithubAlerts), not
 // upstream's blockquote callouts; the attribute stays allowed so other renderers sanitize alike.
 import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '@/lib/remark-github-callouts'
+import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
 
 export const markdownPreviewSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
@@ -72,6 +73,7 @@ export type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins
 // them), so hard-wrapped docs must reflow here to read like GitHub.
 export const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
+  remarkAutolinkLiteralProseBoundary,
   remarkCjkFriendly,
   remarkFrontmatter,
   remarkMath,

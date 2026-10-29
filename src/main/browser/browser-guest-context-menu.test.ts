@@ -101,6 +101,9 @@ describe('setupGuestContextMenu', () => {
       pageUrl: 'https://test.dev/page',
       linkUrl: 'https://test.dev/link',
       selectionText: '',
+      editable: null,
+      image: null,
+      extensionMenu: undefined,
       canGoBack: true,
       canGoForward: true
     })

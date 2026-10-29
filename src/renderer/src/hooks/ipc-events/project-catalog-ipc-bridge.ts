@@ -60,10 +60,7 @@ export function registerProjectCatalogIpcBridge(
         if (data.shieldOnly) {
           return
         }
-        // Why: preserve this event's local origin across queue delays and runtime
-        // focus changes; otherwise an unbound repo can refresh from the wrong host.
-        // A folder rename changes the worktree id; handleWorktreesChanged re-keys
-        // state and shields it from the deletion diff.
+        // Preserve local event origin through queue/focus changes; rekey folder renames before deletion diff so moved state survives.
         worktreeChangeRefreshQueue.enqueue(
           adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })
         )
@@ -75,8 +72,7 @@ export function registerProjectCatalogIpcBridge(
     unsubs.push(
       window.api.worktrees.onHeadIdentitiesChanged((data) => {
         if (isRuntimeEnvironmentActive()) {
-          // Why: local worktree events carry local repo ids; the local-pinned list
-          // refresh (onChanged) covers local rows while a runtime is active.
+          // Local CLI events name local repos; use the pinned local refresh while a runtime is active.
           return
         }
         const state = useAppStore.getState()
@@ -115,7 +111,8 @@ export function registerProjectCatalogIpcBridge(
       // Why: every event without a live meter (a phase change, or null when git finished) clears it.
       useAppStore.getState().updatePendingWorktreeCreation(data.creationId, {
         phase: data.phase,
-        checkoutProgress: data.checkout ?? undefined
+        checkoutProgress: data.checkout ?? undefined,
+        ...(data.worktreeId ? { worktreeId: data.worktreeId } : {})
       })
     }) ?? (() => {})
   )

@@ -7,7 +7,6 @@ import type { useWorktreeLineageDropCommit } from './use-lineage-drop-commit'
 import type { useWorktreeDefaultSwitchDropCommit } from './use-default-switch-drop-commit'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
-/** Bundles the drag session, lineage commits, and viewport callbacks every drop path reads. */
 export function useWorktreeDropCommitContext(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -43,7 +42,7 @@ export function useWorktreeDropCommitContext(args: {
   const { worktreePointerDragRef } = runtime
   const { worktreeDragSessionRef } = session
   return useMemo<WorktreeDropCommitContext>(() => {
-    // Why: read at drop time; the drops pass ids, which name a twin's card on another host too.
+    // Read confirmed copies at drop time because IDs alone also name other-host twins.
     const draggedCopies = () =>
       worktreePointerDragRef.current?.draggedCopies ?? worktreeDragSessionRef.current?.draggedCopies
     return {

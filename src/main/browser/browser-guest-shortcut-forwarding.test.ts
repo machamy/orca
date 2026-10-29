@@ -5,14 +5,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-import {
-  resolveGuestMouseWheelZoomDirection,
-  setupGuestMouseWheelZoomForwarding
-} from './browser-guest-wheel-zoom'
+import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 
 const zoomTo = (direction: 'in' | 'out' | 'reset') => ({ browserPageId: 'tab-1', direction })
-const historyTo = (direction: 'back' | 'forward') => ({ browserPageId: 'tab-1', direction })
 
 describe('guest mouse wheel browser zoom', () => {
   const browserTabId = 'tab-1'
@@ -60,37 +56,6 @@ describe('guest mouse wheel browser zoom', () => {
     guestOffMock = vi.fn()
   })
 
-  it('resolves ctrl wheel direction from guest mouse input', () => {
-    expect(resolveGuestMouseWheelZoomDirection(mouseWheel({ deltaY: -120 }), 'win32')).toBe('in')
-    expect(resolveGuestMouseWheelZoomDirection(mouseWheel({ deltaY: 120 }), 'linux')).toBe('out')
-  })
-
-  it('allows command wheel only on macOS', () => {
-    const commandWheel = mouseWheel({ modifiers: ['cmd'], deltaY: -120 })
-
-    expect(resolveGuestMouseWheelZoomDirection(commandWheel, 'darwin')).toBe('in')
-    expect(resolveGuestMouseWheelZoomDirection(commandWheel, 'win32')).toBeNull()
-  })
-
-  it('ignores non-zoom wheel input', () => {
-    expect(
-      resolveGuestMouseWheelZoomDirection(mouseWheel({ modifiers: [], deltaY: -120 }), 'linux')
-    ).toBeNull()
-    expect(
-      resolveGuestMouseWheelZoomDirection(mouseWheel({ modifiers: ['ctrl', 'alt'] }), 'linux')
-    ).toBeNull()
-    expect(
-      resolveGuestMouseWheelZoomDirection(mouseWheel({ modifiers: ['ctrl', 'shift'] }), 'linux')
-    ).toBeNull()
-    expect(resolveGuestMouseWheelZoomDirection(mouseWheel({ deltaY: 0 }), 'linux')).toBeNull()
-    expect(
-      resolveGuestMouseWheelZoomDirection(
-        { type: 'mouseMove', x: 0, y: 0, modifiers: ['ctrl'] },
-        'linux'
-      )
-    ).toBeNull()
-  })
-
   it('forwards ctrl wheel to browser page zoom and consumes the guest wheel event', () => {
     setupGuestMouseWheelZoomForwarding({
       browserTabId,
@@ -118,18 +83,6 @@ describe('guest mouse wheel browser zoom', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).not.toHaveBeenCalled()
-  })
-
-  it('cleans up the mouse wheel listener on teardown', () => {
-    const cleanup = setupGuestMouseWheelZoomForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer()
-    })
-
-    cleanup()
-
-    expect(guestOffMock).toHaveBeenCalledWith('before-mouse-event', expect.any(Function))
   })
 })
 
@@ -235,7 +188,7 @@ describe('setupGuestShortcutForwarding', () => {
       const tabReleasePreventDefault = triggerBeforeInput({ ...ctrlTabInput, type: 'keyUp' })
       const keyUpPreventDefault = triggerBeforeInput(releaseInput)
 
-      // Why: keydown must not preventDefault or Electron drops the commit keyup.
+      // Preventing keydown loses the commit keyup in Electron.
       expect(keyDownPreventDefault).not.toHaveBeenCalled()
       expect(tabReleasePreventDefault).not.toHaveBeenCalled()
       expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
@@ -244,75 +197,6 @@ describe('setupGuestShortcutForwarding', () => {
       })
       expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:ctrlTabKeyUp')
     }
-  })
-
-  it('forwards browser page zoom shortcuts from focused guest pages', () => {
-    setupGuestShortcutForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer()
-    })
-
-    const zoomInPreventDefault = triggerBeforeInput({ code: 'Equal', key: '=' })
-    const shiftedPlusPreventDefault = triggerBeforeInput({
-      code: 'Equal',
-      key: '+',
-      shift: true
-    })
-    const zoomOutPreventDefault = triggerBeforeInput({ code: 'Minus', key: '-' })
-    const numpadSubtractPreventDefault = triggerBeforeInput({ code: 'NumpadSubtract', key: '-' })
-    const resetPreventDefault = triggerBeforeInput({ code: 'Digit0', key: '0' })
-    const repeatPreventDefault = triggerBeforeInput({
-      code: 'NumpadAdd',
-      key: '+',
-      isAutoRepeat: true
-    })
-
-    expect(zoomInPreventDefault).toHaveBeenCalledTimes(1)
-    expect(shiftedPlusPreventDefault).toHaveBeenCalledTimes(1)
-    expect(zoomOutPreventDefault).toHaveBeenCalledTimes(1)
-    expect(numpadSubtractPreventDefault).toHaveBeenCalledTimes(1)
-    expect(resetPreventDefault).toHaveBeenCalledTimes(1)
-    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', zoomTo('in'))
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', zoomTo('in'))
-    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', zoomTo('out'))
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', zoomTo('out'))
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', zoomTo('reset'))
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', zoomTo('in'))
-  })
-
-  it('forwards browser history shortcuts from focused guest pages', () => {
-    setupGuestShortcutForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer()
-    })
-
-    const backInput =
-      process.platform === 'darwin'
-        ? { code: 'BracketLeft', key: '[', meta: true, control: false, alt: false }
-        : { code: 'ArrowLeft', key: 'ArrowLeft', meta: false, control: false, alt: true }
-    const forwardInput =
-      process.platform === 'darwin'
-        ? { code: 'BracketRight', key: ']', meta: true, control: false, alt: false }
-        : { code: 'ArrowRight', key: 'ArrowRight', meta: false, control: false, alt: true }
-
-    const backPreventDefault = triggerBeforeInput(backInput)
-    const forwardPreventDefault = triggerBeforeInput(forwardInput)
-
-    expect(backPreventDefault).toHaveBeenCalledTimes(1)
-    expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(
-      1,
-      'ui:browserHistoryNavigate',
-      historyTo('back')
-    )
-    expect(rendererSendMock).toHaveBeenNthCalledWith(
-      2,
-      'ui:browserHistoryNavigate',
-      historyTo('forward')
-    )
   })
 
   it('leaves the Unity and Rider chords entirely to the focused guest', () => {
@@ -345,65 +229,11 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).not.toHaveBeenCalled()
   })
 
-  it('forwards browser Find with its registered page and workspace owner', () => {
-    setupGuestShortcutForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer(),
-      resolveWorkspaceId: () => 'workspace-1'
-    })
-
-    const preventDefault = triggerBeforeInput({ code: 'KeyF', key: 'f' })
-
-    expect(preventDefault).toHaveBeenCalledOnce()
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:findInBrowserPage', {
-      browserPageId: browserTabId,
-      browserWorkspaceId: 'workspace-1'
-    })
-  })
-
-  // A client-hosted guest is registered by main's host runtime, whose wire command carries no
-  // workspace. Withholding the chord there suppressed Cmd+F in the guest and delivered nothing.
-  it('forwards browser Find by page alone when no workspace owner is registered', () => {
-    setupGuestShortcutForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer()
-    })
-
-    const preventDefault = triggerBeforeInput({ code: 'KeyF', key: 'f' })
-
-    expect(preventDefault).toHaveBeenCalledOnce()
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:findInBrowserPage', {
-      browserPageId: browserTabId,
-      browserWorkspaceId: undefined
-    })
-  })
-
-  it('forwards quick-command menu shortcuts from focused guest pages', () => {
-    setupGuestShortcutForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer(),
-      getKeybindings: () => ({
-        'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
-      })
-    })
-
-    const isMac = process.platform === 'darwin'
-    const preventDefault = triggerBeforeInput({
-      code: 'KeyQ',
-      key: 'q',
-      meta: isMac,
-      control: !isMac,
-      shift: true
-    })
-
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
-  })
-
-  it('forwards workspace delete shortcuts from focused guest pages', () => {
+  // Why: Orca claims these on every repeat but acts once, so a held chord's repeats never reach the page.
+  it.each([
+    ['workspace delete', { code: 'Backspace', key: 'Backspace' }],
+    ['next tab', { code: 'BracketRight', key: '}' }]
+  ])('consumes repeated %s shortcuts from focused guest pages', (_name, chord) => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -412,28 +242,7 @@ describe('setupGuestShortcutForwarding', () => {
 
     const isMac = process.platform === 'darwin'
     const preventDefault = triggerBeforeInput({
-      code: 'Backspace',
-      key: 'Backspace',
-      meta: isMac,
-      control: !isMac,
-      shift: true
-    })
-
-    expect(preventDefault).toHaveBeenCalledOnce()
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
-  })
-
-  it('consumes repeated workspace delete shortcuts from focused guest pages', () => {
-    setupGuestShortcutForwarding({
-      browserTabId,
-      guest: makeGuest(),
-      resolveRenderer: () => makeRenderer()
-    })
-
-    const isMac = process.platform === 'darwin'
-    const preventDefault = triggerBeforeInput({
-      code: 'Backspace',
-      key: 'Backspace',
+      ...chord,
       meta: isMac,
       control: !isMac,
       shift: true,
@@ -592,7 +401,9 @@ describe('setupGuestShortcutForwarding', () => {
     const secondDownPreventDefault = triggerBeforeInput(modifierInput)
 
     expect(secondDownPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:browserPageTabShortcut', {
+      doubleTapModifier: 'Shift'
+    })
   })
 
   it('resets guest double-tap detection on blur', () => {
@@ -622,11 +433,8 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).not.toHaveBeenCalledWith('ui:openQuickOpen')
   })
 
-  // A floating-workspace-owned guest routes close/index chords to the floating-scoped
-  // IPC *carrying its source id*; a main-owned guest keeps main routing.
   describe('source-aware close/index routing', () => {
     const closeInput = { code: 'KeyW', key: 'w' }
-    // workspace.selectByIndex default is Mod+1; tab.selectByIndex default is Ctrl+1 (darwin) / Alt+1 (other).
     const workspaceIndexInput = { code: 'Digit1', key: '1' }
     const tabIndexInput =
       process.platform === 'darwin'

@@ -112,7 +112,7 @@ export function createWorktreeEventRuntime(
     }
     const localRefreshStartedWithRuntime =
       options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
-    // Why: capture active-ness before migration moves the pointer; re-key maps before the diff so a rename isn't a deletion.
+    // Capture activation before migration, then rekey maps before deletion diff so renames retain state.
     const identityMigrations = migrations?.length ? migrations : renamed ? [renamed] : []
     const activeBeforeMigration = useAppStore.getState().activeWorktreeId
     const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
@@ -127,7 +127,7 @@ export function createWorktreeEventRuntime(
         .getState()
         .migrateWorktreeIdentity(migration.oldWorktreeId, migration.newWorktreeId)
     }
-    // Why: diff before/after fetch to catch out-of-band deletions and purge worktree state, else zombie ptyId entries leak (design §2c, §4.4).
+    // Diff around refetch to purge externally deleted worktree state and prevent zombie PTY entries.
     const state = useAppStore.getState()
     const before =
       getAuthoritativeDetectedWorktreeIds(state, repoId) ??
@@ -161,7 +161,7 @@ export function createWorktreeEventRuntime(
               : undefined
         )
     }
-    // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
+    // ID changes unmount active panes; reactivate so tab reconciliation restores them immediately.
     if (activeBeforeMigration && activeAfterMigration !== activeBeforeMigration) {
       const renamedSelection = { ...selectionBeforeRename, worktreeId: activeAfterMigration }
       // Why only if unchanged: a workspace or twin copy picked during the refresh is the user's.
@@ -172,14 +172,10 @@ export function createWorktreeEventRuntime(
     // Follow-mode "agents follow their branch": resume slept agents only after
     // the migrations above swapped session content between the two workspaces.
     runDefaultWorktreeSwitchFollowWake(identityMigrations)
-    // Sweep expired rename-grace entries before any early return, else forced-local
-    // (or non-authoritative) events let the map grow for the session.
+    // Prune rename grace before early returns so local/non-authoritative events cannot leak entries indefinitely.
     const now = Date.now()
     sweepExpiredWorktreeIdentityGrace(now)
-    // Why: the deletion diff below is repo-wide, but a forced-local scan overlapping
-    // a runtime cannot prove remote absence (legacy runtime rows may lack hostId).
-    // fetchWorktrees still purges removed local rows host-scoped; accepted gap: the
-    // workspace-space entry survives until the next local-only rescan.
+    // Forced-local scans cannot prove runtime absence; fetch still purges local host rows, while space entries await local-only rescan.
     if (
       options?.forceLocalOwner &&
       (localRefreshStartedWithRuntime || isRuntimeEnvironmentActive())
@@ -256,7 +252,7 @@ export function createWorktreeEventRuntime(
       return
     }
     if (!options.allowRuntimeEnvironment && isRuntimeEnvironmentActive()) {
-      // Why: local CLI worktree events carry local ids; runtime activation comes via the remote stream, allowed separately.
+      // Local CLI IDs activate locally; remote stream activation follows its separate host route.
       return
     }
     const existedBeforeFetch = Boolean(
@@ -273,14 +269,14 @@ export function createWorktreeEventRuntime(
     const existsAfterFetch = Boolean(
       useAppStore.getState().getKnownWorktreeById(worktreeId, options.executionHostId)
     )
-    // Why: use the canonical activation path so the CLI switch records a back/forward visit, or the nav buttons ignore it.
+    // Canonical activation records CLI switches in back/forward history.
     activateAndRevealWorktree(worktreeId, {
       ...(setup ? { setup } : {}),
       ...(startup ? { startup } : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(providesInitialSurface ? { providesInitialSurface } : {}),
       ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
-      // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
+      // Do not echo runtime-stream activation back to its host or selection can loop.
       notifyHostRuntime: false,
       ...(options.executionHostId ? { executionHostId: options.executionHostId } : {})
     })

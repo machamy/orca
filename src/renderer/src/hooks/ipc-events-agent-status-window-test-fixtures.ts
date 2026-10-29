@@ -1,6 +1,3 @@
-/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 11 agent-status ipc-events specs, not shipped code, and it falls
-   outside the *.test / *.spec / tests glob set. Inlining stubReactSyncEffect and stubAuxiliaryModules would duplicate them
-   into all 11 specs and push several past the max-lines ratchet. */
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import type {
@@ -66,6 +63,7 @@ export function buildWindowApi(args: {
         onPublishAgentLaunchTab: () => () => {},
         onRevealTerminalPane: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
+        onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},
@@ -79,10 +77,8 @@ export function buildWindowApi(args: {
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
-        onNewBrowserTab: () => () => {},
-        onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
         onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
@@ -90,14 +86,11 @@ export function buildWindowApi(args: {
         replyTabClose: () => {},
         onRequestTabSetProfile: () => () => {},
         replyTabSetProfile: () => {},
-        onNewTerminalTab: () => () => {},
         onCloseActiveTab: () => () => {},
         onCloseFloatingItem: () => () => {},
         onSelectFloatingIndex: () => () => {},
-        onSwitchTab: () => () => {},
-        onSwitchTabAcrossAllTypes: () => () => {},
+        onBrowserPageTabShortcut: () => () => {},
         onSwitchRecentTab: () => () => {},
-        onSwitchTerminalTab: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},
@@ -115,6 +108,7 @@ export function buildWindowApi(args: {
         onGuestLoadFailed: () => () => {},
         onPaneFocus: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {}
       },
@@ -137,6 +131,7 @@ export function buildWindowApi(args: {
         listTargets: () => Promise.resolve([]),
         listRemovedTargetLabels: () => Promise.resolve({}),
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         getState: () => Promise.resolve(null),
         onStateChanged: () => () => {},

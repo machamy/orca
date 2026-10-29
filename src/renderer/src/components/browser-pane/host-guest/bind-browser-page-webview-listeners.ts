@@ -1,4 +1,4 @@
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser-extension-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { loadBrowserGuestUrl } from '../navigate/load-browser-guest-url'
 import { parkBrowserPageViewport } from './browser-page-viewport'
@@ -87,25 +87,22 @@ export function bindBrowserPageWebviewListeners({
       syncBrowserAnnotationViewportBridge
     })
 
-  const { handleDidStartLoading, handleDidStopLoading, handleFailLoad } =
-    createBrowserPageWebviewLoadingHandlers({
-      webview,
-      browserTabId,
-      faviconUrlRef,
-      browserTabUrlRef,
-      addressBarValueRef,
-      addressBarInputRef,
-      activeLoadFailureRef,
-      lastKnownWebviewUrlRef,
-      keepAddressBarFocusRef,
-      recoveryNavigationValidationRef,
-      invalidateBrowserAnnotationDocumentRef,
-      onUpdatePageStateRef,
-      onSetUrlRef,
-      setBrowserOverlayViewport,
-      setAddressBarValue,
-      focusAddressBarNow
-    })
+  const { handleDidStopLoading, handleFailLoad } = createBrowserPageWebviewLoadingHandlers({
+    webview,
+    browserTabId,
+    faviconUrlRef,
+    browserTabUrlRef,
+    addressBarValueRef,
+    addressBarInputRef,
+    activeLoadFailureRef,
+    lastKnownWebviewUrlRef,
+    keepAddressBarFocusRef,
+    recoveryNavigationValidationRef,
+    onUpdatePageStateRef,
+    onSetUrlRef,
+    setAddressBarValue,
+    focusAddressBarNow
+  })
 
   const {
     handleDidStartNavigation,
@@ -142,7 +139,6 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
   webview.addEventListener('destroyed', handleGuestDestroyed)
   webview.addEventListener('focus', dismissAddressBarSuggestions)
-  webview.addEventListener('did-start-loading', handleDidStartLoading)
   webview.addEventListener('did-start-navigation', handleDidStartNavigation)
   webview.addEventListener('did-redirect-navigation', handleDidRedirectNavigation)
   webview.addEventListener('did-stop-loading', handleDidStopLoading)
@@ -162,7 +158,7 @@ export function bindBrowserPageWebviewListeners({
   if (needsInitialNavigation) {
     // Why: set src only after listeners attach so a fast localhost failure isn't missed.
     const initialUrl =
-      normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
+      normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     loadBrowserGuestUrl({
       url: initialUrl,
       worktreeId,
@@ -186,7 +182,6 @@ export function bindBrowserPageWebviewListeners({
     webview.removeEventListener('render-process-gone', guestRecovery.recoverRenderer)
     webview.removeEventListener('destroyed', handleGuestDestroyed)
     webview.removeEventListener('focus', dismissAddressBarSuggestions)
-    webview.removeEventListener('did-start-loading', handleDidStartLoading)
     webview.removeEventListener('did-start-navigation', handleDidStartNavigation)
     webview.removeEventListener('did-redirect-navigation', handleDidRedirectNavigation)
     webview.removeEventListener('did-stop-loading', handleDidStopLoading)

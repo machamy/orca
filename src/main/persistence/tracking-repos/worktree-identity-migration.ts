@@ -10,12 +10,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
 import { migrateWorkspaceSessionIdentity } from './worktree-identity-session-migration'
 
-/**
- * Re-keys every worktreeId-keyed record in `state` from `oldWorktreeId` to `newWorktreeId`. Mutates `state` in place;
- * returns whether anything changed so the caller can gate its save. No-op when the ids match.
- * See `Store.migrateWorktreeIdentity` for why the rename happens.
- */
-
+/** Mutate worktree references in place; return whether anything changed so callers can gate persistence. */
 export function migrateWorktreeIdentity(
   state: PersistedState,
   oldWorktreeId: string,
@@ -69,7 +64,7 @@ export function migrateWorktreeIdentity(
   }
 
   let changed = moveKey(state.worktreeMeta)
-  // Record the prior id so a session minted under it isn't reaped as an orphan.
+  // Retain the prior ID so existing terminal sessions do not become orphans.
   const newMeta = state.worktreeMeta[newWorktreeId]
   if (newMeta) {
     const prior = newMeta.priorWorktreeIds ?? []
@@ -104,11 +99,10 @@ export function migrateWorktreeIdentity(
   const movedLineage = state.worktreeLineageById[newWorktreeId]
   if (movedLineage && movedLineage.worktreeId === oldWorktreeId) {
     movedLineage.worktreeId = newWorktreeId
-    // Why: moveKey reports nothing when the record already sat under the new key, so flag the repair
-    // ourselves or the caller skips the save and the stale id comes back on reload.
+    // Repairing an already-rekeyed row still needs a save.
     changed = true
   }
-  // Why: children carry this as parentWorktreeId; keep the denormalized path-derived id consistent (parentWorktreeInstanceId is stable).
+  // Keep children's path-derived parent IDs consistent; parent instance identity stays stable.
   for (const lineage of Object.values(state.worktreeLineageById)) {
     if (lineage.parentWorktreeId === oldWorktreeId) {
       lineage.parentWorktreeId = newWorktreeId

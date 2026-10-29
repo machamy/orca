@@ -2,12 +2,12 @@ import { STATUS_METHODS } from './status'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad-migration'
+import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './session-terminal-scrollback'
 import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
 import { DEFAULT_SET_METHOD } from './worktree-default-set-method'
-import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { REFERENCE_METHODS } from './reference'
 import { TERMINAL_METHODS } from './terminal'
 import { TERMINAL_ORPHAN_METHODS } from './terminal-orphan'
@@ -66,6 +66,7 @@ import { MANAGED_RUNTIME_INSTALL_METHODS } from './managed-runtime-install'
 import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
+import { CONNECTOR_METHODS } from './connector'
 import {
   LAYOUT_APPLY_METHODS,
   LAYOUT_VIEW_REPORT_METHODS,
@@ -74,13 +75,12 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
-// Why: a flat manifest keeps registration order explicit and provides one
-// grep-point for "what methods does the RPC server expose?" — useful when
-// auditing the security boundary or wiring new CLI commands.
+// Keep registration order and the full RPC/security surface visible in one manifest.
 export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,
+  ...SESSION_TERMINAL_SCROLLBACK_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
@@ -88,7 +88,6 @@ export const ALL_RPC_METHODS = [
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
   // Fork: registered here, not in WORKTREE_METHODS, so worktree.ts stays within its line limit.
-  WORKTREE_SLEEP_METHOD,
   DEFAULT_SET_METHOD,
   ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,
@@ -98,6 +97,7 @@ export const ALL_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...MANAGED_RUNTIME_INSTALL_METHODS,
   ...AGENT_LAUNCH_METHODS,
+  ...CONNECTOR_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
   ...BROWSER_CORE_METHODS,

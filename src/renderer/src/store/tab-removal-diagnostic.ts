@@ -23,29 +23,16 @@ function collectTabIds(state: AppState | undefined): Set<string> {
 }
 
 export function installTabRemovalDiagnostic(api: StoreApi<AppState>): void {
-  // Why lazily: this installs from inside the store initializer, where
-  // `getState()` still returns undefined — reading it there threw and took the
-  // whole store down, leaving the runtime stuck at `graph_not_ready`.
-  let previous: Set<string> | null = null
-  let previousTabsByWorktree: AppState['tabsByWorktree'] | undefined
-  api.subscribe((state) => {
-    // Why: most updates leave the tab map untouched; walking every tab on each one
-    // scaled with workspace count and blew the store's per-update read budget.
-    if (state?.tabsByWorktree === previousTabsByWorktree) {
-      return
-    }
-    previousTabsByWorktree = state?.tabsByWorktree
-    if (previous === null) {
-      previous = collectTabIds(state)
+  api.subscribe((state, prevState) => {
+    // Why only mid-switch: the vanishing tab was only ever seen there, and walking every tab on
+    // each tab-map update broke the store's per-update read budget.
+    if (state?.tabsByWorktree === prevState?.tabsByWorktree || !state?.defaultSwitchInFlight) {
       return
     }
     // Why sets and not sizes: a swap rewrites `tabsByWorktree` wholesale, so a
-    // dropped tab can be masked by an added one in the same update. Comparing
-    // counts missed exactly that case.
-    const seen: Set<string> = previous
+    // dropped tab can be masked by an added one in the same update.
     const next = collectTabIds(state)
-    const removed = [...seen].filter((id) => !next.has(id))
-    previous = next
+    const removed = [...collectTabIds(prevState)].filter((id) => !next.has(id))
     if (removed.length === 0) {
       return
     }

@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -38,7 +39,6 @@ export type PendingSidebarRevealArgs = {
   folderWorkspaces: readonly FolderWorkspace[]
   repoMap: Map<string, Repo>
   /** Fork: host-correct repo records for worktree-folder reveal expansion. */
-  repos?: readonly Repo[]
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   collapsedGroups: Set<string>
@@ -57,7 +57,6 @@ export type PendingSidebarRevealArgs = {
   cancelPendingRevealFrames: () => void
 }
 
-// Expand whatever collapsed section hides the reveal target, then scroll to it.
 export function expandGroupsForWorktreeReveal(
   args: PendingSidebarRevealArgs,
   worktreeId: string,
@@ -103,14 +102,11 @@ export function expandGroupsForWorktreeReveal(
   }
   // Fork: a collapsed worktree folder hides member rows outright, so the target's
   // folder ancestor chain must open too.
-  if (!args.repos) {
-    return
-  }
   for (const groupKey of getWorktreeFolderRevealGroupKeys({
     worktree: targetWorktree,
     hostWorktreeMap: args.worktreeMap,
     hostLineageById: args.worktreeLineageById,
-    repos: args.repos,
+    repos: useAppStore.getState().repos,
     settings: args.settings,
     groupBy: args.groupBy,
     hostId: getWorktreeExecutionHostId(

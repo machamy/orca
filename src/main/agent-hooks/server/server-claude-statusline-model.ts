@@ -1,6 +1,7 @@
 // Fork: the statusline wrapper's model/effort posts for the pane badge
 // (claude-statusline-model-badge.ts). One listener per process, like the server itself.
 import type { ServerResponse } from 'node:http'
+import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import {
   CLAUDE_STATUSLINE_MODEL_PATHNAME,
   parseClaudeStatusLineModelBody,
@@ -31,4 +32,15 @@ export function handleClaudeStatusLineModelRequest(
   res.writeHead(204)
   res.end()
   return true
+}
+
+/** Fork: the lifecycle reaches the route through `this`, keeping upstream's file to one call. */
+export abstract class AgentHookServerClaudeModelRoute extends AgentHookServerStatusHookLifecycle {
+  protected handleClaudeStatusLineModelRoute(
+    pathname: string,
+    body: unknown,
+    res: ServerResponse
+  ): boolean {
+    return handleClaudeStatusLineModelRequest(pathname, body, res)
+  }
 }

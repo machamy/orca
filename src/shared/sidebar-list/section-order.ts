@@ -54,6 +54,17 @@ export function getRenderedNaturalAnchorRepoIds({
   return renderedRepoIds
 }
 
+export function orderMainWorktreeFirst<T extends { isMainWorktree?: boolean }>(
+  worktrees: T[]
+): T[] {
+  const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
+  if (mainWorktrees.length === 0) {
+    return worktrees
+  }
+  // Keep canonical workspaces first for repo-scanned project groups despite dynamic child ranking.
+  return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
+}
+
 export function orderDefaultCheckoutFirst(
   worktrees: Worktree[],
   repoMap: ReadonlyMap<string, Repo>
@@ -76,8 +87,3 @@ export function orderDefaultCheckoutFirst(
   const defaultIds = new Set(defaults.map((worktree) => worktree.id))
   return [...defaults, ...worktrees.filter((worktree) => !defaultIds.has(worktree.id))]
 }
-
-/**
- * Build the flat row list consumed by the virtualizer.
- * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
- */

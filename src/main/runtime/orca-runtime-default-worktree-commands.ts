@@ -10,7 +10,7 @@ import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktre
  *  tab selections, scan caches, the renderer notifier) all land on this link. */
 export abstract class OrcaRuntimeWithDefaultWorktreeCommands extends RuntimeWorkspaceRepoScanRefresh {
   private readonly defaultWorktree = new RuntimeDefaultWorktree({
-    resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+    resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
     getRepo: (repoId) => this.store?.getRepo(repoId),
     getGitOptions: (repo) => getLocalProjectWorktreeGitOptions(this.requireStore(), repo),
     // Branch swap changes no paths, so a plain refresh updates the branch labels.
@@ -51,7 +51,7 @@ export abstract class OrcaRuntimeWithDefaultWorktreeCommands extends RuntimeWork
     selector: string,
     opts: { followAgents: boolean; notifyAgents: boolean; includeUntracked: boolean }
   ): Promise<{ requested: true; repoId: string; worktreeId: string }> {
-    const selected = await this.resolveWorktreeSelector(selector)
+    const selected = await this.resolveGitWorktreeSelector(selector)
     const repo = this.store?.getRepo(selected.repoId)
     if (!repo || repo.kind === 'folder') {
       throw new Error('default_worktree_switch_git_required')

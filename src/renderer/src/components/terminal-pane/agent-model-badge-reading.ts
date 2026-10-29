@@ -22,7 +22,7 @@ import {
   type AgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
-import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
+import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { readClaudeSessionOptionsFromTerminalScreen } from '../native-chat/claude-terminal-session-options'
 
 export type AgentModelBadgeReading = {

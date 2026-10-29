@@ -7,6 +7,7 @@ import { getAgentModelBadgeSearchEntry } from './agent-model-badge-search-entry'
 import { getBrowserMarkdownHandoffSearchEntry } from './browser-markdown-handoff-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getBrowserExtensionsExperimentalSearchEntry } from './browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
@@ -188,16 +189,15 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     // Worktree folders: row held back this release — keep it out of the global
     // catalog too, or search navigates to a pane with no such control.
     getEphemeralVmsSearchEntry(),
-    // Why: only a Windows desktop shows this toggle, so only there may search find it.
+    getBrowserExtensionsExperimentalSearchEntry(),
+    // Index WSL toggles only on Windows desktops that expose them.
     ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
       ? [getWslHostsExperimentalSearchEntry()]
       : [])
   ]
 )
 
-// Why: title-keyed lookup avoids a fragile numeric-index invariant — the array
-// shape can change without breaking consumers, and a typo/rename throws loudly
-// instead of silently matching the wrong (or empty) entry.
+// Resolve by title and fail loudly on renames so changing catalog shape cannot silently retarget numeric indexes.
 function findEntry(title: string): SettingsSearchEntry {
   const entry = getExperimentalPaneSearchEntries().find((e) => e.title === title)
   if (!entry) {
@@ -247,6 +247,12 @@ export function getExperimentalSearchEntry() {
 
     ephemeralVms: findEntry(
       translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
+    ),
+    browserExtensions: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.browserExtensions.title',
+        'Browser extensions'
+      )
     )
   } as const
 }

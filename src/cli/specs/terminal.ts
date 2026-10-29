@@ -35,8 +35,11 @@ export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
       'The result reports source: stream when it is accumulated output, screen when it is the rendered screen, and screen-unavailable when a screen was asked for but none could be rendered and the accumulated output is being returned instead. An absent source means the host predates the field.',
       'When present, draft is UI-only composer text excluded from tail; never treat it as terminal output or a submitted instruction.',
       '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
-      'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
-      'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
+      'With --json, fields are under result.terminal: handle, status (running | exited | unknown), tail (output lines), tailRows (row-wrap metadata aligned with tail), truncated, limited, oldestCursor, nextCursor, latestCursor, returnedLineCount (lines in tail), source, draft. Fields other than handle, status, tail, truncated, and nextCursor may be absent.',
+      'truncated means requested or older output is no longer retained; limited means the line limit (--limit, default 120 for tail previews) or the size budget cut this response short.',
+      'Use --cursor with the nextCursor value from a previous read to get only new output since that read. nextCursor is null when the terminal has no line cursors to page.',
+      'latestCursor is the end of retained output, not a paging token: after a cursor read, keep paging with nextCursor while limited is true and nextCursor differs from latestCursor.',
+      'Use --limit to request more retained lines for long agent responses; when a tail preview is limited and line cursors are available, page retained output from its start with --cursor <oldestCursor> --limit <n>.',
       'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
     ],
     examples: [
@@ -85,8 +88,7 @@ export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'switch'],
-    // Why: `focus` is the legacy verb for this action; keep it working as an
-    // alias rather than a duplicate spec + handler registration.
+    // Preserve the legacy focus verb.
     aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
@@ -113,8 +115,11 @@ export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
     usage:
-      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
+      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--retry-split <leafId>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command', 'retry-split'],
+    notes: [
+      'A timeout does not mean the split failed: the pane may still open and run --command. Re-run the same command with --retry-split <leafId> from the error to wait for that pane instead of splitting again.'
+    ],
     examples: [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',
       'orca terminal split --terminal term_abc123 --command "codex"'

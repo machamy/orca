@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
@@ -158,6 +159,25 @@ export function resolveSidebarWorktreeFolders(args: {
   return byHostRepo.size > 0 ? { byHostRepo } : null
 }
 
+function worktreeFolderCapabilityGapKey(
+  statuses: WorktreeFolderRuntimeStatusLookup | null | undefined
+): string {
+  const gaps: string[] = []
+  for (const [environmentId, entry] of statuses ?? []) {
+    if (
+      entry?.status &&
+      entry.status.capabilities?.includes(WORKTREE_FOLDERS_RUNTIME_CAPABILITY) !== true
+    ) {
+      gaps.push(environmentId)
+    }
+  }
+  return gaps.sort().join('\n')
+}
+
+function capabilityGapLookup(key: string): WorktreeFolderRuntimeStatusLookup {
+  return new Map(key ? key.split('\n').map((id) => [id, { status: { capabilities: [] } }]) : [])
+}
+
 /** The window's folder model for the shared row planner; null when folders are off or unused. */
 export function useSidebarWorktreeFolderModel(args: {
   worktrees: readonly Worktree[]
@@ -167,18 +187,16 @@ export function useSidebarWorktreeFolderModel(args: {
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
   defaultHostId: ExecutionHostId
-  runtimeStatusByEnvironmentId?: WorktreeFolderRuntimeStatusLookup | null
 }): SidebarWorktreeFolderModel | null {
-  const {
-    worktrees,
-    repos,
-    repoMap,
-    settings,
-    lineageById,
-    worktreeMap,
-    defaultHostId,
-    runtimeStatusByEnvironmentId
-  } = args
+  const { worktrees, repos, repoMap, settings, lineageById, worktreeMap, defaultHostId } = args
+  // Why a key: subscribing to the whole status map re-planned the sidebar on every health tick.
+  const capabilityGapKey = useAppStore((s) =>
+    worktreeFolderCapabilityGapKey(s.runtimeStatusByEnvironmentId)
+  )
+  const runtimeStatusByEnvironmentId = useMemo(
+    () => capabilityGapLookup(capabilityGapKey),
+    [capabilityGapKey]
+  )
   return useMemo(
     () =>
       resolveSidebarWorktreeFolders({
