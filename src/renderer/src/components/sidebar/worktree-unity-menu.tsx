@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FileCode2, Gamepad2, HardDriveDownload } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
@@ -28,8 +28,9 @@ import type { UnityWorktreeStatus } from '../../../../shared/unity-worktree'
  *    gate: the confirm dialog and an in-flight seed outlive the menu, and the
  *    Agent Map wrapper unmounting on menu close destroyed the dialog
  *    mid-question.
- *  - `allWorktrees` comes from the parent, which already subscribes for its
- *    lineage menu — taking it as an argument avoids a duplicate subscription.
+ *  - `allWorktrees` comes from the parent's menu-scoped catalog, which empties
+ *    on close; the last open snapshot is kept so dialogs outliving the menu
+ *    still tint against the right siblings.
  */
 export function useUnityWorktreeMenu(args: {
   worktree: Worktree
@@ -95,9 +96,14 @@ export function useUnityWorktreeMenu(args: {
         : entry
     )
   }, [unityProbeTarget])
+  const openMenuWorktreesRef = useRef(allWorktrees)
+  if (menuOpen) {
+    openMenuWorktreesRef.current = allWorktrees
+  }
+  const openMenuWorktrees = openMenuWorktreesRef.current
   const unityTintSiblingWorktrees = useMemo(
-    () => selectUnityTintSiblingWorktrees(allWorktrees, worktree.repoId, repoPath),
-    [allWorktrees, repoPath, worktree.repoId]
+    () => selectUnityTintSiblingWorktrees(openMenuWorktrees, worktree.repoId, repoPath),
+    [openMenuWorktrees, repoPath, worktree.repoId]
   )
   const unityTintSiblingLabels = useMemo(
     () => unityTintSiblingLabelsOf(unityTintSiblingWorktrees),

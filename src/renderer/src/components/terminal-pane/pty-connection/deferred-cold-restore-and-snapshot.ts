@@ -19,6 +19,7 @@ import { bindReplayDataDrain } from './replay-data-drain'
 import { bindStartFreshSpawn } from './fresh-spawn-start'
 
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
+import { bindReplacedProcessInputModes } from './replaced-process-input-modes'
 import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
 import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
 import { attachToMainResumedSleepPane, mainResumedSleepPane } from './main-resumed-sleep-pane'
@@ -90,19 +91,15 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   // Why ungated: a reveal, a restart replacement on show, or a phone wake already chose to run now.
   session.spawnColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
-    options: FreshSpawnOptions = {}
+    options: FreshSpawnOptions = {},
+    automatic?: boolean
   ): Promise<string | null> => {
     if (startup?.resumeSource?.cancelled) {
       return Promise.resolve(null)
     }
     const mainPane = mainResumedSleepPane(session, startup)
     if (mainPane && startup?.sleepingRecordEntry) {
-      return attachToMainResumedSleepPane(
-        session,
-        mainPane,
-        startup.sleepingRecordEntry.paneKey,
-        options
-      )
+      return attachToMainResumedSleepPane(session, mainPane, startup, options, automatic)
     }
     const claimLoser = startColdRestoreResumeClaimLoser(session, startup, options)
     if (claimLoser) {
@@ -209,6 +206,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     session.freshSpawnFollowResetDisposables = []
   }
   bindFreshSpawnFollowReset(session)
+  bindReplacedProcessInputModes(session)
   bindStartFreshSpawn(session)
   bindReplayDataDrain(session)
   session.replayDataCallback = (
@@ -230,6 +228,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           }
         : {}),
       ...(meta.terminalOwner ? { terminalOwner: meta.terminalOwner } : {}),
+      ...(meta.lastTitle !== undefined ? { lastTitle: meta.lastTitle } : {}),
       ...(meta.alternateScreen !== undefined ? { alternateScreen: meta.alternateScreen } : {}),
       ...(meta.snapshotCols !== undefined && meta.snapshotRows !== undefined
         ? { snapshotCols: meta.snapshotCols, snapshotRows: meta.snapshotRows }

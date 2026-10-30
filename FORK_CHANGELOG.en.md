@@ -24,6 +24,33 @@ source.
 
 ---
 
+## machamy.22 — upstream `1.4.245` · 2026-10-31
+
+Merges upstream **1.4.244 → 1.4.245** (395 commits). No new fork features.
+
+### Upstream merge (395 commits, `1.4.244` → `1.4.245`)
+
+- 210 fixes · 22 features. The 131 `main` commits after the 1.4.245 cut came along too (the one fix only on the tag is on `main` as well).
+- Notable: web link preview cards and GitHub PR/issue hover cards in chat, a shortcut and
+  `orca tab create --split` to open a browser tab in a right split, pasting images into annotation
+  comments, agents driving sign-in and payment popups, resolving merge conflicts from the phone, and
+  idle WSL hosts exiting on their own.
+- Upstream removed about 300 low-value test suites.
+
+### What the fork re-touched
+
+13 conflicts.
+
+- **Unity tint in the context menu**: upstream now reads the worktree catalog only while the menu is
+  open. So the cache-copy confirm and the tint picker, which outlive the menu, keep their siblings:
+  open and cache copy read the list at click time, and the tint picker uses the last open-menu list.
+  The "Open in Unity" shortcut reads the same way, dropping one catalog subscription.
+- **Worktree-folder indentation test**: upstream deleted the indentation suite; the fork's case now
+  lives in its own file.
+- Added the fork's worktree-folder row to upstream's new per-host project header test.
+
+---
+
 ## machamy.21 — upstream `1.4.244` · 2026-10-29
 
 Merges upstream **1.4.237 → 1.4.244** (2,049 commits). No new fork features.

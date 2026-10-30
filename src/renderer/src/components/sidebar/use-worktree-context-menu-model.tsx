@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { useRepoById } from '@/store/selectors'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { useContextWorkspaceStatuses } from './use-workspace-board-statuses'
+import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import {
   hasSleepableWorkspaceActivity,
@@ -98,9 +99,7 @@ export function useWorktreeContextMenuModel({
   const parentPickerUnmountTimerRef = useRef<number | null>(null)
   const lifecycleStartedRef = useRef(false)
   const isDeleting = deleteState?.isDeleting ?? false
-  const repoMap = useRepoMap()
-  const worktreeMap = useWorktreeMap()
-  const allWorktrees = useAllWorktrees()
+  const { repoMap, worktreeMap, allWorktrees } = useMenuScopedWorktreeCatalog(menuOpen)
   // Fork: Unity cache/open/Rider menu entries + seed-first confirm dialog live
   // in worktree-unity-menu.tsx; lifecyclePending keeps the Agent Map wrapper
   // mounted while the dialog or an in-flight seed outlives the menu.
@@ -173,7 +172,7 @@ export function useWorktreeContextMenuModel({
     [activeContextWorktrees, sleepActivity]
   )
   const lineageMenuActions = useWorkspaceLineageMenuActions({
-    enabled: !isMultiContext,
+    enabled: menuOpen && !isMultiContext,
     parent: worktree,
     worktrees: allWorktrees,
     lineageById: worktreeLineageById,
@@ -356,7 +355,6 @@ export function useWorktreeContextMenuModel({
     activeContextWorktrees,
     onDefaultSwitchRequest,
     handleDefaultSwitch,
-    allWorktrees,
     batchDeleteWorktrees,
     browserTabsByWorktree,
     children,

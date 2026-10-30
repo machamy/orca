@@ -4,6 +4,7 @@ import type { WorktreeFolder } from '../../../../../../shared/worktree-folder/ty
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getWorktreeDragUnitGroups } from '../../worktree-drag-units'
 import { shouldFiltersHideAllRows } from '../../sidebar-empty-state-gate'
 import { worktree as worktreeFixture } from '../../worktree-list-groups-test-fixtures'
@@ -367,8 +368,8 @@ describe('worktree folder rows — drag units and renderable rows (C8, C9)', () 
     const groups = getWorktreeDragUnitGroups(rows as never)
     expect(groups).toHaveLength(1)
     expect(groups[0].units.map((unit) => unit.worktreeIds)).toEqual([
-      ['worktree-1', 'worktree-3'],
-      ['worktree-2']
+      [getWorktreeHostIdentity(rootOne), getWorktreeHostIdentity(childOfOne)],
+      [getWorktreeHostIdentity(rootTwo)]
     ])
   })
 
