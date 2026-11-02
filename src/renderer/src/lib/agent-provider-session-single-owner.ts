@@ -2,7 +2,7 @@ import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 /**

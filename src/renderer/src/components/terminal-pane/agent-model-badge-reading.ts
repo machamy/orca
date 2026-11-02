@@ -18,10 +18,12 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   findCatalogModel,
   findCatalogOption,
-  getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog,
-  type CatalogModel
-} from '../../../../shared/agent-session-option-catalog'
+  getAgentSessionOptionCatalog
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel
+} from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { readClaudeSessionOptionsFromTerminalScreen } from '../native-chat/claude-terminal-session-options'
 

@@ -24,6 +24,36 @@ source.
 
 ---
 
+## machamy.23 — upstream `1.4.246` · 2026-11-02
+
+Merges upstream **1.4.245 → 1.4.246** (560 commits). No new fork features.
+
+### Upstream merge (560 commits, `1.4.245` → `1.4.246`)
+
+- 188 fixes · 67 features. The 175 `main` commits after the 1.4.246 cut came along too (the 7 fixes only on the tag are all on `main`).
+- Notable: **Chat UI ships** (its experimental switch is gone), GitHub and VS Code themes with a theme catalog,
+  window background opacity and blur, a "Match Terminal" app theme, sub-agent lists collapsed by default,
+  needs-input alerts split from finished alerts, "Open in" on the explorer context menu, branch-only history
+  pages, plugin hooks, status bar items and isolated frames, and silent updates for unedited Orca skills.
+
+### What the fork re-touched
+
+11 conflicts.
+
+- **Modules upstream moved**: the fork's cold-restore, default-worktree-switch and model-badge code follow
+  agent-session resume (`shared/agent-session/lifecycle/`) and the option catalog
+  (`shared/agent-session/options/`). The worktree jump palette moved into a folder; the fork's test edits came along.
+- **Chat UI shipped**: the experimental Chat UI switch is gone, so its two cases left the fork's experimental
+  pane test. The fork's experimental entries (model badge, browser markdown handoff) stay.
+- **Line limits**: in five files upstream grew, fork code moved into its own modules — the worktree-create
+  Unity seed (`workspace-creation-unity-seed.ts`), Unity IPC registration (`startup/fork-ipc-handlers.ts`),
+  the CLI `worktree default set` group, the hook server's model route, and the sidebar card's switch-stage
+  and terminal-tab rows.
+- `AGENTS.md`: upstream turned "First Class Citizens" into a list; the fork's "no repo writes during a build"
+  moved under Footguns.
+
+---
+
 ## machamy.22 — upstream `1.4.245` · 2026-10-31
 
 Merges upstream **1.4.244 → 1.4.245** (395 commits). No new fork features.

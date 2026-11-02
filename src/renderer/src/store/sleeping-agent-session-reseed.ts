@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from './types'
 
 export type SleepingAgentSessionReseedSlice = {

@@ -5,6 +5,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { DEFAULT_SWITCH_IN_FLIGHT_STALE_MS } from '@/lib/default-worktree-switch-readiness'
 import { WorktreeCardSwitchStageRow } from './worktree-card-switch-stage-row'
+import { WorktreeCardTerminalTabRows } from './worktree-card-terminal-tab-rows'
 
 /** Fork: the card's extra rows — the default-switch stage and terminal tabs no agent row covers. */
 export function useWorktreeCardForkRows(
@@ -42,4 +43,27 @@ export function useWorktreeCardForkRows(
     <WorktreeCardSwitchStageRow worktreeId={worktreeId} />
   ) : null
   return { movingIndicator, uncoveredTabs }
+}
+
+/** Fork: upstream's agent body wrapped with the switch stage row and uncovered terminal tabs. */
+export function withWorktreeCardForkRows(
+  Body: React.ComponentType<{ worktreeId: string; agents: DashboardAgentRowData[] }>
+): React.ComponentType<{
+  worktreeId: string
+  agents: DashboardAgentRowData[]
+  className?: string
+}> {
+  return function WorktreeCardWithForkRows({ worktreeId, agents, className }) {
+    const { movingIndicator, uncoveredTabs } = useWorktreeCardForkRows(worktreeId, agents)
+    if (agents.length === 0 && uncoveredTabs.length === 0 && !movingIndicator) {
+      return null
+    }
+    return (
+      <div className={className}>
+        {movingIndicator}
+        {agents.length > 0 ? <Body worktreeId={worktreeId} agents={agents} /> : null}
+        <WorktreeCardTerminalTabRows worktreeId={worktreeId} tabs={uncoveredTabs} />
+      </div>
+    )
+  }
 }

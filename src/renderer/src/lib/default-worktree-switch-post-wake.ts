@@ -10,7 +10,7 @@
 // replays) has been observed deleting the fresh records before the wake runs,
 // leaving nothing to resume. The consumer re-seeds any snapshot record that
 // went missing, re-keyed through the switch's migrations.
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const PENDING_WAKE_TTL_MS = 5 * 60_000
 

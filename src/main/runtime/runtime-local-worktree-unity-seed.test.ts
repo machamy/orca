@@ -63,20 +63,27 @@ describe('autoSeedUnityAfterLocalWorktreeCreate', () => {
  */
 describe('worktree create still invokes the Unity auto-seed', () => {
   const createSource = readFileSync(join(__dirname, 'workspaces', 'workspace-creation.ts'), 'utf8')
+  const hookSource = readFileSync(
+    join(__dirname, 'workspaces', 'workspace-creation-unity-seed.ts'),
+    'utf8'
+  )
 
-  it('imports the fork seed module', () => {
-    expect(createSource).toContain("from '../runtime-local-worktree-unity-seed'")
+  it('keeps the fork seed link in the create class chain', () => {
+    expect(createSource).toContain('extends OrcaRuntimeWithUnitySeedAfterCreate')
+    expect(hookSource).toContain("from '../runtime-local-worktree-unity-seed'")
+    expect(hookSource).toContain('scheduleUnitySeedAfterLocalWorktreeCreate({')
   })
 
   it('calls it after a local worktree is materialized', () => {
-    expect(createSource).toContain('scheduleUnitySeedAfterLocalWorktreeCreate({')
+    const call = 'this.scheduleUnitySeedForCreatedWorktree(repo, created.path)'
+    expect(createSource).toContain(call)
     // Ordering: the call must sit after materialization, or there is no worktree to seed.
-    expect(createSource.indexOf('scheduleUnitySeedAfterLocalWorktreeCreate({')).toBeGreaterThan(
+    expect(createSource.indexOf(call)).toBeGreaterThan(
       createSource.indexOf('await createRuntimeLocalManagedWorktree({')
     )
   })
 
   it('routes the first-time question through the notifier', () => {
-    expect(createSource).toContain('this.notifier?.unityAutoSeedOffer?.(repo.id, created.path)')
+    expect(hookSource).toContain('this.notifier?.unityAutoSeedOffer?.(repo.id, worktreePath)')
   })
 })

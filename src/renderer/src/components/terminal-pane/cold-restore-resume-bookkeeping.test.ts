@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { applyResumedAgentBookkeeping } from './cold-restore-resume-bookkeeping'
 
 const SESSION: AgentProviderSessionMetadata = {

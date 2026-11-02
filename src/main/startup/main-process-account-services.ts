@@ -1,7 +1,5 @@
-import {
-  broadcastClaudeStatusLineModel,
-  registerAgentModelBadgeSnapshotHandler
-} from '../agent-hooks/claude-statusline-model-broadcast'
+import { broadcastClaudeStatusLineModel } from '../agent-hooks/claude-statusline-model-broadcast'
+import { registerForkIpcHandlers } from './fork-ipc-handlers'
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../provider-account-services'
@@ -75,7 +73,7 @@ export function initializeMainProcessAccountServices(): void {
     }
   })
   agentHookServer.setClaudeStatusLineModelListener(broadcastClaudeStatusLineModel)
-  registerAgentModelBadgeSnapshotHandler()
+  registerForkIpcHandlers()
   store.migrateLegacyOpenCodeGoApiKey({
     has: hasOpenCodeGoApiKey,
     read: readOpenCodeGoApiKey,

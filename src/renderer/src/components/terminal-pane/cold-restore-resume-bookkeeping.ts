@@ -1,7 +1,7 @@
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '@/store/types'
 
 /**

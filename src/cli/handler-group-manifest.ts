@@ -1,9 +1,10 @@
 import type { CommandHandler } from './dispatch'
-import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
+import { BROWSER_HANDLER_GROUPS } from './browser/browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
+import { WORKTREE_DEFAULT_SET_HANDLER_GROUP } from './worktree-default-set-handler-group'
 
 export type HandlerGroup = {
   name: string
@@ -99,12 +100,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/worktree.js')).WORKTREE_HANDLERS
   },
-  {
-    name: 'worktree-default-set',
-    keys: ['worktree default set'],
-    load: async () =>
-      (await import('./handlers/worktree-default-set.js')).WORKTREE_DEFAULT_SET_HANDLERS
-  },
+  WORKTREE_DEFAULT_SET_HANDLER_GROUP,
   {
     name: 'file',
     keys: ['file open', 'file diff', 'file open-changed'],
@@ -150,6 +146,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-stop',
       'orchestration worker-abandon',
       'orchestration worker-release',
+      'orchestration worker-keep-open',
       'orchestration worker-retain',
       'orchestration worker-list',
       'orchestration dispatch',

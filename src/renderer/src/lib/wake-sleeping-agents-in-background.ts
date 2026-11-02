@@ -8,7 +8,7 @@ import {
   planFollowWakeMountBatches
 } from '@/lib/follow-switch-wake-mount-batches'
 import { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'

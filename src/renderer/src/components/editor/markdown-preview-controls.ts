@@ -1,6 +1,7 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import type { EditorToggleValue } from './EditorViewToggle'
+import { isSvgFilePath } from '../../../../shared/svg-document'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
@@ -20,6 +21,7 @@ const MARKDOWN_DIFF_VIEW_MODES = [
   'preview'
 ] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const SVG_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
@@ -62,6 +64,10 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
     return MERMAID_VIEW_MODES
   }
 
+  if (target.language === 'svg' && target.mode === 'edit') {
+    return SVG_VIEW_MODES
+  }
+
   if ((target.language === 'csv' || target.language === 'tsv') && target.mode === 'edit') {
     return CSV_VIEW_MODES
   }
@@ -71,6 +77,11 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
   }
 
   return NO_VIEW_MODES
+}
+
+/** The language that picks a file's views; SVG keeps XML highlighting but gains a Preview. */
+export function getEditorViewLanguage(filePath: string, language: string): string {
+  return isSvgFilePath(filePath) ? 'svg' : language
 }
 
 export function getDefaultMarkdownViewMode(

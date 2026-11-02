@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { shouldClearResumeClaimLoserRecord } from './cold-restore-resume-claim'
 
 function record(

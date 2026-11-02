@@ -3,7 +3,7 @@ import {
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 /**
  * Fork: a pane lost the resume claim — clear its record only if it names the

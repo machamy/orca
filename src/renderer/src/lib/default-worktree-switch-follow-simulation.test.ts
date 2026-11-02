@@ -20,7 +20,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as PtyInventory from './worktree-activation-pty-inventory'
 import type * as SurfaceOwners from './worktree-live-terminal-surface-owners'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,

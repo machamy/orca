@@ -12,7 +12,7 @@ import {
   DEFAULT_SWITCH_IN_FLIGHT_STALE_MS
 } from './default-worktree-switch-stale-bound'
 import { useAppStore } from '@/store'
-import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const IN_FLIGHT_WAIT_MS = 30_000
 const READINESS_WAIT_MS = 45_000

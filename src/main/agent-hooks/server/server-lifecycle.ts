@@ -17,6 +17,7 @@ import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerClaudeModelRoute } from './server-claude-statusline-model'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
+import { respondAfterAgentToolPluginHooks } from '../agent-tool-plugin-hooks'
 
 type HookServerStartOptions = {
   env?: string
@@ -110,12 +111,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeMode
           return
         }
         await this.initializeStatusHookOwner()
-        if (!isStatusCurrent()) {
-          res.writeHead(404)
-          res.end()
-          return
-        }
-        if (this.handleClaudeStatusLineModelRoute(pathname, body, res)) {
+        if (this.endBeforeStatusRoutes(isStatusCurrent(), pathname, body, res)) {
           return
         }
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
@@ -159,6 +155,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeMode
               launchToken: normalized.event.launchToken
             })
           : 'suppress'
+        let toolCallOwner: typeof normalized.event = null
         if (normalized.event && statusDisposition !== 'suppress') {
           const restartedAuthority =
             statusDisposition === 'restart' && source === 'omp'
@@ -182,15 +179,16 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeMode
             this.observations.rebind(event.paneKey)
           }
           this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
+          toolCallOwner = event
+          const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
             this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
           }
         }
-        res.writeHead(204)
-        res.end()
+        // Plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped.
+        await respondAfterAgentToolPluginHooks(res, source, aliasedBody, req.headers, toolCallOwner)
       } catch (error) {
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {
           if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
@@ -226,6 +224,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeMode
           if (address && typeof address === 'object') {
             this.port = address.port
           }
+          this.activateClaudeHelperObservations()
           this.maybeWriteEndpointFile()
         },
         (error) => console.error('[agent-hooks] server error', error)

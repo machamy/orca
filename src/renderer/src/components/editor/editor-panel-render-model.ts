@@ -6,6 +6,7 @@ import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
   getEditorToggleModes,
+  getEditorViewLanguage,
   getMarkdownViewModes
 } from './markdown-preview-controls'
 import { getEditorHeaderOpenFileState } from './editor-header'
@@ -81,7 +82,9 @@ export function getEditorPanelRenderModel({
         )
   // Read-only artifact tabs require raw source viewers; retain real-language tokenization while suppressing rich/preview modes and their editing affordances.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
-  const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
+  const viewerLanguage = rawReadOnly
+    ? 'plaintext'
+    : getEditorViewLanguage(activeFile.filePath, resolvedLanguage)
   const worktreeEntries = gitStatusEntries ?? []
   const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
@@ -234,6 +237,7 @@ export function getEditorPanelRenderModel({
     openFileState,
     isMarkdown: viewerLanguage === 'markdown',
     isMermaid: viewerLanguage === 'mermaid',
+    isSvg: viewerLanguage === 'svg',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
     // Preview reads disk; exclude deleted modified sides and historical commit snapshots that may not match it.

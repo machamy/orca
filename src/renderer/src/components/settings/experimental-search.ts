@@ -5,7 +5,6 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getAgentModelBadgeSearchEntry } from './agent-model-badge-search-entry'
 import { getBrowserMarkdownHandoffSearchEntry } from './browser-markdown-handoff-search-entry'
-import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 import { getBrowserExtensionsExperimentalSearchEntry } from './browser-extensions-experimental-search'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
@@ -50,7 +49,6 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
-    getNativeChatExperimentalSearchEntry(),
     {
       title: translate(
         'auto.components.settings.experimental.search.agentDashboard.title',
@@ -209,9 +207,6 @@ function findEntry(title: string): SettingsSearchEntry {
 export function getExperimentalSearchEntry() {
   return {
     pet: findEntry(translate('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
-    nativeChat: findEntry(
-      translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI')
-    ),
     agentDashboard: findEntry(
       translate(
         'auto.components.settings.experimental.search.agentDashboard.title',

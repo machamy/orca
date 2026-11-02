@@ -36,11 +36,18 @@ export function handleClaudeStatusLineModelRequest(
 
 /** Fork: the lifecycle reaches the route through `this`, keeping upstream's file to one call. */
 export abstract class AgentHookServerClaudeModelRoute extends AgentHookServerStatusHookLifecycle {
-  protected handleClaudeStatusLineModelRoute(
+  /** Upstream's post-owner-init 404 for stale status hooks, then the fork's model route; true = response sent. */
+  protected endBeforeStatusRoutes(
+    statusCurrent: boolean,
     pathname: string,
     body: unknown,
     res: ServerResponse
   ): boolean {
+    if (!statusCurrent) {
+      res.writeHead(404)
+      res.end()
+      return true
+    }
     return handleClaudeStatusLineModelRequest(pathname, body, res)
   }
 }

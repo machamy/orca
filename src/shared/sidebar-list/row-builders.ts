@@ -96,6 +96,14 @@ export function appendWorktreeOccurrenceRows(
   // Fork: folder members nest on their own axis; absent outside folders.
   options: AppendWorktreeRowsOptions & { worktreeFolderDepth?: number }
 ): void {
+  const childIdsByParent = new Map<string, string[]>()
+  for (const occurrence of planned) {
+    if (occurrence.parent) {
+      const children = childIdsByParent.get(occurrence.parent.key) ?? []
+      children.push(occurrence.row.id)
+      childIdsByParent.set(occurrence.parent.key, children)
+    }
+  }
   const occurrences = getExpandedWorktreeOccurrences(planned, (worktree) =>
     options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
@@ -112,6 +120,7 @@ export function appendWorktreeOccurrenceRows(
       groupDepth: options.groupDepth,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
+      lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
