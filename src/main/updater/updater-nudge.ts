@@ -8,7 +8,7 @@ export abstract class UpdaterNudge extends UpdaterBuildSelection {
     if (!app.isPackaged) {
       return
     }
-    if (this.nudgeCheckInFlight) {
+    if (this.nudgeCheckInFlight || !this.isAutomaticUpdateCheckEnabled()) {
       return
     }
     const now = Date.now()

@@ -12835,6 +12835,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "만들기"
+        },
+        "OfficialUpdateChecksSetting": {
+          "title": "공식 Orca 업데이트 알림",
+          "description": "공식 Orca 릴리스를 백그라운드에서 확인하고 업데이트 카드를 띄웁니다. 설치하면 포크가 공식판으로 바뀌므로 이 포크 빌드에서는 기본으로 꺼져 있습니다. \"업데이트 확인\"은 그대로 동작합니다."
         }
       },
       "right": {

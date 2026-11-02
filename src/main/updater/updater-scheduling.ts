@@ -28,7 +28,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     }
     this.autoUpdateCheckTimer = setTimeout(() => {
       // Long-running apps need main-process timers independent of renderer/relaunch lifetime.
-      if (!this.runBackgroundUpdateCheck()) {
+      if (!this.isAutomaticUpdateCheckEnabled() || !this.runBackgroundUpdateCheck()) {
         // Deferred checks have no outcome handler; re-arm here or automatic checks stop forever.
         this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
       }

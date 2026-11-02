@@ -30,4 +30,7 @@ export type ForkGlobalSettings = {
   /** Fork: the view a markdown file opens in. Absent means 'preview' — the rendered,
    *  GitHub-style read view — since the rich editor refuses whole classes of docs. */
   markdownDefaultViewMode?: 'preview' | 'rich' | 'source'
+  /** Fork: automatic checks for official Orca releases. Absent means off — a fork build reads as
+   *  older than the same upstream release, so the official build was offered over it. */
+  officialUpdateChecks?: boolean
 }

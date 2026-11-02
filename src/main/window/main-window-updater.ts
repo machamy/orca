@@ -67,6 +67,7 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
       store.updateUI({ dismissedUpdateNudgeId: id })
     },
     getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
+    isAutomaticUpdateCheckEnabled: () => store.getSettings().officialUpdateChecks === true,
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }

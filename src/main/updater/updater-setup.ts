@@ -35,6 +35,7 @@ export type UpdaterSetupOptions = {
   getReleaseChannelOverride?: () => ReleaseChannel | null
   installMode?: UpdateInstallMode
   onBeforeQuitFailure?: PreQuitCleanupFailureMode
+  isAutomaticUpdateCheckEnabled?: () => boolean
 }
 
 export class UpdaterSetup extends UpdaterDownloadInstall {
@@ -119,6 +120,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.onBeforeQuitFailure = opts?.onBeforeQuitFailure ?? 'continue'
     this.persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
     this._getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
+    this.isAutomaticUpdateCheckEnabled = opts?.isAutomaticUpdateCheckEnabled ?? (() => true)
     this._getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
     this._getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
     this._setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
@@ -240,7 +242,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       }
       const lastCheck = this._getLastUpdateCheckAt?.() ?? null
       const msSince = lastCheck === null ? Number.POSITIVE_INFINITY : Date.now() - lastCheck
-      if (msSince >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
+      if (msSince >= AUTO_UPDATE_CHECK_INTERVAL_MS && this.isAutomaticUpdateCheckEnabled()) {
         this.runBackgroundUpdateCheck()
         this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
       }
@@ -251,7 +253,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     const lastUpdateCheckAt = opts?.getLastUpdateCheckAt?.() ?? null
     const msSinceLastCheck =
       lastUpdateCheckAt === null ? Number.POSITIVE_INFINITY : Date.now() - lastUpdateCheckAt
-    if (msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
+    if (msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS && this.isAutomaticUpdateCheckEnabled()) {
       this.runBackgroundUpdateCheck()
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
     } else {

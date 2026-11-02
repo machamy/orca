@@ -12,6 +12,7 @@ import { updaterMessageText } from '@/lib/updater-message-copy'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
+import { OfficialUpdateChecksSetting } from './official-update-checks-setting'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
@@ -261,6 +262,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                     ))}
         </p>
       </SearchableSetting>
+      <OfficialUpdateChecksSetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
     </section>

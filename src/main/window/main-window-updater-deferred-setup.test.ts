@@ -408,6 +408,8 @@ describe('completed deferred updater setup ownership', () => {
       'setPendingUpdateNudgeId',
       'setDismissedUpdateNudgeId',
       'getReleaseChannelOverride',
+      // Fork: official-release automatic-check gate.
+      'isAutomaticUpdateCheckEnabled',
       'onBeforeQuitFailure',
       'installMode'
     ])

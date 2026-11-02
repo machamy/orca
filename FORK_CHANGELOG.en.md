@@ -24,6 +24,22 @@ source.
 
 ---
 
+## machamy.24 — upstream `1.4.246` · 2026-11-02
+
+No upstream merge. Official update alerts are off by default.
+
+### Official Orca update alerts are off by default
+
+- A fork build (`1.4.246-machamy.24`) compares as **older** than the official release with the same
+  number (`1.4.246`), so Orca's "update available" card offered the official build — installing it
+  replaces the fork.
+- Background checks (startup, the daily interval, window focus, wake, update campaigns) now run only
+  when **Settings → General → Updates → "Notify about official Orca releases"** is on. Off by default.
+- Checks you start yourself (the Check for Updates button and menu item) still work.
+- A fork contract test (`updater.fork-official-checks-gate.test.ts`) pins off, on and the explicit check.
+
+---
+
 ## machamy.23 — upstream `1.4.246` · 2026-11-02
 
 Merges upstream **1.4.245 → 1.4.246** (560 commits). No new fork features.
