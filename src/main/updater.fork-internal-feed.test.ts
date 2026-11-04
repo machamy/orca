@@ -6,11 +6,15 @@ import { updaterMainWindow } from './updater-test-main-window'
 const { autoUpdaterMock, moduleFactories, resetUpdaterMocks } = await vi.hoisted(async () =>
   (await import('./updater-test-harness')).createUpdaterMocks()
 )
-const { fetchNewerReleaseTagsWithReadiness } = vi.hoisted(() => ({
-  fetchNewerReleaseTagsWithReadiness: vi.fn()
+const { fetchNewerReleaseTagsWithReadiness, setUserDefault } = vi.hoisted(() => ({
+  fetchNewerReleaseTagsWithReadiness: vi.fn(),
+  setUserDefault: vi.fn()
 }))
 
-vi.mock('electron', () => moduleFactories.electron())
+vi.mock('electron', () => ({
+  ...moduleFactories.electron(),
+  systemPreferences: { setUserDefault }
+}))
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
 vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
@@ -43,6 +47,7 @@ describe('updater internal feed (fork)', () => {
   beforeEach(() => {
     resetUpdaterMocks()
     fetchNewerReleaseTagsWithReadiness.mockReset()
+    setUserDefault.mockReset()
   })
 
   it('runs the startup check against the internal folder, never the official releases', async () => {
@@ -91,6 +96,27 @@ describe('updater internal feed (fork)', () => {
       provider: 'generic',
       url: 'https://github.com/stablyai/orca/releases/latest/download'
     })
+  })
+
+  it('keeps the .app folder through macOS updates only on internal builds', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      const { setupAutoUpdater } = await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(vi.fn()), { getLastUpdateCheckAt: () => Date.now() })
+      expect(setUserDefault).not.toHaveBeenCalled()
+
+      setupAutoUpdater(updaterMainWindow(vi.fn()), {
+        getLastUpdateCheckAt: () => Date.now(),
+        internalUpdateFeedUrl: INTERNAL_FEED
+      })
+      expect(setUserDefault).toHaveBeenCalledWith(
+        'SquirrelMacEnableDirectContentsWrite',
+        'boolean',
+        true
+      )
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('reads a rebuilt internal version as newer than the last fork build', () => {

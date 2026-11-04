@@ -24,6 +24,12 @@ source.
 
 ---
 
+## machamy.26 — upstream `1.4.246` · 2026-11-04
+
+- **In-app updates keep the `.app` folder.** Squirrel replaces `Orca.app` as a whole by default;
+  internal builds turn on `SquirrelMacEnableDirectContentsWrite` so only `Contents` is swapped and
+  the Dock pin survives the update. Public builds are unchanged.
+
 ## machamy.25 — upstream `1.4.246` · 2026-11-04
 
 No upstream merge. Defines an internal build whose built-in updater reads the company update folder.

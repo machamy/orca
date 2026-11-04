@@ -1,4 +1,4 @@
-import { app, powerMonitor } from 'electron'
+import { app, powerMonitor, systemPreferences } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
 import type { ReleaseBuildListOptions } from '../updater-release-build-cache'
@@ -147,6 +147,10 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     const autoUpdater = this.getAutoUpdater()
     configureMacShipItScheduling()
+    if (process.platform === 'darwin' && this.internalUpdateFeedUrl) {
+      // ShipIt reads this default; replacing the .app folder can detach its Dock pin.
+      systemPreferences.setUserDefault('SquirrelMacEnableDirectContentsWrite', 'boolean', true)
+    }
     autoUpdater.autoDownload = false
     if (this.activeUpdateSource === 'release') {
       autoUpdater.allowDowngrade = false
