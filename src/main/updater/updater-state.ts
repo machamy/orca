@@ -73,6 +73,7 @@ export abstract class UpdaterState {
   protected _getLastUpdateCheckAt: (() => number | null) | null = null
   // Fork: gates timer/startup/wake/nudge checks only; explicit checks always run.
   protected isAutomaticUpdateCheckEnabled: () => boolean = () => true
+  protected internalUpdateFeedUrl: string | null = null
   protected backgroundCheckLaunchPending = false
   // Retain promotion on the launch because its error event can precede the promise catch.
   protected backgroundCheckPromotedToUserInitiated = false

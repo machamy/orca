@@ -48,6 +48,7 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/components/right-sidebar/source-control/panel/SourceControlFilterPreset.test.tsx',
   'src/main/runtime/runtime-local-worktree-unity-seed.test.ts',
   'src/main/updater.fork-official-checks-gate.test.ts',
+  'src/main/updater.fork-internal-feed.test.ts',
   'src/shared/agent-hook-listener-claude-model-effort.test.ts',
   'src/shared/agent-hook-listener/providers/claude-model-effort-fields.test.ts',
   'src/shared/agent-model-badge-settings.test.ts',

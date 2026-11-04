@@ -410,6 +410,7 @@ describe('completed deferred updater setup ownership', () => {
       'getReleaseChannelOverride',
       // Fork: official-release automatic-check gate.
       'isAutomaticUpdateCheckEnabled',
+      'internalUpdateFeedUrl',
       'onBeforeQuitFailure',
       'installMode'
     ])

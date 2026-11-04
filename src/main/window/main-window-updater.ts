@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { INTERNAL_UPDATE_FEED_URL, IS_INTERNAL_BUILD } from '../../shared/internal-build'
 import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../ipc/ui'
@@ -67,7 +68,9 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
       store.updateUI({ dismissedUpdateNudgeId: id })
     },
     getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-    isAutomaticUpdateCheckEnabled: () => store.getSettings().officialUpdateChecks === true,
+    isAutomaticUpdateCheckEnabled: () =>
+      IS_INTERNAL_BUILD || store.getSettings().officialUpdateChecks === true,
+    internalUpdateFeedUrl: INTERNAL_UPDATE_FEED_URL,
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }

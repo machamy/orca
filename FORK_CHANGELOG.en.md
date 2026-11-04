@@ -24,6 +24,28 @@ source.
 
 ---
 
+## machamy.25 — upstream `1.4.246` · 2026-11-04
+
+No upstream merge. Defines an internal build whose built-in updater reads the company update folder.
+
+### Internal and open-source builds split at build time
+
+- Setting the `ORCA_INTERNAL_UPDATE_FEED_URL` build variable makes an internal build; leaving it out
+  makes an open-source one. The address lives only in the build environment, so open-source builds
+  never carry it.
+- Internal versions use `.internal.` instead of `.local.`, visible in Settings and About.
+- Internal builds check only the folder's `latest-mac.yml`. Official release lookups, update nudges
+  and build-channel switching are all blocked so two paths never overwrite the same app.
+  `officialUpdateChecks` does not apply there; Settings shows a notice instead.
+- Open-source behavior is unchanged.
+
+### One first install through the script
+
+- machamy.24 and earlier only know the official path, so they cannot find builds in the internal
+  folder. Moving to the internal build takes one run of the install command.
+
+---
+
 ## machamy.24 — upstream `1.4.246` · 2026-11-02
 
 No upstream merge. Official update alerts are off by default.

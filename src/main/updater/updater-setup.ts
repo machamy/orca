@@ -36,6 +36,7 @@ export type UpdaterSetupOptions = {
   installMode?: UpdateInstallMode
   onBeforeQuitFailure?: PreQuitCleanupFailureMode
   isAutomaticUpdateCheckEnabled?: () => boolean
+  internalUpdateFeedUrl?: string | null
 }
 
 export class UpdaterSetup extends UpdaterDownloadInstall {
@@ -121,6 +122,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
     this._getLastUpdateCheckAt = opts?.getLastUpdateCheckAt ?? null
     this.isAutomaticUpdateCheckEnabled = opts?.isAutomaticUpdateCheckEnabled ?? (() => true)
+    this.internalUpdateFeedUrl = opts?.internalUpdateFeedUrl ?? null
     this._getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
     this._getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
     this._setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
@@ -162,7 +164,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     if (this.activeUpdateSource === 'release') {
       autoUpdater.setFeedURL({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url:
+          this.internalUpdateFeedUrl ?? 'https://github.com/stablyai/orca/releases/latest/download'
       })
     }
     if (this.autoUpdaterInitialized) {

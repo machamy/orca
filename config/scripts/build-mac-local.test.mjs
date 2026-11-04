@@ -27,6 +27,12 @@ describe('createLocalBuildVersion', () => {
     expect(createLocalBuildVersion('1.0.0', 1, 'abc', null)).toBe('1.0.0-local.1.abc')
     expect(createLocalBuildVersion('1.0.0', 1, 'abc', '')).toBe('1.0.0-local.1.abc')
   })
+
+  it('names the internal edition in the version', () => {
+    expect(createLocalBuildVersion('1.4.246', 1, 'abc', '25', 'internal')).toBe(
+      '1.4.246-machamy.25.internal.1.abc'
+    )
+  })
 })
 
 describe('readForkUpstreamRelease', () => {

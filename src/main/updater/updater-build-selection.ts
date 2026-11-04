@@ -84,12 +84,15 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
     channel: ReleaseChannel,
     options?: ReleaseBuildListOptions
   ): Promise<ReleaseBuild[]> {
+    if (this.internalUpdateFeedUrl) {
+      return []
+    }
     return this.releaseBuildCache.list(channel, options)
   }
 
   /** Pin any published channel/tag, including deliberate downgrades. */
   protected async checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promise<void> {
-    if (!app.isPackaged) {
+    if (!app.isPackaged || this.internalUpdateFeedUrl) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }

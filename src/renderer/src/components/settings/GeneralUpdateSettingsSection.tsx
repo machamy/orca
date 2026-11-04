@@ -13,6 +13,7 @@ import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-che
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { OfficialUpdateChecksSetting } from './official-update-checks-setting'
+import { IS_INTERNAL_BUILD } from '../../../../shared/internal-build'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
@@ -263,7 +264,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
         </p>
       </SearchableSetting>
       <OfficialUpdateChecksSetting />
-      {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
+      {channelSwitcherRevealed && !IS_INTERNAL_BUILD ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
     </section>
   )

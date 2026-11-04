@@ -50,6 +50,11 @@ const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
   typeof orcaDiagnosticsTokenUrl === 'string' && orcaDiagnosticsTokenUrl.length > 0
     ? JSON.stringify(orcaDiagnosticsTokenUrl)
     : 'null'
+const orcaInternalUpdateFeedUrl = process.env.ORCA_INTERNAL_UPDATE_FEED_URL
+const ORCA_INTERNAL_UPDATE_FEED_URL_LITERAL =
+  typeof orcaInternalUpdateFeedUrl === 'string' && orcaInternalUpdateFeedUrl.length > 0
+    ? JSON.stringify(orcaInternalUpdateFeedUrl)
+    : 'null'
 
 const darkBuildSwitches: {
   darkBuildDefines: () => Record<string, string>
@@ -244,6 +249,7 @@ export const electronViteConfig: UserConfig = {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
+      ORCA_INTERNAL_UPDATE_FEED_URL: ORCA_INTERNAL_UPDATE_FEED_URL_LITERAL,
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
       ...DARK_BUILD_DEFINES
     },
@@ -272,6 +278,7 @@ export const electronViteConfig: UserConfig = {
     // Shared node_modules installs must not share dependency optimization state across worktrees.
     cacheDir: resolve('.cache/vite/renderer'),
     define: {
+      ORCA_INTERNAL_UPDATE_FEED_URL: ORCA_INTERNAL_UPDATE_FEED_URL_LITERAL,
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
       ...DARK_BUILD_DEFINES
     },

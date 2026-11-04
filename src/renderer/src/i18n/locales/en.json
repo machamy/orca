@@ -13796,6 +13796,7 @@
           }
         },
         "OfficialUpdateChecksSetting": {
+          "internalBuild": "Internal build. New versions come from the company update folder, and official Orca releases are never offered.",
           "title": "Notify about official Orca releases",
           "description": "Checks for official Orca releases in the background and shows an update card. Off by default in this fork build, because installing one replaces the fork. Check for Updates still works."
         }

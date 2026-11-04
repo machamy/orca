@@ -6,7 +6,13 @@ import { resolve } from 'node:path'
 // base, e.g. 1.4.169-rc.0 → 1.4.169-rc.0.machamy.<rev>.local.<ts>.<commit>. The
 // rev lives in the FORK_VERSION file and is bumped per fork milestone (see
 // FORK_CHANGELOG.md). `forkRev` is optional so upstream's plain scheme still works.
-export function createLocalBuildVersion(baseVersion, timestamp, commit, forkRev) {
+export function createLocalBuildVersion(
+  baseVersion,
+  timestamp,
+  commit,
+  forkRev,
+  edition = 'local'
+) {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(baseVersion)) {
     throw new Error(`Package version is not valid semver: ${baseVersion}`)
   }
@@ -24,8 +30,8 @@ export function createLocalBuildVersion(baseVersion, timestamp, commit, forkRev)
           .replace(/[^0-9A-Za-z-]/g, '')
           .slice(0, 32)
   const suffix = sanitizedForkRev
-    ? `machamy.${sanitizedForkRev}.local.${timestamp}.${sanitizedCommit}`
-    : `local.${timestamp}.${sanitizedCommit}`
+    ? `machamy.${sanitizedForkRev}.${edition}.${timestamp}.${sanitizedCommit}`
+    : `${edition}.${timestamp}.${sanitizedCommit}`
   return baseVersion.includes('-') ? `${baseVersion}.${suffix}` : `${baseVersion}-${suffix}`
 }
 
@@ -58,7 +64,14 @@ export function getLocalBuildIdentity() {
   const baseVersion = readForkUpstreamRelease() ?? packageJson.version
   return {
     commit,
-    version: createLocalBuildVersion(baseVersion, Date.now(), commit, readForkRevision())
+    version: createLocalBuildVersion(
+      baseVersion,
+      Date.now(),
+      commit,
+      readForkRevision(),
+      // Internal builds say so in the version shown in Settings and About.
+      process.env.ORCA_INTERNAL_UPDATE_FEED_URL ? 'internal' : 'local'
+    )
   }
 }
 
