@@ -3,7 +3,10 @@ import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitchRow } from './SettingsFormControls'
+import { Button } from '../ui/button'
 import { IS_INTERNAL_BUILD } from '../../../../shared/internal-build'
+
+const FORK_GITHUB_URL = 'https://github.com/machamy/orca'
 
 function InternalBuildUpdateNotice(): React.JSX.Element {
   return (
@@ -18,7 +21,38 @@ function InternalBuildUpdateNotice(): React.JSX.Element {
 
 /** Fork: automatic checks for official Orca releases, off unless turned on here. */
 export function OfficialUpdateChecksSetting(): React.JSX.Element {
-  return IS_INTERNAL_BUILD ? <InternalBuildUpdateNotice /> : <OfficialUpdateChecksSwitch />
+  if (IS_INTERNAL_BUILD) {
+    return <InternalBuildUpdateNotice />
+  }
+  return (
+    <>
+      <OfficialUpdateChecksSwitch />
+      <ForkUpdatesNotice />
+    </>
+  )
+}
+
+function ForkUpdatesNotice(): React.JSX.Element {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-xs text-muted-foreground">
+        {translate(
+          'auto.components.settings.OfficialUpdateChecksSetting.forkUpdates',
+          'This fork has no automatic updates. New versions are on GitHub.'
+        )}
+      </p>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={() => void window.api.shell.openUrl(FORK_GITHUB_URL)}
+      >
+        {translate(
+          'auto.components.settings.OfficialUpdateChecksSetting.openGitHub',
+          'Open GitHub'
+        )}
+      </Button>
+    </div>
+  )
 }
 
 function OfficialUpdateChecksSwitch(): React.JSX.Element {

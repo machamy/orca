@@ -24,6 +24,12 @@ source.
 
 ---
 
+## machamy.27 — upstream `1.4.246` · 2026-11-05
+
+- **Open-source builds now point to the fork on GitHub.** The update settings say the fork has no
+  automatic updates and where to find new versions, with a button that opens `machamy/orca`.
+  Internal builds don't show this.
+
 ## machamy.26 — upstream `1.4.246` · 2026-11-04
 
 - **In-app updates keep the `.app` folder.** Squirrel replaces `Orca.app` as a whole by default;
