@@ -29,6 +29,9 @@ source.
 - **Open-source builds now point to the fork on GitHub.** The update settings say the fork has no
   automatic updates and where to find new versions, with a button that opens `machamy/orca`.
   Internal builds don't show this.
+- **An agent restarting Orca no longer leaves its Claude settings in the app.** Restarting from a
+  terminal passed values like `CLAUDE_CONFIG_DIR` into the app, so new terminals ran under another
+  account. Packaged builds drop these values at startup.
 
 ## machamy.26 — upstream `1.4.246` · 2026-11-04
 

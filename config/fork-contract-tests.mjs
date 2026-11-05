@@ -49,6 +49,7 @@ export const FORK_ADDED_TESTS = [
   'src/main/runtime/runtime-local-worktree-unity-seed.test.ts',
   'src/main/updater.fork-official-checks-gate.test.ts',
   'src/main/updater.fork-internal-feed.test.ts',
+  'src/main/startup/inherited-pane-env.test.ts',
   'src/shared/agent-hook-listener-claude-model-effort.test.ts',
   'src/shared/agent-hook-listener/providers/claude-model-effort-fields.test.ts',
   'src/shared/agent-model-badge-settings.test.ts',
