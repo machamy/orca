@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setImmediate as nextEventLoopTurn } from 'node:timers/promises'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { compareAppVersions } from '../shared/app-version'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 import { updaterMainWindow } from './updater-test-main-window'
@@ -33,6 +34,7 @@ vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBui
 warmUpdaterModule()
 
 const INTERNAL_FEED = 'https://updates.example.test/orca'
+const JUST_CHECKED_AT = Date.UTC(2026, 10, 1)
 
 function expectOnlyInternalFeed(): void {
   expect(autoUpdaterMock.setFeedURL).toHaveBeenCalled()
@@ -45,9 +47,14 @@ function expectOnlyInternalFeed(): void {
 // Fork: an internal build and the official feed must never both own /Applications/Orca.app.
 describe('updater internal feed (fork)', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: JUST_CHECKED_AT })
     resetUpdaterMocks()
     fetchNewerReleaseTagsWithReadiness.mockReset()
     setUserDefault.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('runs the startup check against the internal folder, never the official releases', async () => {
@@ -64,7 +71,7 @@ describe('updater internal feed (fork)', () => {
   it('keeps Check for Updates on the internal folder for every modifier variant', async () => {
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
     setupAutoUpdater(updaterMainWindow(vi.fn()), {
-      getLastUpdateCheckAt: () => Date.now(),
+      getLastUpdateCheckAt: () => JUST_CHECKED_AT,
       internalUpdateFeedUrl: INTERNAL_FEED
     })
 
@@ -77,12 +84,12 @@ describe('updater internal feed (fork)', () => {
   it('refuses a pinned official build, even through a direct IPC call', async () => {
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
     setupAutoUpdater(updaterMainWindow(vi.fn()), {
-      getLastUpdateCheckAt: () => Date.now(),
+      getLastUpdateCheckAt: () => JUST_CHECKED_AT,
       internalUpdateFeedUrl: INTERNAL_FEED
     })
 
     checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.300' })
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await nextEventLoopTurn()
 
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
     expectOnlyInternalFeed()
@@ -90,7 +97,7 @@ describe('updater internal feed (fork)', () => {
 
   it('keeps the official feed when the build has no internal folder', async () => {
     const { setupAutoUpdater } = await loadUpdaterModule()
-    setupAutoUpdater(updaterMainWindow(vi.fn()), { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(updaterMainWindow(vi.fn()), { getLastUpdateCheckAt: () => JUST_CHECKED_AT })
 
     expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
       provider: 'generic',
@@ -102,11 +109,11 @@ describe('updater internal feed (fork)', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     try {
       const { setupAutoUpdater } = await loadUpdaterModule()
-      setupAutoUpdater(updaterMainWindow(vi.fn()), { getLastUpdateCheckAt: () => Date.now() })
+      setupAutoUpdater(updaterMainWindow(vi.fn()), { getLastUpdateCheckAt: () => JUST_CHECKED_AT })
       expect(setUserDefault).not.toHaveBeenCalled()
 
       setupAutoUpdater(updaterMainWindow(vi.fn()), {
-        getLastUpdateCheckAt: () => Date.now(),
+        getLastUpdateCheckAt: () => JUST_CHECKED_AT,
         internalUpdateFeedUrl: INTERNAL_FEED
       })
       expect(setUserDefault).toHaveBeenCalledWith(

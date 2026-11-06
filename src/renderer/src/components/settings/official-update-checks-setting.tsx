@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitchRow } from './SettingsFormControls'
 import { Button } from '../ui/button'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 import { IS_INTERNAL_BUILD } from '../../../../shared/internal-build'
 
 const FORK_GITHUB_URL = 'https://github.com/machamy/orca'
@@ -41,11 +42,7 @@ function ForkUpdatesNotice(): React.JSX.Element {
           'This fork has no automatic updates. New versions are on GitHub.'
         )}
       </p>
-      <Button
-        variant="outline"
-        size="xs"
-        onClick={() => void window.api.shell.openUrl(FORK_GITHUB_URL)}
-      >
+      <Button variant="outline" size="xs" onClick={() => openAppHttpLink(FORK_GITHUB_URL)}>
         {translate(
           'auto.components.settings.OfficialUpdateChecksSetting.openGitHub',
           'Open GitHub'
