@@ -6,6 +6,8 @@ export const claudeAccountsApi = {
   list: () => ipcRenderer.invoke('claudeAccounts:list'),
   add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null; copyLink?: boolean }) =>
     ipcRenderer.invoke('claudeAccounts:add', args),
+  addApiKey: (args: { label: string; apiKey: string }) =>
+    ipcRenderer.invoke('claudeAccounts:addApiKey', args),
   cancelPendingLogin: (): Promise<boolean> =>
     ipcRenderer.invoke('claudeAccounts:cancelPendingLogin'),
   reauthenticate: (args: { accountId: string; copyLink?: boolean }) =>

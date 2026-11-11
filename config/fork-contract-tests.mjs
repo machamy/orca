@@ -16,6 +16,8 @@
 
 /** Test files that exist only in the fork. */
 export const FORK_ADDED_TESTS = [
+  'src/main/claude-accounts/claude-api-key-account.fork.test.ts',
+  'src/main/claude-accounts/claude-profile-router-api-key.fork.test.ts',
   'src/renderer/src/components/editor/markdown-preview-reading-layout.test.ts',
   'src/renderer/src/components/editor/MarkdownPreviewBody.github.test.tsx',
   'src/renderer/src/components/editor/markdown-preview-table-widths-storage.test.ts',

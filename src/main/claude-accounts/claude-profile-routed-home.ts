@@ -21,9 +21,9 @@ export async function claudeRoutedHomeAsync(
   }
   const login = (configDir: string | undefined) =>
     claudeStateFileAsync(configDir, router.userHome).then(readClaudeFolderLoginAsync)
-  if (!(await login(profile.home))) {
+  const saved = router.savedAccount(profile.accountId)
+  if (saved?.authMethod !== 'api-key' && !(await login(profile.home))) {
     // Reuse a matching System default login until the account signs in separately.
-    const saved = router.savedAccount(profile.accountId)
     const systemDefault = await login(router.userConfigDir())
     if (saved && systemDefault && isSameClaudeLogin(saved, systemDefault)) {
       return null

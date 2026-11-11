@@ -50,6 +50,8 @@ export type ClaudeAccountsApi = {
     /** Copy the sign-in link instead of opening the default browser. */
     copyLink?: boolean
   }) => Promise<ClaudeRateLimitAccountsState>
+  /** Fork: saves an Anthropic API key as a switchable host account. */
+  addApiKey: (args: { label: string; apiKey: string }) => Promise<ClaudeRateLimitAccountsState>
   cancelPendingLogin: () => Promise<boolean>
   reauthenticate: (args: {
     accountId: string

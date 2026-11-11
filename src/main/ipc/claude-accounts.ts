@@ -11,6 +11,9 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
     (_event, args?: ClaudeAccountSelectionTarget & { copyLink?: boolean }) =>
       claudeAccounts.addAccount(args, args?.copyLink)
   )
+  ipcMain.handle('claudeAccounts:addApiKey', (_event, args: { label: string; apiKey: string }) =>
+    claudeAccounts.addApiKeyAccount(args)
+  )
   ipcMain.handle('claudeAccounts:cancelPendingLogin', () => claudeAccounts.cancelPendingLogin())
   ipcMain.handle(
     'claudeAccounts:reauthenticate',

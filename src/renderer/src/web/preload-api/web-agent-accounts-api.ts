@@ -110,6 +110,8 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
   return {
     list: async () => (await fetchAccountsSnapshot(false)).claude,
     add: rejectHostOnlySignIn,
+    // The key is stored on the host device, so a paired client cannot add one.
+    addApiKey: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: rejectHostOnlySignIn,
     waitForSignInLink: () => Promise.resolve(null),

@@ -75,7 +75,10 @@ export type ClaudeManagedAccount = {
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxAuthPath?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  /** Fork: 'api-key' accounts read an Anthropic API key through Claude's apiKeyHelper. */
+  authMethod: 'subscription-oauth' | 'api-key' | 'unknown'
+  /** Fork: last characters of an API key account's key, for telling keys apart. */
+  apiKeyHint?: string
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number
@@ -88,7 +91,10 @@ export type ClaudeManagedAccountSummary = {
   email: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  /** Fork: 'api-key' accounts read an Anthropic API key through Claude's apiKeyHelper. */
+  authMethod: 'subscription-oauth' | 'api-key' | 'unknown'
+  /** Fork: last characters of an API key account's key, for telling keys apart. */
+  apiKeyHint?: string
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number

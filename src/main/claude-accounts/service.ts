@@ -4,6 +4,7 @@ import type {
   ClaudeSignInRequest
 } from '../../shared/managed-account-types'
 import { ClaudeAccountRegistration } from './claude-account-registration'
+import { ClaudeApiKeyAccounts, type ClaudeApiKeyAccountRequest } from './claude-api-key-account'
 import {
   ClaudeAccountSelection,
   type ClaudeAccountRuntime,
@@ -24,6 +25,7 @@ export class ClaudeAccountService {
   private openWslSignInLink: ((signInLink: string) => void) | null = null
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
+  private readonly apiKeyAccounts: ClaudeApiKeyAccounts
 
   constructor(
     store: ClaudeAccountStore,
@@ -39,6 +41,18 @@ export class ClaudeAccountService {
       runtimeAuth,
       selection: this.selection
     })
+    this.apiKeyAccounts = new ClaudeApiKeyAccounts({
+      store,
+      rateLimits,
+      runtimeAuth,
+      selection: this.selection
+    })
+  }
+
+  /** Fork: saves an Anthropic API key as a host account that terminals and chats can switch to. */
+  addApiKeyAccount(request: ClaudeApiKeyAccountRequest): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() => this.apiKeyAccounts.add(request))
   }
 
   listAccounts(): ClaudeRateLimitAccountsState {
@@ -102,7 +116,19 @@ export class ClaudeAccountService {
 
   removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.remove(accountId))
+    return this.serializeMutation(async () => {
+      const apiKeyHome =
+        this.selection.findAccount(accountId)?.authMethod === 'api-key'
+          ? this.runtimeAuth.router.accountHome(accountId)
+          : null
+      const next = await this.selection.remove(accountId)
+      if (apiKeyHome) {
+        await this.apiKeyAccounts.forget(accountId, apiKeyHome).catch((error: unknown) => {
+          console.warn('[claude-accounts] Could not delete a removed account API key:', error)
+        })
+      }
+      return next
+    })
   }
 
   selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {

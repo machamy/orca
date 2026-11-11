@@ -109,6 +109,9 @@ export class ClaudeAccountSelection {
       return savedWslClaudeAccountHome(account) ? summary : { ...summary, needsSignIn: true }
     }
     const home = this.runtimeAuth.router.accountHome(account.id)
+    if (account.authMethod === 'api-key') {
+      return { ...summary, home }
+    }
     const login = readClaudeFolderLogin(claudeStateFile(home))
     if (login) {
       return {
@@ -132,6 +135,7 @@ export class ClaudeAccountSelection {
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
       wslDistro: account.wslDistro ?? null,
       authMethod: account.authMethod ?? 'unknown',
+      ...(account.apiKeyHint ? { apiKeyHint: account.apiKeyHint } : {}),
       organizationUuid: account.organizationUuid ?? null,
       organizationName: account.organizationName ?? null,
       createdAt: account.createdAt,

@@ -31,6 +31,10 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import {
+  ClaudeApiKeyAccountButton,
+  claudeApiKeyAccountDetail
+} from './claude-api-key-account-dialog'
 
 export function renderClaudeAccountsSection(
   model: AccountsPaneSectionModel,
@@ -147,6 +151,7 @@ export function renderClaudeAccountsSection(
                   />
                 ) : null}
               </ButtonGroup>
+              <ClaudeApiKeyAccountButton model={model} disabled={addDisabled} />
               {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
               {claudeAction === 'adding' &&
               !accountAdditionShownInPrompt('claude', accountOwner) ? (
@@ -322,43 +327,46 @@ export function renderClaudeAccountsSection(
                           ) : null}
                         </div>
                         <span className="truncate text-[11px] text-muted-foreground">
-                          {account.needsSignIn
-                            ? t(
-                                'accounts.claude.signInRequired',
-                                'Sign in again to use this account'
-                              )
-                            : account.organizationName
-                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}`
-                              : formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
+                          {claudeApiKeyAccountDetail(account, t) ??
+                            (account.needsSignIn
+                              ? t(
+                                  'accounts.claude.signInRequired',
+                                  'Sign in again to use this account'
+                                )
+                              : account.organizationName
+                                ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}`
+                                : formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale))}
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                        <ButtonGroup>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void reauthenticate(false)
-                            }}
-                            disabled={isRemoteAccountScope || isBusy}
-                            className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                          >
-                            {isReauthing ? (
-                              <Loader2 className="size-3 animate-spin" />
-                            ) : (
-                              <RefreshCw className="size-3" />
-                            )}
-                            {t('accounts.claude.signInAgain', 'Sign in again')}
-                          </Button>
-                          {canOfferClaudeSignInLink(accountRuntimeView.runtime) ? (
-                            <ClaudeSignInLinkMenu
+                        {account.authMethod === 'api-key' ? null : (
+                          <ButtonGroup>
+                            <Button
                               variant="ghost"
+                              size="xs"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void reauthenticate(false)
+                              }}
                               disabled={isRemoteAccountScope || isBusy}
-                              onCopyLink={() => void reauthenticate(true)}
-                            />
-                          ) : null}
-                        </ButtonGroup>
+                              className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                            >
+                              {isReauthing ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-3" />
+                              )}
+                              {t('accounts.claude.signInAgain', 'Sign in again')}
+                            </Button>
+                            {canOfferClaudeSignInLink(accountRuntimeView.runtime) ? (
+                              <ClaudeSignInLinkMenu
+                                variant="ghost"
+                                disabled={isRemoteAccountScope || isBusy}
+                                onCopyLink={() => void reauthenticate(true)}
+                              />
+                            ) : null}
+                          </ButtonGroup>
+                        )}
                         <Button
                           variant="ghost"
                           size="xs"

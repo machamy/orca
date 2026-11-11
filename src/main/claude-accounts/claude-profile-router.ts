@@ -113,10 +113,11 @@ export class ClaudeProfileRouter {
 
   /** Reuse a matching System default login until a legacy account signs in separately. */
   coveredBySystemDefault(accountId: string): boolean {
-    if (this.accountLogin(accountId)) {
+    const saved = this.savedAccount(accountId)
+    // An API key account's label is not a login, so it never stands in for System default.
+    if (saved?.authMethod === 'api-key' || this.accountLogin(accountId)) {
       return false
     }
-    const saved = this.savedAccount(accountId)
     const systemDefault = this.systemDefaultLogin()
     return Boolean(saved && systemDefault && isSameClaudeLogin(saved, systemDefault))
   }

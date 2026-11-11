@@ -28,6 +28,8 @@ source.
 
 Merged upstream through `v1.4.256` (1,996 commits, 128 conflicts). Upstream moved most of the sidebar, editor, settings and runtime folders, so the fork's features were laid back on top of the new layout.
 
+- **Claude API key accounts:** Settings → Accounts → Claude → `Add API key` saves an Anthropic API key as an account you can pick in the status bar switcher next to subscription accounts. The key stays in the macOS keychain (a 0600 file elsewhere) and the account folder's `apiKeyHelper` reads it. Keys can be added on this device (host) only, and they show no subscription usage.
+
 - **Sidebar cards:** upstream now draws cards from a JSON template. The repo-path star, the `Primary` badge and the `Default` badge are wired back through template facts (`ws.isDefaultCheckout`, `ws.isDefaultWorktree`).
 - **Markdown default view:** upstream added a setting of the same name (source or rich, rich by default). The fork adds preview and keeps preview as the default.
 - **Hide sleeping:** picking the next row after the active workspace is removed also keeps the repo-path checkout visible.
