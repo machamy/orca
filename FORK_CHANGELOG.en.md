@@ -24,6 +24,17 @@ source.
 
 ---
 
+## machamy.28 — upstream `1.4.256` · 2026-11-11
+
+Merged upstream through `v1.4.256` (1,996 commits, 128 conflicts). Upstream moved most of the sidebar, editor, settings and runtime folders, so the fork's features were laid back on top of the new layout.
+
+- **Sidebar cards:** upstream now draws cards from a JSON template. The repo-path star, the `Primary` badge and the `Default` badge are wired back through template facts (`ws.isDefaultCheckout`, `ws.isDefaultWorktree`).
+- **Markdown default view:** upstream added a setting of the same name (source or rich, rich by default). The fork adds preview and keeps preview as the default.
+- **Hide sleeping:** picking the next row after the active workspace is removed also keeps the repo-path checkout visible.
+- Fork cases inside test files upstream removed as low value moved to `*.fork.test.ts`.
+- Two pieces of upstream code moved to stay under the line limit; check them on the next merge: the two cache invalidations in `workspace-creation.ts` now run inside the fork mixin's `invalidateCachesAndSeedCreatedWorktree`, and `createSidebarHostOptionsSelector` moved unchanged from `use-section-rows.ts` to `sidebar-host-options-selector.ts`.
+- The fork gate config now follows upstream's shared-worker project; before, most fork tests were silently skipped.
+
 ## machamy.27 — upstream `1.4.246` · 2026-11-05
 
 - **Open-source builds now point to the fork on GitHub.** The update settings say the fork has no

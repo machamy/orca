@@ -29,7 +29,7 @@ vi.mock('@/store', () => ({
 }))
 // The row subscribes per repo; the fixture answers for the repo under test only.
 const worktreesForRepo = vi.fn<(repoId: string | null) => readonly Worktree[]>()
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
   useWorktreesForRepo: (repoId: string | null) => worktreesForRepo(repoId)
 }))
 // Menu-side mocks: the cross-check renders the real context-menu hook.

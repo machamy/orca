@@ -9,7 +9,7 @@
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../shared/terminal-tab-types'
+} from '../../../shared/workspace-layout/terminal-tab-types'
 
 export type FollowSwitchShellPtyRelease = {
   /** Tabs whose tab-level `ptyId` must be dropped. */

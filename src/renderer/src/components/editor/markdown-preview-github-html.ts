@@ -4,7 +4,7 @@ import {
   MARKDOWN_REHYPE_EXPANSION_PLUGINS,
   markdownPreviewSanitizeSchema,
   type MarkdownPluginList
-} from './markdown-preview-plugins'
+} from './markdown-preview/render-tree/markdown-preview-plugins'
 import rehypeSlug from 'rehype-slug'
 
 // GitHub-flavored HTML mode (fork feature): the default schema strips tags and

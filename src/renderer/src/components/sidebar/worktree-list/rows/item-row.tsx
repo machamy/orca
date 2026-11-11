@@ -1,17 +1,16 @@
 import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
-import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
+import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
+import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
-  getFolderBackedRepoWorktreeCardContentIndent,
-  getFolderBackedRepoWorktreeCardSurfaceInset,
   getLineageChildrenInlineStyle,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset,
@@ -19,7 +18,7 @@ import {
   LINEAGE_CHILDREN_INLINE_OFFSET,
   LINEAGE_NESTED_ROW_SURFACE_INSET
 } from './indentation'
-import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
+import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import { canSwitchWorktreeToDefault } from '../../default-worktree-switch-eligibility'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
@@ -29,19 +28,18 @@ import type { WorktreePointerDrag, WorktreeRowDragState } from '../drag/row-stat
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
   groupBy: WorktreeGroupBy
-  folderBackedProjectGroupIds: ReadonlySet<string>
   groupKeyByRowKey: ReadonlyMap<string, string>
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
   worktreeDragState: WorktreeRowDragState
   // Fork: default-switch drop is single-worktree only.
   worktreePointerDragRef: React.MutableRefObject<WorktreePointerDrag | null>
-  nativeLineageDropTargetId: string | null
   // Fork: default-worktree switch entry points (context menu + drag target ring).
   defaultSwitchDropTargetId: string | null
   onDefaultSwitchRequest?: (worktree: Worktree) => void
   findDefaultWorktree?: (repoId: string) => Worktree | undefined
   worktreeMap: ReadonlyMap<string, Worktree>
+  nativeLineageDropTargetIdentity: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
@@ -71,7 +69,7 @@ export type WorktreeItemRowContext = {
   onCardDragEnd: () => void
 }
 
-// Handle plain rows, inherited lineage offsets and folder-backed project geometry separately.
+// Handle plain rows and inherited lineage offsets separately.
 function getWorktreeItemRowGeometry(
   ctx: WorktreeItemRowContext,
   itemRow: WorktreeItemRow,
@@ -82,31 +80,13 @@ function getWorktreeItemRowGeometry(
     return { surfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET, cardContentIndent: 0 }
   }
 
-  const projectGroupId = itemRow.repo?.projectGroupId
-  const isFolderBackedRepoChild =
-    ctx.groupBy === 'repo' &&
-    Boolean(projectGroupId && ctx.folderBackedProjectGroupIds.has(projectGroupId))
-  const getCardContentIndent = (lineageDepth: number): number =>
-    isFolderBackedRepoChild
-      ? getFolderBackedRepoWorktreeCardContentIndent({
-          groupDepth: itemRow.groupDepth,
-          lineageDepth
-        })
-      : getWorktreeCardContentIndent({
-          isGrouped: ctx.groupBy !== 'none',
-          groupDepth: itemRow.groupDepth,
-          lineageDepth
-        })
-  const paddingLeft = getCardContentIndent(itemRow.depth)
-  const surfaceInset = isFolderBackedRepoChild
-    ? getFolderBackedRepoWorktreeCardSurfaceInset({
-        groupDepth: itemRow.groupDepth,
-        lineageDepth: itemRow.depth
-      })
-    : getWorktreeCardSurfaceInset({
-        isGrouped: ctx.groupBy !== 'none',
-        groupDepth: itemRow.groupDepth
-      })
+  const isGrouped = ctx.groupBy !== 'none'
+  const paddingLeft = getWorktreeCardContentIndent({
+    isGrouped,
+    groupDepth: itemRow.groupDepth,
+    lineageDepth: itemRow.depth
+  })
+  const surfaceInset = getWorktreeCardSurfaceInset({ isGrouped, groupDepth: itemRow.groupDepth })
   // Fork (C10): the folder axis indents only top-level rows — a nested lineage
   // child already sits inside a parent card that carries the folder offset.
   const worktreeFolderIndent = getWorktreeFolderMemberIndent(itemRow.worktreeFolderDepth ?? 0)
@@ -132,8 +112,8 @@ export function renderWorktreeItemRow(
   const isMultiSelected = ctx.selectedWorktreeIds.has(worktreeIdentity)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
-    (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
-      ctx.nativeLineageDropTargetId === itemRow.worktree.id)
+    (ctx.worktreeDragState.lineageDropTargetIdentity === worktreeIdentity ||
+      ctx.nativeLineageDropTargetIdentity === worktreeIdentity)
   const isActiveWorktree = isActiveSidebarWorkspace(itemRow.worktree, {
     worktreeId: ctx.activeWorktreeId,
     hostId: ctx.activeWorkspaceExecutionHostId ?? null
@@ -262,7 +242,7 @@ export function renderWorktreeItemRow(
 // Rebuild the visible lineage subtree so each card renders its own children inline.
 export function renderWorktreeLineageDescendants(
   ctx: WorktreeItemRowContext,
-  parent: WorktreeItemRow,
+  parent: { depth: number },
   descendants: readonly WorktreeItemRow[]
 ): React.ReactNode | undefined {
   const childNodes: React.ReactNode[] = []

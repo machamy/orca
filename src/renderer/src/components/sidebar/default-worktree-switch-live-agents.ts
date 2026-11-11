@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 /** Agents still mid-turn in either swapped worktree. The swap moves both directories,
  *  so absolute paths these agents cached in their context (edit targets, spawn cwds)

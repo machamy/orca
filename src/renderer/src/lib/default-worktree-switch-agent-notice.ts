@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { countActiveAgentsForDefaultSwitch } from './default-worktree-switch-live-agents'
 
 const entry = (overrides: Partial<AgentStatusEntry>): AgentStatusEntry =>

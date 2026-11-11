@@ -1,6 +1,7 @@
 /* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the close-routing
    ipc-events specs, not shipped code, and it falls outside the *.test / *.spec / tests glob set.
    Fork: split out of ipc-events-close-routing-test-harness to keep that file under its line cap. */
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 
@@ -67,6 +68,7 @@ export function mockCloseRoutingModules({
         activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
         browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
         browserPagesByWorkspace: {},
+        browserAnnotationsByPageId: {},
         openFiles: [],
         unifiedTabsByWorktree: {},
         closeBrowserTab: vi.fn(),
@@ -77,35 +79,32 @@ export function mockCloseRoutingModules({
     }
   }
 
-  vi.doMock('../store', () => appStoreModule)
-  vi.doMock('@/store', () => appStoreModule)
+  vi.doMock('../store/index', () => appStoreModule)
+  vi.doMock('@/store/index', () => appStoreModule)
 
-  vi.doMock('@/lib/ui-zoom', () => ({
+  vi.doMock('@/app-shell/chrome/ui-zoom', () => ({
     applyUIZoom: vi.fn()
   }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('@/lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
-  vi.doMock('@/lib/editor-font-zoom', () => ({
-    nextEditorFontZoomLevel: vi.fn(() => 0),
-    computeEditorFontSize: vi.fn(() => 13)
-  }))
-  vi.doMock('@/components/settings/SettingsConstants', () => ({
+  vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+    ...(await importOriginal<typeof UIZoomLevelModule>()),
     zoomLevelToPercent: vi.fn(() => 100),
-    ZOOM_MIN: -3,
-    ZOOM_MAX: 3
+    UI_ZOOM_MIN: -3,
+    UI_ZOOM_MAX: 3
   }))
-  vi.doMock('@/lib/zoom-events', () => ({
+  vi.doMock('@/app-shell/chrome/zoom-events', () => ({
     dispatchZoomLevelChanged: vi.fn()
   }))
-  vi.doMock('@/lib/workspace-session-host-persistence', () => ({
+  vi.doMock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({
     persistWorkspaceSessionByHost: persistWorkspaceSession
   }))
-  vi.doMock('@/lib/workspace-session', () => ({
+  vi.doMock('@/lib/workspace/persistence/workspace-session', () => ({
     buildWorkspaceSessionPayload: vi.fn(() => ({}))
   }))
 }

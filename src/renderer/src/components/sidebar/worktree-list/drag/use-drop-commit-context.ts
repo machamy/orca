@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { useWorktreeDragRuntime } from './use-runtime'
@@ -25,11 +26,11 @@ export function useWorktreeDropCommitContext(args: {
   const getEligibleDropTarget = useCallback(
     (
       target: WorktreeSidebarLineageDropTarget,
-      draggedIds: readonly string[]
+      pickedCopies: DraggedWorktreeCopies
     ): WorktreeSidebarLineageDropTarget =>
       defaultSwitchDrop.filterEligibleDefaultSwitchTarget(
-        lineageDrop.getEligibleLineageDropTarget(target, draggedIds),
-        draggedIds
+        lineageDrop.getEligibleLineageDropTarget(target, pickedCopies),
+        pickedCopies.map((copy) => copy.id)
       ),
     [defaultSwitchDrop, lineageDrop]
   )

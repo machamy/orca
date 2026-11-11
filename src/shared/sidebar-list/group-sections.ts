@@ -13,17 +13,15 @@ import {
   getProjectHeaderHostRepos
 } from './host-labels'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type { ProjectGroupingIndex } from '../project-section-grouping'
 import {
-  buildFolderWorkspaceRow,
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
 } from './row-builders'
-import {
-  appendWorktreeRowsWithFolders,
-  type SidebarWorktreeFolderModel
-} from './worktree-folder-rows'
+import type { SidebarWorktreeFolderModel } from './worktree-folder-rows'
+import { appendSectionWorktreeRows } from './section-worktree-rows'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -53,6 +51,7 @@ export type SectionAppendContext = {
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
   /** Fork: worktree folders, resolved once per project per host; absent = none. */
   worktreeFolderModel?: SidebarWorktreeFolderModel | null
+  folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
 }
 
 function getProjectHeaderHostScope(
@@ -101,9 +100,7 @@ export function appendOrderedGroups(
     projectIndex,
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
-    pendingByRepo,
-    mixedWorktreeHostContextLabels,
-    occurrencePlan
+    pendingByRepo
   } = ctx
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
@@ -189,7 +186,6 @@ export function appendOrderedGroups(
             result.push(
               buildImportedWorktreesCardRow(
                 candidate,
-                'repo-group',
                 ctx.noticeHostContextLabelByRepoId?.get(repoId)
               )
             )
@@ -217,25 +213,11 @@ export function appendOrderedGroups(
         groupBy === 'repo'
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
           : undefined
-      appendWorktreeRowsWithFolders(
-        result,
-        repoOf,
-        occurrencePlan,
-        {
-          collapsedGroups,
-          groupDepth: projectGroupDepth,
-          sectionKey: key,
-          hostContextLabelByRepoId,
-          hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
-          groupBy,
-          defaultHostId,
-          repoMap
-        },
-        ctx.worktreeFolderModel ?? null
-      )
-      for (const pair of folderPairs) {
-        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
-      }
+      appendSectionWorktreeRows(ctx, {
+        sectionKey: key,
+        groupDepth: projectGroupDepth,
+        hostContextLabelByRepoId
+      })
     }
   }
 }

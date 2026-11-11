@@ -17,11 +17,11 @@ const updateBrowserPageState = vi.fn()
 
 let browserPagesByWorkspace: Record<string, BrowserPageState[]> = {}
 
-vi.mock('@/lib/user-opened-local-path', () => ({
+vi.mock('@/lib/files/access/user-opened-local-path', () => ({
   statUserOpenedPath: (...args: unknown[]) => statUserOpenedPath(...args)
 }))
 
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   requireRuntimeTargetForFileOwner: (
     _state: unknown,
     _worktreeId: unknown,

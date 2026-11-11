@@ -1,5 +1,4 @@
 import type { AppState } from '../../../types'
-import { remapPathInsideWorktreeRoot } from '../../../../../../shared/cross-platform-path'
 import type {
   BrowserPage,
   BrowserWorkspace
@@ -7,12 +6,20 @@ import type {
 import { remapBrowserPageDocLocation } from '../../../../../../shared/browser-page-doc-location'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
+import { getWorktreeIdFromVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
-} from '../../recently-closed-tabs'
-import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
+} from '../../../terminals/recently-closed-terminal-tabs'
+import '../../tabs/worktree-layout-lifecycle'
+import { renameWorktreeLayoutKeys } from '../../tabs/rename-worktree-layout'
+import { replaceRecordEntries } from '../../../keyed-record-transitions'
+import {
+  rekeyAgentStatusWorktree,
+  remapClosedEditorFilePathUnderRoot,
+  remapExpandedDirsUnderRoot,
+  remapStartupCwdUnderRoot
+} from './worktree-identity-rename-path-remaps'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
 // Inventory non-layout worktree-keyed maps; layout migrates separately, while surviving tab/file IDs keep their keys.
@@ -39,6 +46,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'gitBranchCompareRequestStatusHeadByWorktree',
   'explorerDisplayRootByWorktree',
   'showDotfilesByWorktree',
+  'gitGraphFiltersByWorktree',
   'expandedDirs',
   'defaultTerminalTabsAppliedByWorktreeId',
   'recentlyClosedTabKindsByWorktree'
@@ -72,13 +80,7 @@ export function buildWorktreeRenameState(
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
   const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
   const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
-  const withRemappedStartupCwd = <T extends { startupCwd?: string }>(value: T): T => {
-    if (!value.startupCwd || !oldWorktreePath || !newWorktreePath) {
-      return value
-    }
-    const remapped = remapPathInsideWorktreeRoot(oldWorktreePath, newWorktreePath, value.startupCwd)
-    return remapped === null ? value : { ...value, startupCwd: remapped }
-  }
+  const roots = { oldWorktreePath, newWorktreePath }
   const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
     const renamedValue = withNewWorktreeId(value)
     return value.docLocation?.worktreeId === oldWorktreeId
@@ -103,16 +105,7 @@ export function buildWorktreeRenameState(
         workspace: withNewBrowserWorktreeId(snapshot.workspace),
         pages: snapshot.pages.map(withNewBrowserWorktreeId)
       })),
-    // Fork: the values are absolute dir paths under the old root — without the
-    // remap the file tree renders fully collapsed in both swapped workspaces.
-    expandedDirs: (dirs: Set<string>) =>
-      oldWorktreePath && newWorktreePath
-        ? new Set(
-            [...dirs].map(
-              (dir) => remapPathInsideWorktreeRoot(oldWorktreePath, newWorktreePath, dir) ?? dir
-            )
-          )
-        : dirs,
+    expandedDirs: (dirs: Set<string>) => remapExpandedDirsUnderRoot(roots, dirs),
     fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
       ...searchState,
       resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
@@ -140,23 +133,10 @@ export function buildWorktreeRenameState(
     renamed.lastVisitedAtByWorktreeId = nextVisitRecency
   }
   // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
-  // Fork: reopen-closed-tab loads snapshot.filePath verbatim — an un-remapped
-  // path serves the OTHER checkout's file after a move/swap.
   renameKey(
     'recentlyClosedEditorTabsByWorktree',
     (files: { worktreeId: string; filePath?: string }[]) =>
-      files.map((file) => {
-        const moved = withNewWorktreeId(file)
-        if (!moved.filePath || !oldWorktreePath || !newWorktreePath) {
-          return moved
-        }
-        const remapped = remapPathInsideWorktreeRoot(
-          oldWorktreePath,
-          newWorktreePath,
-          moved.filePath
-        )
-        return remapped === null ? moved : { ...moved, filePath: remapped }
-      })
+      files.map((file) => remapClosedEditorFilePathUnderRoot(roots, withNewWorktreeId(file)))
   )
   // Remap absolute startupCwd in reopen snapshots or Cmd+Shift+T spawns into the vanished old directory.
   renameKey('recentlyClosedTerminalTabsByWorktree', (snapshots: ClosedTerminalTabSnapshot[]) =>
@@ -246,41 +226,30 @@ export function buildWorktreeRenameState(
     s.pairedTerminalTabCloseIntentsByEnvironment
   )
   const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
-  const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
-    (record) => record.worktreeId === oldWorktreeId
+  const repointedSleepingSessions = Object.entries(currentSleepingAgentSessionsByPaneKey).flatMap(
+    ([paneKey, record]) =>
+      record.worktreeId === oldWorktreeId
+        ? [[paneKey, { ...record, worktreeId: newWorktreeId }] as const]
+        : []
   )
+  const sleepingAgentSessionsByPaneKey =
+    repointedSleepingSessions.length > 0
+      ? replaceRecordEntries(currentSleepingAgentSessionsByPaneKey, repointedSleepingSessions)
+      : s.sleepingAgentSessionsByPaneKey
+  // Groups keep their ids across the rename, so their chooser marks move with them.
+  const splitLandingGroupIds = Object.values(s.splitLandingGroupIds ?? {}).includes(oldWorktreeId)
     ? Object.fromEntries(
-        Object.entries(currentSleepingAgentSessionsByPaneKey).map(([paneKey, record]) => [
-          paneKey,
-          record.worktreeId === oldWorktreeId ? { ...record, worktreeId: newWorktreeId } : record
+        Object.entries(s.splitLandingGroupIds).map(([groupId, worktreeId]) => [
+          groupId,
+          worktreeId === oldWorktreeId ? newWorktreeId : worktreeId
         ])
       )
-    : s.sleepingAgentSessionsByPaneKey
-  // Fork (default-worktree switch): live agent rows carry a worktreeId used for
-  // sidebar attribution when the tab lookup misses; stale ids strand the chip
-  // on the swapped-away side.
-  const currentAgentStatuses = s.agentStatusByPaneKey ?? {}
-  const agentStatusByPaneKey = Object.values(currentAgentStatuses).some(
-    (entry) => entry.worktreeId === oldWorktreeId
-  )
-    ? Object.fromEntries(
-        Object.entries(currentAgentStatuses).map(([paneKey, entry]) => [
-          paneKey,
-          entry.worktreeId === oldWorktreeId ? { ...entry, worktreeId: newWorktreeId } : entry
-        ])
-      )
-    : s.agentStatusByPaneKey
+    : s.splitLandingGroupIds
 
   return {
-    ...(agentStatusByPaneKey !== s.agentStatusByPaneKey
-      ? { agentStatusByPaneKey, agentStatusEpoch: s.agentStatusEpoch + 1 }
-      : {}),
-    ...renameWorktreeLayoutKeys(
-      s,
-      oldWorktreeId,
-      newWorktreeId,
-      withNewBrowserWorktreeId,
-      withRemappedStartupCwd
+    ...rekeyAgentStatusWorktree(s, oldWorktreeId, newWorktreeId),
+    ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId, (tab) =>
+      remapStartupCwdUnderRoot(roots, tab)
     ),
     ...(renamed as Partial<AppState>),
     ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),
@@ -296,6 +265,7 @@ export function buildWorktreeRenameState(
     ...(sleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
       ? { sleepingAgentSessionsByPaneKey }
       : {}),
+    ...(splitLandingGroupIds !== s.splitLandingGroupIds ? { splitLandingGroupIds } : {}),
     ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
       ? { closedTerminalTabTombstonesByTabId }
       : {}),

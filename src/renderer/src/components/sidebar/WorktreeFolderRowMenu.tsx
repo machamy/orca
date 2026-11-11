@@ -17,8 +17,8 @@ import { compareWorktreeFolderSiblings } from '../../../../shared/worktree-folde
 import type { WorktreeFolderRow } from '../../../../shared/sidebar-list/row-types'
 import { collectRawWorktreeFolderMemberIds } from '@/store/slices/worktree-folder-membership'
 import { wouldCreateWorktreeFolderCycle } from '@/store/slices/worktree-folders'
-import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { ProjectGroupNameDialog } from './worktree-list/rows/ProjectGroupNameDialog'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import {
   buildWorktreeFolderDeletePlan,
   WorktreeFolderDeleteDialog,

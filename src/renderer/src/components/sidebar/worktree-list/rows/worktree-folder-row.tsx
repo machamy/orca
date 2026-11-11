@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   WorktreeFolderRow,
   WorktreeGroupBy

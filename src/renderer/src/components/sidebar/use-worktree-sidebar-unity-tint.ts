@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 
 import { useAppStore } from '@/store'
-import { useWorktreesForRepo } from '@/store/selectors'
+import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import { isLocallyRunnableUnityRepo } from '../../../../shared/unity-repo-eligibility'
 import {

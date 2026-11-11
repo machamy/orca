@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { mockCloseRoutingModules } from './ipc-events-close-routing-module-mocks'
-import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surface-close-target'
 import { createIdleSshApiStub } from './ipc-events-ssh-api-test-fixtures'
 
 export type RequestTabCloseListener = (data: {
@@ -101,6 +101,7 @@ export async function useIpcEventsForCloseRouting({
         onRequestTerminalCreate: () => () => {},
         onPublishAgentLaunchTab: () => () => {},
         onRevealTerminalPane: () => () => {},
+        onApplyAgentPaneActivity: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
         onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { worktree as worktreeFixture } from './worktree-list-groups-test-fixtures'
+import { worktree as worktreeFixture } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 import {
   convertWorktreeToFolder,
   getDirectWorktreeLineageChildren,

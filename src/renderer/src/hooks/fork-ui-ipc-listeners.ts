@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { runDefaultWorktreeSwitchFlow } from '@/lib/default-worktree-switch-flow'
 import { areRuntimePathsEqual } from '../../../shared/worktree/ownership'
 

@@ -1,18 +1,19 @@
+import { getWorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import {
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
   isWorkspaceKanbanSidebarDropPointInBoard,
   resolveWorkspaceKanbanSidebarFullLaneDropIndex
-} from '../../workspace-kanban-sidebar-drop'
-import { resolveWorkspaceKanbanCardDropCommitTarget } from '../../workspace-kanban-card-pointer-drag-dom'
-import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
-import { resolveWorktreeSidebarStatusDropCommitTarget } from '../../worktree-sidebar-drop-preview'
+} from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
+import { resolveWorkspaceKanbanCardDropCommitTarget } from '../../workspace-board/drag/workspace-kanban-card-pointer-drag-dom'
+import { getFullDropIndexForWorktreeDragUnit } from './worktree-drag-units'
+import { resolveWorktreeSidebarStatusDropCommitTarget } from './worktree-sidebar-drop-preview'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
 import type {
   WorktreeDropCommitContext,
   WorktreeStatusDropAtIndexArgs
 } from './drop-commit-context'
-import type { WorktreeSidebarStatusDropTarget } from '../../worktree-sidebar-drop-preview'
+import type { WorktreeSidebarStatusDropTarget } from './worktree-sidebar-drop-preview'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET, type WorktreePointerDrag } from './row-state'
 
 type PointerDropCommitArgs = {
@@ -25,7 +26,7 @@ type PointerDropCommitArgs = {
 
 function commitStatusOrPinDrop(
   args: PointerDropCommitArgs,
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null },
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null },
   dropIndex: number | null
 ): void {
   const { drag, ctx } = args
@@ -86,7 +87,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
             y: event.clientY
           })
         : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-      drag.draggedIds
+      drag.pickedCopies
     )
     if (preferredStatusTarget.defaultSwitchTargetId) {
       ctx.commitWorktreeDefaultSwitchDrop(
@@ -96,8 +97,11 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       ctx.clearWorktreeDrag()
       return
     }
-    if (preferredStatusTarget.lineageParentId) {
-      ctx.commitWorktreeLineageParentDrop(drag.draggedIds, preferredStatusTarget.lineageParentId)
+    if (preferredStatusTarget.lineageParentIdentity) {
+      ctx.commitWorktreeLineageParentDrop(
+        drag.pickedCopies,
+        preferredStatusTarget.lineageParentIdentity
+      )
       ctx.clearWorktreeDrag()
       return
     }
@@ -133,7 +137,9 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       })
       ctx.clearReorderedWorktreeParents({
         draggedIds: drag.draggedIds,
-        sourceGroupKey: drag.sourceGroupKey
+        sourceGroupKey: drag.sourceGroupKey,
+        pickedCopies: drag.pickedCopies,
+        dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
       })
     } else if (ctx.scrollRef.current) {
       const currentPreview = preferredStatusTarget.status
@@ -152,8 +158,8 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       })
       if (target.defaultSwitchTargetId) {
         ctx.commitWorktreeDefaultSwitchDrop(drag.draggedIds, target.defaultSwitchTargetId)
-      } else if (target.lineageParentId) {
-        ctx.commitWorktreeLineageParentDrop(drag.draggedIds, target.lineageParentId)
+      } else if (target.lineageParentIdentity) {
+        ctx.commitWorktreeLineageParentDrop(drag.pickedCopies, target.lineageParentIdentity)
       } else {
         commitStatusOrPinDrop(args, target, statusDrop?.dropIndex ?? null)
       }

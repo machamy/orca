@@ -8,7 +8,7 @@ import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
 import { useAppStore } from '@/store'
 import type { WorktreeFolderRow } from '../../../../shared/sidebar-list/row-types'
 import { WorktreeFolderRowMenu } from './WorktreeFolderRowMenu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 
 const initialState = useAppStore.getState()
 

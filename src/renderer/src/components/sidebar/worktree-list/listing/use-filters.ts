@@ -5,13 +5,12 @@ import {
   selectSidebarFilterState,
   sidebarHasActiveFilters,
   sidebarWorkspaceRowFilters
-} from '../../sidebar-filter-actions'
+} from '../controls/sidebar-filter-actions'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   activeWorkspaceRowFilterKeys,
-  isSleepingSweepExempt,
   type WorkspaceRowFilters
 } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../../shared/workspace-view/workspace-host-visibility'
@@ -28,20 +27,13 @@ import {
   isDefaultBranchWorkspaceAtRepoPath,
   isDetachedHeadWorkspace
 } from '../../../../../../shared/worktree/workspace-kinds'
-import { isRepoPathEntryPoint } from '../../../../../../shared/worktree/ownership'
 import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/host-filtering'
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../../../shared/workspace-creator-visibility'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
-import {
-  getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs,
-  getWorktreeIdsWithStructuredChat
-} from '../../visible-worktree-activity-inputs'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { createRepoPathSleepingSweepHiddenCheck } from './sleeping-sweep-repo-path-visibility'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -98,31 +90,7 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
     }
   },
   hideSleepingWorkspaces: ({ state, worktree, repo }) => {
-    const tabsByWorktree = getVisibleWorktreeTerminalActivityTabs(state.tabsByWorktree)
-    const browserTabsByWorktree = getVisibleWorktreeBrowserActivityTabs(state.browserTabsByWorktree)
-    const liveAgentWorktrees = getWorktreeIdsWithLiveAgent(
-      state.agentStatusByPaneKey,
-      tabsByWorktree,
-      getAgentStatusEpochNow(state.agentStatusEpoch)
-    )
-    if (
-      // Fork: the repo-path checkout is the entry point after an in-place default switch.
-      !isSleepingSweepExempt(
-        isRepoPathEntryPoint(worktree, repo),
-        state.alwaysShowDefaultBranchWorkspace
-      ) &&
-      isInactiveWorkspace(
-        worktree.id,
-        tabsByWorktree,
-        state.ptyIdsByTabId,
-        browserTabsByWorktree,
-        liveAgentWorktrees,
-        getWorktreeIdsWithStructuredChat(
-          state.unifiedTabsByWorktree,
-          state.structuredChatSleptAtByPaneKey
-        )
-      )
-    ) {
+    if (createRepoPathSleepingSweepHiddenCheck(state)(worktree, repo)) {
       state.setShowSleepingWorkspaces(true)
     }
   },

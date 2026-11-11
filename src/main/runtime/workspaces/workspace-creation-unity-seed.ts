@@ -13,4 +13,11 @@ export abstract class OrcaRuntimeWithUnitySeedAfterCreate extends OrcaRuntimeWit
       offer: () => this.notifier?.unityAutoSeedOffer?.(repo.id, worktreePath)
     })
   }
+
+  /** Upstream's post-create cache invalidation followed by the seed, so the create path keeps a single fork call. */
+  protected invalidateCachesAndSeedCreatedWorktree(repo: Repo, worktreePath: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
+    this.scheduleUnitySeedForCreatedWorktree(repo, worktreePath)
+  }
 }

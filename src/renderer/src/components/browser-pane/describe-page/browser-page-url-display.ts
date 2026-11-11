@@ -1,12 +1,13 @@
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
-import { detectLanguage } from '@/lib/language-detect'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
 
 export function getBrowserPageRuntimeEnvironmentId(

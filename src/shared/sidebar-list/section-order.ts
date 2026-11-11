@@ -1,62 +1,15 @@
 import type { Repo } from '../repo-types'
-import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
-import type { ProjectSectionModel } from '../project-section-grouping'
+import type { Worktree } from '../worktree/types'
 import { isDefaultCheckoutWorkspace } from '../worktree/ownership'
-import { ALL_GROUP_KEY } from './group-keys'
-import type { SidebarPRGroupReader, WorktreeGroupBy } from './row-types'
-import { getGroupKeyForWorktree } from './worktree-group-keys'
-
-export function getRenderedNaturalAnchorRepoIds({
-  groupBy,
-  worktrees,
-  repoMap,
-  prGroupOf,
-  collapsedGroups,
-  workspaceStatuses,
-  projectGrouping
-}: {
-  groupBy: WorktreeGroupBy
-  worktrees: readonly Worktree[]
-  repoMap: Map<string, Repo>
-  prGroupOf: SidebarPRGroupReader
-  collapsedGroups: ReadonlySet<string>
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  projectGrouping?: ProjectSectionModel
-}): Set<string> {
-  const renderedRepoIds = new Set<string>()
-  if (groupBy === 'none') {
-    if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-      for (const worktree of worktrees) {
-        renderedRepoIds.add(worktree.repoId)
-      }
-    }
-    return renderedRepoIds
-  }
-  if (groupBy === 'repo') {
-    for (const worktree of worktrees) {
-      renderedRepoIds.add(worktree.repoId)
-    }
-    return renderedRepoIds
-  }
-  for (const worktree of worktrees) {
-    const groupKey = getGroupKeyForWorktree(
-      groupBy,
-      worktree,
-      repoMap,
-      prGroupOf,
-      workspaceStatuses,
-      projectGrouping
-    )
-    if (groupKey && !collapsedGroups.has(groupKey)) {
-      renderedRepoIds.add(worktree.repoId)
-    }
-  }
-  return renderedRepoIds
-}
+import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 export function orderMainWorktreeFirst<T extends { isMainWorktree?: boolean }>(
-  worktrees: T[]
+  worktrees: T[],
+  sortBy: WorkspaceSortBy
 ): T[] {
+  if (sortBy === 'manual') {
+    return worktrees
+  }
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
   if (mainWorktrees.length === 0) {
     return worktrees
@@ -67,8 +20,12 @@ export function orderMainWorktreeFirst<T extends { isMainWorktree?: boolean }>(
 
 export function orderDefaultCheckoutFirst(
   worktrees: Worktree[],
-  repoMap: ReadonlyMap<string, Repo>
+  repoMap: ReadonlyMap<string, Repo>,
+  sortBy?: WorkspaceSortBy
 ): Worktree[] {
+  if (sortBy === 'manual') {
+    return worktrees
+  }
   // Fork: anchor the repo-path checkout, not isMainWorktree — after an in-place
   // default-worktree switch git's main flag follows the displaced checkout.
   let defaults = worktrees.filter((worktree) =>

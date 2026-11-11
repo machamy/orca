@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { DefaultWorktreeSwitchFirstRunWarning } from './DefaultWorktreeSwitchFirstRunWarning'
 import {
   DEFAULT_SWITCH_NOTIFY_SCOPE,

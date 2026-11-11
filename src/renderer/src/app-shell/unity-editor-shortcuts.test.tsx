@@ -12,14 +12,14 @@ import {
   getEffectiveKeybindingsForAction,
   keybindingMatchesAction
 } from '../../../shared/keybindings'
-import { groupDefinitions } from '../components/settings/shortcut-groups'
+import { groupDefinitions } from '../components/settings/shortcuts/shortcut-groups'
 import { shouldOfferUnityCacheCopy } from '../components/sidebar/unity-cache-copy-offer'
 import { unityFocusFailureMessage } from '../components/sidebar/unity-focus-failure-message'
 import { isLocallyRunnableUnityWorkspace } from '../../../shared/unity-repo-eligibility'
 import type { Repo } from '../../../shared/repo-types'
 import type { UnityWorktreeStatus } from '../../../shared/unity-worktree'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { ActivePluginCommand } from '../store/plugin-panels'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { matchUnityEditorShortcut } from './unity-editor-shortcut-match'
 
 const UNITY_CHORD = { key: 'u', code: 'KeyU', control: false, alt: true, meta: true, shift: false }
@@ -207,9 +207,13 @@ type SelectorState = {
 
 const selectorState: SelectorState = { activeWorktree: null, repo: null }
 
-vi.mock('../store/selectors', () => ({
-  useActiveWorktree: () => selectorState.activeWorktree,
-  useRepoById: () => selectorState.repo,
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
+  useActiveWorktree: () => selectorState.activeWorktree
+}))
+vi.mock('@/store/repos/use-repository-catalog', () => ({
+  useRepoById: () => selectorState.repo
+}))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
   useAllWorktrees: () => (selectorState.activeWorktree ? [selectorState.activeWorktree] : [])
 }))
 
@@ -231,7 +235,7 @@ vi.mock('../store', () => ({
 
 let activePluginCommands: ActivePluginCommand[] = []
 
-vi.mock('../store/plugin-panels', () => ({
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
   usePluginCommands: () => activePluginCommands
 }))
 

@@ -17,7 +17,7 @@ vi.mock('@/i18n/i18n', () => ({
       : fallback
 }))
 const breadcrumb = vi.fn()
-vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
+vi.mock('@/diagnostics/crash-reporting/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: (...args: unknown[]) => breadcrumb(...args)
 }))
 const runFlow = vi.fn()

@@ -9,18 +9,18 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   createCompatibleRuntimeStatusResponse,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { createWorktreeSlice } from './worktrees'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { createWorktreeSlice } from './worktrees/create-worktree-slice'
 import { createWorktreeFolderSlice, wouldCreateWorktreeFolderCycle } from './worktree-folders'
-import { makeWorktree } from './worktrees-slice-test-fixtures'
-import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
+import { makeWorktree } from './worktrees/worktree.test-fixture'
+import { makeDetectedResult } from './worktrees/listing/worktrees-detected-listing-fixtures'
 import {
   mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall
-} from './worktrees-slice-test-harness'
+} from './worktrees/worktrees-slice-test-harness'
 
 vi.mock('sonner', () => ({
   toast: {

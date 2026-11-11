@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { UnitySidebarTintMode } from '../../../../shared/repo-types'
 
 /**

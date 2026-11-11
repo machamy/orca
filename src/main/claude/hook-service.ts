@@ -4,21 +4,22 @@ import {
   listClaudeProfileHomes,
   listClaudeProfileHomesAsync
 } from '../claude-accounts/claude-profile-homes'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import {
-  buildManagedCommandHook,
-  readHooksJson,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { buildManagedCommandHook } from '../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import { getManagedScript } from './hook-script'
 import {
   removeClaudeAgentViewRemote,
@@ -35,7 +36,7 @@ import {
 
 export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
-import { installClaudeManagedStatusLine, retireClaudeManagedStatusLine } from './statusline-install'
+import { installBadgedStatusLine, retireBadgedStatusLine } from './statusline-with-model-badge'
 import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
 import * as modelBadge from './statusline-model-badge-wrapper'
 import {
@@ -219,12 +220,9 @@ export class ClaudeHookService {
     }
     // Profiles inherit statusLine from the default-home settings copy.
     if (options.configDir === undefined && plan.statusLine === 'install') {
-      nextConfig = installClaudeManagedStatusLine(nextConfig, this.options.settings)
-      nextConfig = modelBadge.installModelBadgeStatusLineWrapper(nextConfig, this.options.settings)
+      nextConfig = installBadgedStatusLine(nextConfig, this.options.settings)
     } else if (options.configDir === undefined && plan.statusLine === 'retire') {
-      // Fork: unwrap first so upstream still recognizes, and retires, its own entry.
-      nextConfig = modelBadge.restoreModelBadgeStatusLine(nextConfig, this.options.settings).config
-      nextConfig = retireClaudeManagedStatusLine(nextConfig, this.options.settings)
+      nextConfig = retireBadgedStatusLine(nextConfig, this.options.settings)
     }
     writeHooksJson(configPath, nextConfig)
     return this.getStatus(options)

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callRuntimeRpc = vi.fn()
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
-vi.mock('@/runtime/runtime-worktree-selector', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/rpc/targets/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => ({ id })
 }))
 

@@ -11,8 +11,9 @@
 
 import { rmSync, writeFileSync } from 'node:fs'
 import { CLAUDE_STATUSLINE_MODEL_PATHNAME } from '../../shared/claude-statusline-model-badge'
-import { getSharedManagedScriptPath, writeManagedScript } from '../agent-hooks/installer-utils'
-import type { HooksConfig } from '../agent-hooks/installer-utils'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import { CLAUDE_HOOK_SETTINGS, getStatusLineScriptBaseName } from './hook-settings'
 
 export type WrapperPaths = { script: string; inner: string }

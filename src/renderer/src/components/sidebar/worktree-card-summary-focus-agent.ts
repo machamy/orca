@@ -1,6 +1,6 @@
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import { getAgentDotState } from './worktree-card-agent-summary'
+import { agentRowDisplayDotState as getAgentDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 
 /** Which agent the collapsed pill names. Ordered by "who is the card asking me
  *  about": something running beats something waiting on me, and both beat a

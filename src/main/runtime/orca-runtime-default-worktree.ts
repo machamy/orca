@@ -7,7 +7,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
-import { DEFAULT_SWITCH_TEMP_ID_MARKER, WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
+import { DEFAULT_SWITCH_TEMP_ID_MARKER, composeWorktreeId } from '../../shared/worktree/id'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { swapClaudeProjectTranscripts } from '../claude/claude-project-transcript-swap'
 import { switchDefaultWorktree } from '../git/default-worktree-switch'
@@ -45,7 +45,7 @@ function samePath(left: string, right: string): boolean {
 }
 
 function worktreeId(repoId: string, path: string): string {
-  return `${repoId}${WORKTREE_ID_SEPARATOR}${path}`
+  return composeWorktreeId(repoId, path)
 }
 
 /** Three re-key steps that swap two workspaces' session content between their

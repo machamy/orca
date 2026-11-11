@@ -62,7 +62,10 @@ describe('autoSeedUnityAfterLocalWorktreeCreate', () => {
  * no caller is exactly what this guards against.
  */
 describe('worktree create still invokes the Unity auto-seed', () => {
-  const createSource = readFileSync(join(__dirname, 'workspaces', 'workspace-creation.ts'), 'utf8')
+  const createSource = readFileSync(
+    join(__dirname, 'workspaces', 'creation', 'workspace-creation.ts'),
+    'utf8'
+  )
   const hookSource = readFileSync(
     join(__dirname, 'workspaces', 'workspace-creation-unity-seed.ts'),
     'utf8'
@@ -75,8 +78,9 @@ describe('worktree create still invokes the Unity auto-seed', () => {
   })
 
   it('calls it after a local worktree is materialized', () => {
-    const call = 'this.scheduleUnitySeedForCreatedWorktree(repo, created.path)'
+    const call = 'this.invalidateCachesAndSeedCreatedWorktree(repo, created.path)'
     expect(createSource).toContain(call)
+    expect(hookSource).toContain('this.scheduleUnitySeedForCreatedWorktree(repo, worktreePath)')
     // Ordering: the call must sit after materialization, or there is no worktree to seed.
     expect(createSource.indexOf(call)).toBeGreaterThan(
       createSource.indexOf('await createRuntimeLocalManagedWorktree({')

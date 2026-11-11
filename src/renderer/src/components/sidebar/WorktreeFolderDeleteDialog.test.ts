@@ -3,7 +3,7 @@ import type { AppState } from '@/store/types'
 import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { collectRawWorktreeFolderMemberIds } from '@/store/slices/worktree-folder-membership'
-import { worktree as worktreeFixture } from './worktree-list-groups-test-fixtures'
+import { worktree as worktreeFixture } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 import {
   buildWorktreeFolderDeletePlan,
   getWorktreeFolderDeleteDialogLines

@@ -1,0 +1,533 @@
+import { describe, expect, it } from 'vitest'
+import { Editor } from '@tiptap/core'
+import { encodeRawMarkdownHtmlForRichEditor } from '../../rich-markdown/raw-source/raw-markdown-html'
+import { createRichMarkdownExtensions } from '../../rich-markdown/schema/rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from '../../rich-markdown/document/rich-markdown-source-transport'
+import type { SlashCommandId } from '../../rich-markdown/commands/rich-markdown-slash-command-primitives'
+import '../../rich-markdown/commands/rich-markdown-slash-commands'
+import { slashCommands } from '../../rich-markdown/commands/rich-markdown-slash-command-catalog'
+
+function roundTripMarkdown(content: string): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+
+  try {
+    // Serialization can match byte-for-byte while schema-invalid content crashes on the next edit; check the document too.
+    editor.state.doc.check()
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+
+  try {
+    let from = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (from !== -1 || !node.isText || !node.text) {
+        return
+      }
+      const index = node.text.indexOf(search)
+      if (index !== -1) {
+        from = pos + index
+      }
+    })
+    if (from === -1) {
+      throw new Error(`Missing text: ${search}`)
+    }
+    editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function markdownAfterTypingBesideImage(content: string, typed: string): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+
+  try {
+    let after = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (after === -1 && node.type.name === 'image') {
+        after = pos + node.nodeSize
+      }
+    })
+    if (after === -1) {
+      throw new Error('Missing image node')
+    }
+    editor.view.dispatch(editor.state.tr.insertText(typed, after, after))
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function slashCommandMarkdown(commandId: SlashCommandId): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: '',
+    contentType: 'markdown'
+  })
+
+  try {
+    const command = slashCommands.find((item) => item.id === commandId)
+    if (!command) {
+      throw new Error(`Missing slash command: ${commandId}`)
+    }
+
+    command.run(editor)
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function slashCommandSelectionParent(commandId: SlashCommandId): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: '',
+    contentType: 'markdown'
+  })
+
+  try {
+    const command = slashCommands.find((item) => item.id === commandId)
+    if (!command) {
+      throw new Error(`Missing slash command: ${commandId}`)
+    }
+
+    command.run(editor)
+    return editor.state.selection.$from.parent.type.name
+  } finally {
+    editor.destroy()
+  }
+}
+
+describe('rich markdown round trip', () => {
+  it('preserves block html and comments', () => {
+    expect(roundTripMarkdown('<div>block</div>\n')).toBe('<div>block</div>')
+    expect(roundTripMarkdown('<!-- comment -->\n')).toBe('<!-- comment -->')
+  })
+
+  it('preserves editable details blocks with their source opening tag', () => {
+    expect(roundTripMarkdown('<details><summary>Toggle</summary><p>Body</p></details>\n')).toBe(
+      '<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+    )
+  })
+
+  it('preserves an image in a details summary across an edit', () => {
+    expect(
+      markdownAfterTextReplace(
+        '<details><summary>Toggle ![i](x.png)</summary><p>Body</p></details>\n',
+        'Toggle',
+        'Switch'
+      )
+    ).toBe('<details>\n<summary>Switch ![i](x.png)</summary>\n\nBody\n\n</details>')
+  })
+
+  it('preserves inline math in a details summary across an edit', () => {
+    expect(
+      markdownAfterTextReplace(
+        '<details><summary>Toggle $x^2$</summary><p>Body</p></details>\n',
+        'Toggle',
+        'Switch'
+      )
+    ).toBe('<details>\n<summary>Switch $x^2$</summary>\n\nBody\n\n</details>')
+  })
+
+  it('does not double-escape entities in editable details summaries', () => {
+    expect(roundTripMarkdown('<details><summary>A &amp; B</summary><p>Body</p></details>\n')).toBe(
+      '<details>\n<summary>A &amp; B</summary>\n\nBody\n\n</details>'
+    )
+  })
+
+  it('preserves heading-styled details blocks', () => {
+    expect(
+      roundTripMarkdown(
+        '<details data-orca-toggle="heading-1"><summary>Toggle</summary><p>Body</p></details>\n'
+      )
+    ).toBe(
+      '<details data-orca-toggle="heading-1">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+    )
+  })
+
+  it.each(['heading-2', 'heading-3', 'heading-4', 'heading-5'])(
+    'preserves %s-styled details blocks',
+    (variant) => {
+      expect(
+        roundTripMarkdown(
+          `<details data-orca-toggle="${variant}"><summary>Toggle</summary><p>Body</p></details>\n`
+        )
+      ).toBe(
+        `<details data-orca-toggle="${variant}">\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+      )
+    }
+  )
+
+  it('preserves a heading toggle attribute byte-for-byte, HTML whitespace included', () => {
+    expect(
+      roundTripMarkdown(
+        '<details data-orca-toggle = "heading-4"><summary>Toggle</summary><p>Body</p></details>\n'
+      )
+    ).toBe(
+      '<details data-orca-toggle = "heading-4">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+    )
+  })
+
+  it('round-trips a details block in the generated explain-doc shape byte-for-byte', () => {
+    const input = [
+      '<details>',
+      '<summary>정답 보기</summary>',
+      '',
+      '- first point',
+      '- second point',
+      '',
+      '```ts',
+      'const answer = 1',
+      '```',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('round-trips adjacent details blocks byte-for-byte, open attribute included', () => {
+    const input = [
+      '<details>',
+      '<summary>First</summary>',
+      '',
+      '- item',
+      '',
+      '</details>',
+      '',
+      '<details open>',
+      '<summary>Second</summary>',
+      '',
+      'Body text.',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('keeps a stamped class attribute already present in the source', () => {
+    const input = [
+      '<details class="orca-details" open>',
+      '<summary>Toggle</summary>',
+      '',
+      'Body',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('keeps the source opening tag when only the body text was edited', () => {
+    const input = '<details open>\n<summary>Toggle</summary>\n\nBody here\n\n</details>\n'
+    expect(markdownAfterTextReplace(input, 'here', 'edited')).toBe(
+      '<details open>\n<summary>Toggle</summary>\n\nBody edited\n\n</details>'
+    )
+  })
+
+  it.each(['class="ORCA-DETAILS"', "CLASS='Orca-Details'", 'Class=ORCA-DETAILS'])(
+    'preserves details with case-sensitive %s as passthrough html',
+    (attributes) => {
+      const input = `<details ${attributes}><summary>Toggle</summary><p>Body</p></details>`
+
+      expect(roundTripMarkdown(input)).toBe(input)
+    }
+  )
+
+  it('preserves details blocks with unsupported attributes as passthrough html', () => {
+    const input =
+      '<details id="x"><summary class="s">Toggle</summary><p data-x="1">Body</p></details>\n'
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('preserves details blocks with closing tags inside fenced code as passthrough html', () => {
+    const input = [
+      '<details><summary>Toggle</summary>',
+      '',
+      '```',
+      '</details>',
+      '```',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('preserves literal p/br tags inside fenced code in an editable details body', () => {
+    const input = [
+      '<details>',
+      '<summary>Toggle</summary>',
+      '',
+      '```',
+      '<p>hello</p>',
+      '<br>',
+      '```',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it.each([
+    'Text with `<details>` inline and a `<summary>` mention.',
+    '`<details><summary>A</summary>B</details>` starts this paragraph.',
+    'First line\n`<details>` on the next line.'
+  ])('keeps details tags inside inline code as prose: %j', (input) => {
+    expect(roundTripMarkdown(input)).toBe(input)
+  })
+
+  it('reopens nested toggles as editable details blocks', () => {
+    expect(
+      roundTripMarkdown(
+        '<details><summary>Outer</summary><details><summary>Inner</summary><p>Body</p></details></details>\n'
+      )
+    ).toBe(
+      // Why bare `<details>` and not the stamped class: the source opening tag is
+      // reproduced verbatim at both levels; nesting is what this case pins.
+      [
+        '<details>',
+        '<summary>Outer</summary>',
+        '',
+        '<details>',
+        '<summary>Inner</summary>',
+        '',
+        'Body',
+        '',
+        '</details>',
+        '',
+        '</details>'
+      ].join('\n')
+    )
+  })
+
+  it('round-trips an orca-authored nested toggle unchanged', () => {
+    const input = [
+      '<details class="orca-details" data-orca-toggle="heading-3" open>',
+      '<summary>08/26/2026</summary>',
+      '',
+      '<details class="orca-details" open>',
+      '<summary>goals</summary>',
+      '',
+      '- Read X post',
+      '  - Collab',
+      '',
+      '</details>',
+      '',
+      '- after inner',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('does not close a details block at a closing tag inside inline code', () => {
+    const input = [
+      '<details>',
+      '<summary>Toggle</summary>',
+      '',
+      'Inline `</details>` stays code, and more text follows.',
+      '',
+      'Another paragraph.',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('does not close a details block inside a double-backtick code span', () => {
+    // CommonMark: `` … `` closes only on a run of exactly two backticks, so the
+    // single backticks and the tag between them are all span content.
+    const input = [
+      '<details>',
+      '<summary>Toggle</summary>',
+      '',
+      'Inline `` `</details>` `` stays code, and more text follows.',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('keeps nested toggle bodies editable rather than inert raw html', () => {
+    const markdown = markdownAfterTextReplace(
+      [
+        '<details class="orca-details" open>',
+        '<summary>Outer</summary>',
+        '',
+        '<details class="orca-details" open>',
+        '<summary>Inner</summary>',
+        '',
+        'Body',
+        '',
+        '</details>',
+        '',
+        '</details>',
+        ''
+      ].join('\n'),
+      'Body',
+      'Edited body'
+    )
+    expect(markdown).toContain('Edited body')
+  })
+
+  it('preserves a nested toggle that is not itself editable as passthrough html', () => {
+    const input =
+      '<details><summary>Outer</summary><details id="x"><summary>Inner</summary><p>Body</p></details></details>\n'
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('inserts editable text toggles from slash commands', () => {
+    expect(slashCommandMarkdown('toggle-text')).toBe(
+      '<details class="orca-details" open>\n<summary></summary>\n\n\n\n</details>'
+    )
+    expect(slashCommandSelectionParent('toggle-text')).toBe('detailsSummary')
+  })
+
+  it('inserts editable heading toggles from slash commands', () => {
+    expect(slashCommandMarkdown('toggle-h1')).toBe(
+      '<details class="orca-details" data-orca-toggle="heading-1" open>\n<summary></summary>\n\n\n\n</details>'
+    )
+    expect(slashCommandSelectionParent('toggle-h1')).toBe('detailsSummary')
+  })
+
+  it('preserves encoded local image paths with screenshot filenames', () => {
+    expect(roundTripMarkdown('![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)\n')).toBe(
+      '![](Screenshot%202026-06-22%20at%203.37.19%20PM%20copy.png)'
+    )
+  })
+
+  it('preserves a mid-sentence image after an editor transaction', () => {
+    expect(
+      markdownAfterTextReplace('Install the ![icon](icon.png) extension\n', 'extension', 'add-on')
+    ).toBe('Install the ![icon](icon.png) add-on')
+  })
+
+  it('preserves a standalone image as its own block', () => {
+    expect(roundTripMarkdown('Intro\n\n![shot](shot.png)\n\nOutro\n')).toBe(
+      'Intro\n\n![shot](shot.png)\n\nOutro'
+    )
+    // Standalone images must stay in paragraphs so adjacent typing joins the same block.
+    expect(markdownAfterTypingBesideImage('Intro\n\n![shot](shot.png)\n\nOutro\n', 'X')).toBe(
+      'Intro\n\n![shot](shot.png)X\n\nOutro'
+    )
+  })
+
+  it('preserves images nested in list items and table cells', () => {
+    expect(roundTripMarkdown('- step ![shot](shot.png)\n')).toBe('- step ![shot](shot.png)')
+    expect(roundTripMarkdown('| a |\n| - |\n| ![shot](shot.png) |\n')).toContain(
+      '![shot](shot.png)'
+    )
+    expect(markdownAfterTextReplace('- step ![shot](shot.png)\n', 'step', 'stage')).toBe(
+      '- stage ![shot](shot.png)'
+    )
+    expect(
+      markdownAfterTextReplace('| a |\n| - |\n| b ![shot](shot.png) |\n', 'b ', 'c ')
+    ).toContain('![shot](shot.png)')
+  })
+
+  it('preserves links when editing inside an inline-code label', () => {
+    expect(markdownAfterTextReplace('Link to [`foo.md`](./foo.md) here\n', 'foo', 'bar')).toBe(
+      'Link to [`bar.md`](./foo.md) here'
+    )
+  })
+
+  it('preserves titled links whose label is inline code', () => {
+    expect(roundTripMarkdown('Link to [`foo.md`](./foo.md "Foo") here\n')).toBe(
+      'Link to [`foo.md`](./foo.md "Foo") here'
+    )
+  })
+
+  it('does not surface Linear issue reference definitions as description text', () => {
+    const input = [
+      '- [x] [H-279]',
+      '- [ ] [H-284]',
+      '',
+      '[H-279]: https://linear.app/acme/issue/H-279/child-one "Child one"',
+      '[H-284]: https://linear.app/acme/issue/H-284/child-two "Child two"',
+      ''
+    ].join('\n')
+
+    expect(roundTripMarkdown(input)).toBe(
+      [
+        '- [x] [H-279](https://linear.app/acme/issue/H-279/child-one "Child one")',
+        '- [ ] [H-284](https://linear.app/acme/issue/H-284/child-two "Child two")'
+      ].join('\n')
+    )
+  })
+
+  it('preserves aligned task-item continuations before nested bullets', () => {
+    const input = [
+      '- [ ] Complete the provider action map used by the',
+      '      unchanged UI:',
+      '  - review creation and eligibility;',
+      '  - merge and auto-merge.',
+      '- [ ] Keep provider behavior explicit.'
+    ].join('\n')
+
+    expect(roundTripMarkdown(input)).toBe(
+      [
+        '- [ ] Complete the provider action map used by the',
+        '',
+        '  unchanged UI:',
+        '  - review creation and eligibility;',
+        '  - merge and auto-merge.',
+        '- [ ] Keep provider behavior explicit.'
+      ].join('\n')
+    )
+  })
+
+  it('preserves adjacent doc links', () => {
+    expect(roundTripMarkdown('[[one]][[two]]\n')).toBe('[[one]][[two]]')
+  })
+
+  it('preserves aliased doc links', () => {
+    expect(roundTripMarkdown('Link to [[docs/setup-guide.md|Setup Guide]]\n')).toBe(
+      'Link to [[docs/setup-guide.md|Setup Guide]]'
+    )
+  })
+
+  it('does not encode invalid doc links', () => {
+    const result = roundTripMarkdown('Empty [[]] and blank alias [[a|]]\n')
+    expect(result).toContain('[[]]')
+    expect(result).toContain('[[a|]]')
+  })
+
+  it('preserves doc links inside fenced code blocks as plain text', () => {
+    const input = '```\n[[not-a-link]]\n```\n'
+    expect(roundTripMarkdown(input)).toBe('```\n[[not-a-link]]\n```')
+  })
+})

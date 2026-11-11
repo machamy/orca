@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand'
 import { DEFAULT_SWITCH_IN_FLIGHT_STALE_MS } from '@/lib/default-worktree-switch-stale-bound'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import type { AppState } from '../../../types'
 
 /**
@@ -31,7 +31,7 @@ export function createDefaultSwitchClaimActions(set: Set) {
         if (!admitted && currentIsLive && current.admitted) {
           return {}
         }
-        const token = options?.token ?? createBrowserUuid()
+        const token = options?.token ?? createNonSecureContextUuid()
         granted = token
         const keepsClock = current?.token === options?.token
         return {

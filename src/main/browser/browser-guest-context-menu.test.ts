@@ -9,7 +9,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-import { setupGuestContextMenu } from './browser-guest-context-menu'
+import { setupGuestContextMenu } from './guest-lifecycle/input/browser-guest-context-menu'
 
 describe('setupGuestContextMenu', () => {
   const browserTabId = 'tab-1'

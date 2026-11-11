@@ -10,8 +10,8 @@ import {
   createHookListenerState,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
-import { normalizeHookPayload } from './agent-hook-listener'
-import { PANE_KEY } from './agent-hook-listener-test-harness'
+import { normalizeHookPayload } from './agent-hook-listener/normalization/normalize-hook-payload'
+import { PANE_KEY } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
 
 function claudeHook(state: HookListenerState, payload: Record<string, unknown>) {
   return normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')

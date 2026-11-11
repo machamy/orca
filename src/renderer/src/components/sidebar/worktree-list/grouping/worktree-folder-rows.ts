@@ -21,11 +21,9 @@ import {
   type SidebarWorktreeFolderModel,
   type SidebarWorktreeFolderProject
 } from '../../../../../../shared/sidebar-list/worktree-folder-rows'
-import {
-  getCyclicProjectedWorktreeLineageIds,
-  getProjectedWorktreeLineage
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { findRepoForHost } from '../../../../store/slices/repo-host-identity'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/workspace-lineage-graph'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 
 // Emission and row keys live in the shared builder; the window only resolves membership.
 export {

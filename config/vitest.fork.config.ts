@@ -19,7 +19,20 @@ const nodeProjects = (baseConfig.test?.projects ?? []).flatMap((project) =>
   project !== null &&
   'test' in project &&
   project.test?.name === 'node'
-    ? [{ ...project, test: { ...project.test, include: FORK_CONTRACT_TESTS } }]
+    ? [
+        {
+          ...project,
+          test: {
+            ...project.test,
+            include: FORK_CONTRACT_TESTS,
+            // Why: the base node project excludes every file it hands to the shared-worker
+            // project; keeping that exclude silently drops most of the contract.
+            exclude: (project.test.exclude ?? []).filter(
+              (pattern) => !FORK_CONTRACT_TESTS.includes(pattern)
+            )
+          }
+        }
+      ]
     : []
 )
 

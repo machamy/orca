@@ -5,7 +5,7 @@
 // flight when the on-disk move starts.
 export const WORKTREE_IDENTITY_GRACE_MS = 20_000
 
-const graceExpiryByWorktreeId = new Map<string, number>()
+export const worktreeIdentityGraceExpiryById = new Map<string, number>()
 
 export function armWorktreeIdentityGrace(
   worktreeIds: Iterable<string>,
@@ -14,30 +14,30 @@ export function armWorktreeIdentityGrace(
 ): void {
   const expiry = now + durationMs
   for (const worktreeId of worktreeIds) {
-    graceExpiryByWorktreeId.set(worktreeId, expiry)
+    worktreeIdentityGraceExpiryById.set(worktreeId, expiry)
   }
 }
 
 export function isWorktreeIdentityShielded(worktreeId: string, now: number = Date.now()): boolean {
-  const expiry = graceExpiryByWorktreeId.get(worktreeId)
+  const expiry = worktreeIdentityGraceExpiryById.get(worktreeId)
   if (expiry === undefined) {
     return false
   }
   if (expiry <= now) {
-    graceExpiryByWorktreeId.delete(worktreeId)
+    worktreeIdentityGraceExpiryById.delete(worktreeId)
     return false
   }
   return true
 }
 
 export function sweepExpiredWorktreeIdentityGrace(now: number = Date.now()): void {
-  for (const [worktreeId, expiry] of graceExpiryByWorktreeId) {
+  for (const [worktreeId, expiry] of worktreeIdentityGraceExpiryById) {
     if (expiry <= now) {
-      graceExpiryByWorktreeId.delete(worktreeId)
+      worktreeIdentityGraceExpiryById.delete(worktreeId)
     }
   }
 }
 
 export function clearWorktreeIdentityGraceForTests(): void {
-  graceExpiryByWorktreeId.clear()
+  worktreeIdentityGraceExpiryById.clear()
 }

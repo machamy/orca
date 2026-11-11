@@ -6,7 +6,7 @@
  */
 
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export const SOURCE_CONTROL_REVIEW_FILTER_PRESET = '.cs .json .md'
 

@@ -1,5 +1,5 @@
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
-import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerCleanup } from './server-cleanup'
 

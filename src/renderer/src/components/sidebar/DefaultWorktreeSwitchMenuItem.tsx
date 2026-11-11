@@ -1,7 +1,7 @@
 import { MonitorUp } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import type { WorktreeContextMenuModel } from './workspace-actions/context-menu/use-worktree-context-menu-model'
 
 /** Fork: entry point for the default-worktree switch; absent when the list offers no switch. */
 export function DefaultWorktreeSwitchMenuItem({

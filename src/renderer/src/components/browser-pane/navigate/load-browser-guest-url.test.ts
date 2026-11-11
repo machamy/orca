@@ -6,9 +6,9 @@ import {
   invalidateBrowserGuestUrlProbe,
   loadBrowserGuestUrl
 } from './load-browser-guest-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../../shared/repo-types'
 
 type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
@@ -37,16 +37,16 @@ let projectGroups: { id: string }[] = []
 let settings: { browserMarkdownEditorHandoff?: boolean } = {}
 let activeWorktreeId: string | null = 'wt-1'
 
-vi.mock('@/lib/user-opened-local-path', () => ({
+vi.mock('@/lib/files/access/user-opened-local-path', () => ({
   statUserOpenedPath: (...args: unknown[]) => statUserOpenedPath(...args)
 }))
 
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFilePreview: (...args: unknown[]) => readRuntimeFilePreview(...args)
 }))
 
 // Echoes the owner the probe picked, so assertions can see which host it targeted.
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   requireRuntimeTargetForFileOwner: (
     _state: unknown,
     _worktreeId: unknown,
@@ -57,14 +57,14 @@ vi.mock('@/lib/file-owner-runtime-target', () => ({
       : { kind: 'local' }
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   runtimeEnvironmentIdOrLocalUnlessTwin: () => workspaceRuntimeEnvironmentId
 }))
 
 // Why: the real detector drags TipTap's round-trip editor into a node-env test;
 // its behavior is pinned by markdown-rich-mode.test.ts.
-vi.mock('@/components/editor/markdown-rich-mode', () => ({
+vi.mock('@/components/editor/markdown/render-mode/markdown-rich-mode', () => ({
   getMarkdownRichModeUnsupportedMessage: (content: string) =>
     getMarkdownRichModeUnsupportedMessage(content)
 }))

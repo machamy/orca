@@ -1,9 +1,10 @@
+import { applyLocalWorktreeMetadataSet } from './worktree-metadata-set-events'
 import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
 import { armWorktreeIdentityGrace } from '../../store/worktree-identity-grace'
-import { adoptFromEndpoint } from '../../store/adopt-from-endpoint'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { adoptFromEndpoint } from '../../store/host-catalog/endpoint-catalog-adoption'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -67,6 +68,10 @@ export function registerProjectCatalogIpcBridge(
       }
     )
   )
+
+  if (window.api.worktrees.onMetadataSet) {
+    unsubs.push(window.api.worktrees.onMetadataSet(applyLocalWorktreeMetadataSet))
+  }
 
   if (window.api.worktrees.onHeadIdentitiesChanged) {
     unsubs.push(

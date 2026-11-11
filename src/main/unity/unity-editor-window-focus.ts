@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { isCommandOnLocalPath } from '../ipc/command-path-resolver'
+import { isCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { findUnityEditorProcess, type UnityProcessRow } from './unity-editor-process-lookup'
 import type { UnityOpenResult } from '../../shared/unity-worktree'
 

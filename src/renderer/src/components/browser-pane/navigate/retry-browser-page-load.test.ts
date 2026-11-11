@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { retryBrowserTabLoad } from './retry-browser-page-load'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 
 type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
@@ -14,11 +14,11 @@ const setBrowserPageUrl = vi.fn()
 
 let browserPagesByWorkspace: Record<string, BrowserPageState[]> = {}
 
-vi.mock('@/lib/user-opened-local-path', () => ({
+vi.mock('@/lib/files/access/user-opened-local-path', () => ({
   statUserOpenedPath: (...args: unknown[]) => statUserOpenedPath(...args)
 }))
 
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   requireRuntimeTargetForFileOwner: (
     _state: unknown,
     _worktreeId: unknown,

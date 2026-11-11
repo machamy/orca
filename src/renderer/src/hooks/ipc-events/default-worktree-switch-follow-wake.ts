@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { filterReseedableSleepingRecords } from '@/lib/agent-provider-session-single-owner'
 import { createDefaultSwitchCompletionGate } from '@/lib/default-worktree-switch-completion-gate'
 import { scheduleFollowSwitchPaneRespawn } from '@/lib/default-worktree-switch-pane-respawn'
@@ -12,8 +12,8 @@ import {
   endDefaultSwitchTeardownWindow,
   isInDefaultSwitchTeardownWindow
 } from '@/lib/default-worktree-switch-sleep-guard'
-import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
-import { wakeFollowedSleptAgentsForWorktree } from '@/lib/wake-sleeping-agents-in-background'
+import { remapOpenEditorTabsForPathChange } from '@/lib/editor/file-operations/remap-open-editor-tabs-for-path-change'
+import { wakeFollowedSleptAgentsForWorktree } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import type { RuntimeWorktreeIdentityMigration } from '../../../../shared/runtime-worktree-contracts'
 import { useAppStore } from '../../store'

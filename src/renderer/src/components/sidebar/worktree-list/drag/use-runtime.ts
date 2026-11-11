@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
-import { clearWorkspaceKanbanSidebarDropTargetVisual } from '../../workspace-kanban-sidebar-drop'
-import { setSidebarPointerDragDocumentStyles } from '../../worktree-sidebar-pointer-drag-dom'
+import { clearWorkspaceKanbanSidebarDropTargetVisual } from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
+import { setSidebarPointerDragDocumentStyles } from './worktree-sidebar-pointer-drag-dom'
 import type {
   WorktreeSidebarDragPoint,
   WorktreeSidebarDragSession
-} from '../../worktree-sidebar-drag-autoscroll'
-import type { WorktreeSidebarDropAnchor } from '../../worktree-sidebar-drag-geometry'
+} from './worktree-sidebar-drag-autoscroll'
+import type { WorktreeSidebarDropAnchor } from './worktree-sidebar-drag-geometry'
 import {
   WORKTREE_ROW_DRAG_INITIAL_STATE,
   type WorktreePointerDrag,
@@ -24,7 +24,9 @@ export function useWorktreeDragRuntime(args: {
   const { worktreeDragSessionRef, statusDropAnchorsRef, onWorkspaceBoardDragPreviewCancel } = args
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
-  const [nativeLineageDropTargetId, setNativeLineageDropTargetId] = useState<string | null>(null)
+  const [nativeLineageDropTargetIdentity, setNativeLineageDropTargetIdentity] = useState<
+    string | null
+  >(null)
   // Fork: default-switch hover ring. React state, not the drag ref — an x-only
   // pointer move can leave every other setter untouched, and a ref alone never
   // repaints, letting the ring disagree with what pointer-up would commit.
@@ -62,7 +64,7 @@ export function useWorktreeDragRuntime(args: {
   const cleanupWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
     cancelWorktreePointerAutoscroll()
-    setNativeLineageDropTargetId(null)
+    setNativeLineageDropTargetIdentity(null)
     setPointerDefaultSwitchDropTargetId(null)
     if (!drag) {
       return
@@ -99,8 +101,8 @@ export function useWorktreeDragRuntime(args: {
       setDragOverStatus,
       pinDragOver,
       setPinDragOver,
-      nativeLineageDropTargetId,
-      setNativeLineageDropTargetId,
+      nativeLineageDropTargetIdentity,
+      setNativeLineageDropTargetIdentity,
       pointerDefaultSwitchDropTargetId,
       setPointerDefaultSwitchDropTargetId,
       worktreeDragState,
@@ -121,7 +123,7 @@ export function useWorktreeDragRuntime(args: {
       cancelWorktreePointerAutoscroll,
       clearWorktreeDrag,
       dragOverStatus,
-      nativeLineageDropTargetId,
+      nativeLineageDropTargetIdentity,
       pinDragOver,
       pointerDefaultSwitchDropTargetId,
       worktreeDragState

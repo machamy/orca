@@ -1,9 +1,9 @@
 import React, { useCallback } from 'react'
 import { SquareTerminal } from 'lucide-react'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { translate } from '@/i18n/i18n'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const TERMINAL_TAB_ROW_CAP = 4
 

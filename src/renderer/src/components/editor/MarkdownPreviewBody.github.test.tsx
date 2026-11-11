@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { MarkdownPreviewBody } from './MarkdownPreviewBody'
-import { parseMarkdownPreviewDocument } from './markdown-preview-document-tree'
+import { MarkdownPreviewBody } from './markdown-preview/render-tree/MarkdownPreviewBody'
+import { parseMarkdownPreviewDocument } from './markdown-preview/document-worker/markdown-preview-document-tree'
 
 // Fork contract: the preview renders a .md file the way GitHub's file view does.
 const render = (content: string): string =>

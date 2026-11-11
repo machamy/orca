@@ -48,6 +48,8 @@ import type {
   NotificationsApi
 } from './api/os-permission-api'
 import type { PetApi } from './api/pet-api'
+import type { AppIconApi } from './api/app-icon-api'
+import type { BrowserPasswordsApi } from './api/browser-passwords-api'
 import type { PluginsApi } from './api/plugin-host-api'
 import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
@@ -66,6 +68,7 @@ import type { PlainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
 import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
+import type { ForkUiCommandEventApi } from './api/ui-command-event-api-fork'
 import type { UiWindowApi } from './api/ui-window-api'
 import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
@@ -129,7 +132,9 @@ export type PreloadApi = {
   agentModelBadge: AgentModelBadgeApi
   skills: SkillsApi
   pet: PetApi
+  appIcon: AppIconApi
   browser: BrowserApi
+  browserPasswords: BrowserPasswordsApi
   emulator: EmulatorApi
   hooks: HooksApi
   ephemeralVm: EphemeralVmApi
@@ -148,7 +153,7 @@ export type PreloadApi = {
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
-  ui: Merged<UiCommandEventApi & UiWindowApi>
+  ui: Merged<UiCommandEventApi & ForkUiCommandEventApi & UiWindowApi>
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
@@ -232,11 +237,7 @@ export type {
   PtyManagementSeveredDaemon,
   PtyManagementSeveredDaemonRestartResult
 } from './api/pty-management-api'
-export type {
-  ShellOpenExternalEditorRequest,
-  ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
-} from './api/shell-api'
+
 export type {
   DiagnosticsBundlePayload,
   DiagnosticsStatusPayload,

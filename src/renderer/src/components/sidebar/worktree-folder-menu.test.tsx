@@ -7,7 +7,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { worktree as worktreeFixture } from './worktree-list-groups-test-fixtures'
+import { worktree as worktreeFixture } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
 
 const spies = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -29,6 +29,7 @@ vi.mock('sonner', () => ({
   toast: { error: spies.toastError, info: vi.fn(), success: vi.fn(), dismiss: vi.fn() }
 }))
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     values
       ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(values[name] ?? ''))
@@ -73,7 +74,7 @@ vi.mock('@/components/ui/button', () => ({
   )
 }))
 // Mimics the real dialog's contract: close on resolved submit, stay open on throw.
-vi.mock('./ProjectGroupNameDialog', () => ({
+vi.mock('./worktree-list/rows/ProjectGroupNameDialog', () => ({
   ProjectGroupNameDialog: ({
     open,
     onSubmit,
@@ -101,7 +102,7 @@ vi.mock('./ProjectGroupNameDialog', () => ({
       </button>
     ) : null
 }))
-vi.mock('./delete-worktree-flow', () => ({
+vi.mock('./workspace-actions/deletion/delete-worktree-flow', () => ({
   runWorktreeDelete: spies.runWorktreeDelete
 }))
 

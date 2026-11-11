@@ -22,7 +22,7 @@ import {
   dropRescueRef
 } from './default-worktree-switch-work-capture'
 import type { GitRuntimeOptions } from './git-runtime-options'
-import { listWorktreesStrict } from './worktree'
+import { listWorktreesStrict } from './worktrees/catalog/worktree-listing'
 
 export type DefaultWorktreeSwitchResult = {
   defaultPath: string

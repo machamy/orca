@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useMemo } from 'react'
-import { isEditableTarget } from '../lib/editable-target'
-import { getShortcutPlatform } from '../lib/shortcut-platform'
+import { isEditableTarget } from '../lib/text-input/focus/editable-target'
+import { getShortcutPlatform } from '../lib/keyboard/shortcut-platform'
 import {
   selectUnityTintSiblingWorktrees,
   unityTintSiblingLabelsOf
 } from '../components/sidebar/unity-tint-sibling-worktrees'
-import { getDeleteStateForWorktreeHost } from '../components/sidebar/worktree-delete-state-host-match'
+import { getDeleteStateForWorktreeHost } from '../components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { useUnityWorktreeOpenActions } from '../components/sidebar/unity-worktree-open-actions'
-import { findPluginCommandForKeybinding } from '../lib/plugin-command-keybindings'
-import { usePluginCommands } from '../store/plugin-panels'
-import { useActiveWorktree, useAllWorktrees, useRepoById } from '../store/selectors'
+import { findPluginCommandForKeybinding } from '../lib/plugins/commands/plugin-command-keybindings'
+import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useAppStore } from '../store'
 import { isLocallyRunnableUnityWorkspace } from '../../../shared/unity-repo-eligibility'
 import { isDefaultCheckoutWorkspace } from '../../../shared/worktree/ownership'

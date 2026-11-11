@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CompactAgentSummaryButton } from './worktree-card-compact-agents'
+import { CompactAgentSummaryButton } from './workspace-card/activity/worktree-card-compact-agents'
 
 function makeAgent(state: string, tabTitle: string, updatedAt = 0): DashboardAgentRowData {
   return {

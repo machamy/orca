@@ -28,9 +28,9 @@ import {
 import {
   mountSwitchedWorktreeTabsInBatches,
   wakeSleepingAgentsForWorktreeInBackground
-} from '@/lib/wake-sleeping-agents-in-background'
-import { runSleepWorktreesForDefaultSwitch } from '@/components/sidebar/sleep-worktree-flow'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+} from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
+import { runSleepWorktreesForDefaultSwitch } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { cancelFollowSwitchPaneRespawn } from '@/lib/default-worktree-switch-pane-respawn'
 import { armWorktreeIdentityGrace } from '@/store/worktree-identity-grace'
 import {

@@ -30,7 +30,7 @@ vi.mock('@/store', async () => {
   }
 })
 const worktreesForRepo = vi.fn<(repoId: string | null) => readonly Worktree[]>()
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
   useWorktreesForRepo: (repoId: string | null) => worktreesForRepo(repoId)
 }))
 

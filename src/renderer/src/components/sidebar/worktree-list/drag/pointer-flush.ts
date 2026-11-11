@@ -5,8 +5,8 @@ import {
   hasWorkspaceKanbanSidebarDropBoard,
   isWorkspaceKanbanSidebarDropPointInBoard,
   updateWorkspaceKanbanSidebarDropTargetVisual
-} from '../../workspace-kanban-sidebar-drop'
-import { updateSidebarDragPreviewPosition } from '../../worktree-sidebar-pointer-drag-dom'
+} from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
+import { updateSidebarDragPreviewPosition } from './worktree-sidebar-pointer-drag-dom'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
 import type {
   ShouldShowWorkspaceBoardDropIndicator,
@@ -143,19 +143,19 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
           y: drag.currentY
         })
       : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-    drag.draggedIds
+    drag.pickedCopies
   )
   args.setPointerDefaultSwitchDropTargetId(preferredStatusTarget.defaultSwitchTargetId)
-  const lineageParentId = preferredStatusTarget.lineageParentId
+  const lineageParentIdentity = preferredStatusTarget.lineageParentIdentity
   // Fork: a default-switch drop is a status target, not nesting — no nesting preview.
-  if (!lineageParentId && preferredStatusTarget.defaultSwitchTargetId) {
+  if (!lineageParentIdentity && preferredStatusTarget.defaultSwitchTargetId) {
     drag.reorderIntent = null
     updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
     clearWorkspaceKanbanSidebarDropTargetVisual()
     clearInsertionLine(args)
     return
   }
-  if (lineageParentId) {
+  if (lineageParentIdentity) {
     drag.reorderIntent = null
     updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
     clearWorkspaceKanbanSidebarDropTargetVisual()
@@ -170,7 +170,7 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     args.setDragOverStatus(null)
     args.setPinDragOver(false)
     args.setWorktreeDragState((prev) =>
-      applyWorktreeLineageDropPreview(prev, lineageParentId, drag.currentY)
+      applyWorktreeLineageDropPreview(prev, lineageParentIdentity, drag.currentY)
     )
     return
   }

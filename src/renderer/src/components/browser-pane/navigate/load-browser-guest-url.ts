@@ -1,15 +1,18 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../../shared/terminal-links'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import {
+  isPathInsideWorktree,
+  toWorktreeRelativePath
+} from '../../../../../shared/terminal/links/terminal-links'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
 import { useAppStore } from '@/store'
-import { readRuntimeFilePreview } from '@/runtime/runtime-file-read-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
   getBrowserPageRuntimeEnvironmentId,
@@ -265,7 +268,7 @@ async function handedOffMarkdownLandsInSource(
     }
     // Dynamic import keeps TipTap's round-trip checker out of the browser-pane chunk.
     const { getMarkdownRichModeUnsupportedMessage } =
-      await import('@/components/editor/markdown-rich-mode')
+      await import('@/components/editor/markdown/render-mode/markdown-rich-mode')
     return getMarkdownRichModeUnsupportedMessage(preview.content) !== null
   } catch {
     // A failed read downgrades only the landing view, never the handoff itself.

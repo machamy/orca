@@ -4,7 +4,7 @@ import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { isValidResolvedWorktreeLineageEdge } from '../../../../shared/resolved-worktree-lineage'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
-import { getProjectedWorktreeLineage } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getProjectedWorktreeLineage } from '../../../../shared/worktree/workspace-lineage-graph'
 
 /**
  * Fork E5: valid DIRECT lineage children of one worktree — the rows the

@@ -3,7 +3,7 @@ import { paneCacheKeyMatchesTab } from './server-status-identity'
 import { AgentHookServerWorktreeAttributionMigration } from './server-worktree-attribution-migration'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { releaseAgentExitKey } from './agent-exit-evidence'
-import type { RefusedPaneResume } from '../../../shared/agent-status-types'
+import type { RefusedPaneResume } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerWorktreeAttributionMigration {
@@ -65,7 +65,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerWorktreeA
     }
     for (const key of [
       ...this.state.antigravityCompletedTranscriptByPaneKey.keys(),
-      ...this.state.antigravitySubagentParentByPaneKey.keys()
+      ...this.state.antigravityChildWorkByPaneKey.keys()
     ]) {
       if (paneCacheKeyMatchesTab(key, tabId)) {
         paneKeysToClear.add(key.split('\0', 1)[0] ?? key)

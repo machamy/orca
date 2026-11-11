@@ -6,7 +6,7 @@ import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { worktree as worktreeFixture } from '../../worktree-list-groups-test-fixtures'
+import { worktree as worktreeFixture } from '../grouping/worktree-list-groups-test-fixtures'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 

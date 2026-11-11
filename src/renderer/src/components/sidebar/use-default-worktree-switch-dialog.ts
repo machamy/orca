@@ -9,6 +9,12 @@ import type {
 } from './DefaultWorktreeSwitchDialog'
 import { runDefaultWorktreeSwitchFlow } from '@/lib/default-worktree-switch-flow'
 import { canSwitchWorktreeToDefault } from './default-worktree-switch-eligibility'
+import type { VirtualizedWorktreeViewportProps } from './worktree-list/viewport/viewport-props'
+
+type DefaultSwitchViewportProps = Pick<
+  VirtualizedWorktreeViewportProps,
+  'defaultSwitchDropTargetId' | 'onDefaultSwitchRequest' | 'findDefaultWorktree'
+>
 
 /** Fork: default-worktree switch UI state — a card's context-menu request opens
  *  the confirm dialog; the flow itself owns sleep/swap/wake. */
@@ -25,6 +31,7 @@ export function useDefaultWorktreeSwitchDialog(
     request: DefaultWorktreeSwitchDialogRequest,
     options: DefaultWorktreeSwitchConfirmOptions
   ) => Promise<RuntimeDefaultWorktreeSwitchResult>
+  viewportProps: DefaultSwitchViewportProps
 } {
   const [defaultSwitchDropTargetId] = useState<string | null>(null)
   const [defaultSwitchDialogRequest, setDefaultSwitchDialogRequest] =
@@ -79,6 +86,11 @@ export function useDefaultWorktreeSwitchDialog(
     defaultSwitchDialogRequest,
     setDefaultSwitchDialogRequest,
     requestDefaultSwitch,
-    confirmDefaultSwitch
+    confirmDefaultSwitch,
+    viewportProps: {
+      defaultSwitchDropTargetId,
+      onDefaultSwitchRequest: requestDefaultSwitch,
+      findDefaultWorktree
+    }
   }
 }

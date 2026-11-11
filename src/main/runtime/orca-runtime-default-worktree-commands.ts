@@ -1,7 +1,7 @@
-import { RuntimeWorkspaceRepoScanRefresh } from './workspaces/workspace-repo-scan-refresh'
+import { RuntimeWorkspaceRepoScanRefresh } from './workspaces/catalog/workspace-repo-scan-refresh'
 import { RuntimeDefaultWorktree } from './orca-runtime-default-worktree'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { agentHookServer } from '../agent-hooks/server'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 

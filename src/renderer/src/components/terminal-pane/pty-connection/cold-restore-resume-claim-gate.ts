@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import {
   releaseAgentSessionResume,
   tryClaimAgentSessionResume
@@ -7,11 +7,29 @@ import {
 import { shouldClearResumeClaimLoserRecord } from '../cold-restore-resume-claim'
 import { applyResumedAgentBookkeeping } from '../cold-restore-resume-bookkeeping'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import type { ColdRestoreAgentResumeStartup, FreshSpawnOptions } from './fresh-spawn-types'
-import { startPaneThroughMainThenAttach } from './main-pane-start-request'
+import type { ColdRestoreAgentResumeStartup, FreshSpawnOptions } from './startup/fresh-spawn-types'
+import { startPaneThroughMainThenAttach } from './spawn/main-pane-start-request'
 
-/** Fork: null when this pane wins the resume claim; otherwise its fresh-spawn fallback. */
-export function startColdRestoreResumeClaimLoser(
+/** Fork: only the pane that wins the provider-session claim resumes; the rest start fresh. */
+export function startClaimGatedColdRestoreResume(
+  session: ConnectPanePtySession,
+  startup: ColdRestoreAgentResumeStartup | null,
+  options: FreshSpawnOptions,
+  startClaimedResume: () => Promise<string | null>
+): Promise<string | null> {
+  const claimLoser = startColdRestoreResumeClaimLoser(session, startup, options)
+  if (claimLoser) {
+    return claimLoser
+  }
+  const spawned = startClaimedResume()
+  if (startup) {
+    trackClaimedColdRestoreResume(session, startup, spawned)
+  }
+  return spawned
+}
+
+/** Null when this pane wins the resume claim; otherwise its fresh-spawn fallback. */
+function startColdRestoreResumeClaimLoser(
   session: ConnectPanePtySession,
   startup: ColdRestoreAgentResumeStartup | null,
   options: FreshSpawnOptions
@@ -34,8 +52,8 @@ export function startColdRestoreResumeClaimLoser(
   return startPaneThroughMainThenAttach(session, () => session.startFreshSpawn(null, options))
 }
 
-/** Fork: release the claim once the spawn settles, then record which session the pane runs. */
-export function trackClaimedColdRestoreResume(
+/** Release the claim once the spawn settles, then record which session the pane runs. */
+function trackClaimedColdRestoreResume(
   session: ConnectPanePtySession,
   startup: ColdRestoreAgentResumeStartup,
   spawned: Promise<string | null>

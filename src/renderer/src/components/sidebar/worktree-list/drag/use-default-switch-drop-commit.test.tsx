@@ -107,7 +107,7 @@ describe('getPointerDropStatusTarget default-switch hit test', () => {
     const target = getPointerDropStatusTarget({ container, x: 10, y: 10 })
 
     expect(target.defaultSwitchTargetId).toBe(defaultRow.id)
-    expect(target.lineageParentId).toBeNull()
+    expect(target.lineageParentIdentity).toBeNull()
     container.remove()
   })
 })
@@ -115,15 +115,15 @@ describe('getPointerDropStatusTarget default-switch hit test', () => {
 describe('resolveWorktreeSidebarStatusDropCommitTarget default-switch accuracy', () => {
   it('never resurrects a default-switch target the pointer left', async () => {
     const { resolveWorktreeSidebarStatusDropCommitTarget } =
-      await import('../../worktree-sidebar-drop-preview')
+      await import('./worktree-sidebar-drop-preview')
     const result = resolveWorktreeSidebarStatusDropCommitTarget({
-      currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
+      currentTarget: { status: null, isPinDrop: false, lineageParentIdentity: null },
       currentPreview: null,
       latestTrackedTarget: {
         target: {
           status: null,
           isPinDrop: false,
-          lineageParentId: null,
+          lineageParentIdentity: null,
           defaultSwitchTargetId: defaultRow.id
         },
         preview: null,

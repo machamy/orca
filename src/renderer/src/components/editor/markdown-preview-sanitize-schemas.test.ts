@@ -4,7 +4,8 @@ import rehypeSanitize from 'rehype-sanitize'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
 import { unified } from 'unified'
-import { markdownGithubSanitizeSchema, markdownPreviewSanitizeSchema } from './MarkdownPreview'
+import { markdownGithubSanitizeSchema } from './markdown-preview-github-html'
+import { markdownPreviewSanitizeSchema } from './markdown-preview/render-tree/markdown-preview-plugins'
 
 type Node = {
   type?: string

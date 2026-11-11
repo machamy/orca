@@ -1,5 +1,5 @@
-import { isUnsupportedWorktreeRepairError } from '../../shared/git-worktree-command-capabilities'
-import { getLocalGitCapabilityCache } from './git-capability-state'
+import { isUnsupportedWorktreeRepairError } from '../../shared/git/worktrees/git-worktree-command-capabilities'
+import { getLocalGitCapabilityCache } from './command-runner/git-capability-state'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'

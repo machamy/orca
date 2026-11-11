@@ -13,15 +13,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
-import { runWorktreeDelete } from './delete-worktree-flow'
+import { ProjectGroupNameDialog } from './worktree-list/rows/ProjectGroupNameDialog'
+import { runWorktreeDelete } from './workspace-actions/deletion/delete-worktree-flow'
 import {
   convertWorktreeToFolder,
   getDirectWorktreeLineageChildren,

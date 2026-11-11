@@ -42,17 +42,19 @@ describe('markdown preview reading layout', () => {
   })
 
   it('resolves #anchors to the sanitizer-prefixed id, as GitHub does', () => {
-    expect(read('use-markdown-preview-viewport.ts')).toContain('`user-content-${decodedAnchor}`')
+    expect(read('markdown-preview/viewport/use-markdown-preview-viewport.ts')).toContain(
+      '`user-content-${decodedAnchor}`'
+    )
   })
 
   it('follows the resolved app theme instead of a one-shot media query', () => {
-    const foundation = read('use-markdown-preview-source-foundation.ts')
+    const foundation = read('markdown-preview/surface/use-markdown-preview-source-foundation.ts')
     expect(foundation).toContain('const isDark = useDocumentDarkTheme()')
     expect(foundation).not.toContain("window.matchMedia('(prefers-color-scheme: dark)')")
   })
 
   it('keeps the react-markdown node object off inline code and links', () => {
-    const components = read('use-markdown-preview-components.tsx')
+    const components = read('markdown-preview/render-tree/use-markdown-preview-components.tsx')
     expect(components).toContain('code: ({ node: _node, className, children, ...props }) =>')
     expect(components).toContain('a: ({ node: _node, href, children, className, ...props }) =>')
   })

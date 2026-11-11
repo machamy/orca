@@ -1,9 +1,9 @@
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
@@ -19,7 +19,7 @@ import {
   captureWorkspaceSelection,
   isWorkspaceSelected,
   restoreWorkspaceSelection
-} from '@/lib/active-workspace-host'
+} from '@/lib/workspace/ownership/active-workspace-host'
 import {
   invalidateRemoteWorktreeLineage,
   isRemoteWorktreeLineageFresh
@@ -30,15 +30,17 @@ import {
 } from '../worktree-change-refresh-queue'
 import type { RuntimeWorktreeIdentityMigration } from '../../../../shared/runtime-worktree-contracts'
 import {
-  armWorktreeIdentityGrace,
   isWorktreeIdentityShielded,
   sweepExpiredWorktreeIdentityGrace
 } from '../../store/worktree-identity-grace'
+import { applyWorktreeIdentityMigrations } from './worktree-identity-migration-apply'
 import { runDefaultWorktreeSwitchFollowWake } from './default-worktree-switch-follow-wake'
+// Upstream tests seed and clear the rename shield through this name; the fork's grace module owns the map.
+export { worktreeIdentityGraceExpiryById as recentlyRenamedWorktreeIdExpiry } from '../../store/worktree-identity-grace'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Why the subscription key: it changes on reconnect, re-pair and event-stream replay invalidation.
 function runtimeSortOrderFence(environmentId: string): string {
@@ -135,17 +137,13 @@ export function createWorktreeEventRuntime(
     const identityMigrations = migrations?.length ? migrations : renamed ? [renamed] : []
     const activeBeforeMigration = useAppStore.getState().activeWorktreeId
     const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
-    let activeAfterMigration = activeBeforeMigration
-    for (const migration of identityMigrations) {
-      if (activeAfterMigration === migration.oldWorktreeId) {
-        activeAfterMigration = migration.newWorktreeId
-      }
-      // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
-      armWorktreeIdentityGrace([migration.oldWorktreeId, migration.newWorktreeId])
-      useAppStore
-        .getState()
-        .migrateWorktreeIdentity(migration.oldWorktreeId, migration.newWorktreeId)
-    }
+    const activeAfterMigration = applyWorktreeIdentityMigrations({
+      repoId,
+      migrations: identityMigrations,
+      executionHostId: options?.executionHostId,
+      forceLocalOwner: options?.forceLocalOwner,
+      activeWorktreeId: activeBeforeMigration
+    })
     // Diff around refetch to purge externally deleted worktree state and prevent zombie PTY entries.
     const state = useAppStore.getState()
     const before =

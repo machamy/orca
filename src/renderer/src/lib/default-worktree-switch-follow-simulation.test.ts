@@ -18,10 +18,10 @@
  *      either, so nothing claims the in-place wake).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as PtyInventory from './worktree-activation-pty-inventory'
-import type * as SurfaceOwners from './worktree-live-terminal-surface-owners'
+import type * as PtyInventory from './workspace/activation/worktree-activation-pty-inventory'
+import type * as SurfaceOwners from './workspace/ownership/worktree-live-terminal-surface-owners'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
   type WakeHibernatedAgentsWorktreeDetail
@@ -43,14 +43,14 @@ vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
 const toastCalls = vi.hoisted(() => [] as { kind: string; message: unknown }[])
 // Why: the background wake now asks the host for its PTY and chat inventory first; this
 // simulation has no host, so both inventories answer "nothing live".
-vi.mock('./worktree-activation-pty-inventory', async (importOriginal) => ({
+vi.mock('./workspace/activation/worktree-activation-pty-inventory', async (importOriginal) => ({
   ...(await importOriginal<typeof PtyInventory>()),
   listActivationPtySessions: async () => []
 }))
 vi.mock('./worktree-agent-structured-inventory', () => ({
   readWorktreeStructuredActivationInventory: async () => false
 }))
-vi.mock('./worktree-live-terminal-surface-owners', async (importOriginal) => ({
+vi.mock('./workspace/ownership/worktree-live-terminal-surface-owners', async (importOriginal) => ({
   ...(await importOriginal<typeof SurfaceOwners>()),
   readWorktreeLiveTerminalSurfaceOwners: async () => null
 }))
@@ -68,8 +68,8 @@ vi.mock('sonner', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import { wakeSleepingAgentsForWorktreeInBackground } from './wake-sleeping-agents-in-background'
-import { recordPaneIsOwnedByPreservedPane } from './sleeping-agent-pane-ownership'
+import { wakeSleepingAgentsForWorktreeInBackground } from './agent-session/resume/wake-sleeping-agents-in-background'
+import { recordPaneIsOwnedByPreservedPane } from './agent-session/resume/sleeping-agent-pane-ownership'
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -575,7 +575,7 @@ describe('mode-B follow switch: renderer store simulation', () => {
     seedModeBPostSleepState({ agentStates: { repo: 'done', sel: 'done' } })
     applyFollowMigrations()
     const { wakeFollowedSleptAgentsForWorktree } =
-      await import('./wake-sleeping-agents-in-background')
+      await import('./agent-session/resume/wake-sleeping-agents-in-background')
     for (const worktreeId of [SEL_ID, DEFAULT_ID]) {
       wakeFollowedSleptAgentsForWorktree(worktreeId)
     }
@@ -592,7 +592,7 @@ describe('mode-B follow switch: renderer store simulation', () => {
     seedModeBPostSleepState()
     applyFollowMigrations()
     const { wakeFollowedSleptAgentsForWorktree } =
-      await import('./wake-sleeping-agents-in-background')
+      await import('./agent-session/resume/wake-sleeping-agents-in-background')
     useAppStore.getState().setActiveWorktree(DEFAULT_ID)
     for (const worktreeId of [SEL_ID, DEFAULT_ID]) {
       wakeFollowedSleptAgentsForWorktree(worktreeId)
@@ -613,7 +613,7 @@ describe('mode-B follow switch: renderer store simulation', () => {
     const { queueDefaultSwitchWake, consumeDefaultSwitchWake, clearDefaultSwitchWake } =
       await import('./default-worktree-switch-post-wake')
     const { wakeFollowedSleptAgentsForWorktree } =
-      await import('./wake-sleeping-agents-in-background')
+      await import('./agent-session/resume/wake-sleeping-agents-in-background')
     clearDefaultSwitchWake()
     // WorktreeList queues the pair + a snapshot of the captured records.
     queueDefaultSwitchWake([SEL_ID, DEFAULT_ID], DEFAULT_ID, [recordRepo, recordSel])
@@ -707,7 +707,7 @@ describe('mode-B follow switch: recordless shell panes', () => {
     applyFollowMigrations()
     useAppStore.getState().releaseFollowSwitchShellPtyBindings([SEL_ID, DEFAULT_ID])
     const { wakeFollowedSleptAgentsForWorktree } =
-      await import('./wake-sleeping-agents-in-background')
+      await import('./agent-session/resume/wake-sleeping-agents-in-background')
     for (const worktreeId of [SEL_ID, DEFAULT_ID]) {
       wakeFollowedSleptAgentsForWorktree(worktreeId)
     }
@@ -725,7 +725,7 @@ describe('mode-B follow switch: recordless shell panes', () => {
     seedModeBPostSleepState()
     applyFollowMigrations()
     const { wakeFollowedSleptAgentsForWorktree } =
-      await import('./wake-sleeping-agents-in-background')
+      await import('./agent-session/resume/wake-sleeping-agents-in-background')
 
     wakeFollowedSleptAgentsForWorktree(SEL_ID)
 
@@ -741,7 +741,7 @@ describe('mode-B follow switch: recordless shell panes', () => {
     seedModeBPostSleepState()
     applyFollowMigrations()
     const { wakeFollowedSleptAgentsForWorktree } =
-      await import('./wake-sleeping-agents-in-background')
+      await import('./agent-session/resume/wake-sleeping-agents-in-background')
     // Make every record look orphaned: no tab rows at all for this worktree.
     const state = useAppStore.getState()
     useAppStore.setState({

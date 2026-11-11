@@ -15,26 +15,40 @@ const read = (name: string): string => readFileSync(join(DIR, name), 'utf-8')
 
 describe('default-worktree switch entry points survive card refactors', () => {
   it('hands the switch request to the context menu', () => {
-    expect(read('worktree-card-surface.tsx')).toContain(
+    expect(read('workspace-card/surface/worktree-card-surface.tsx')).toContain(
       'onDefaultSwitchRequest={onDefaultSwitchRequest}'
     )
   })
 
   it('renders the drop target the sidebar drag aims at', () => {
-    expect(read('worktree-card-surface.tsx')).toContain('data-default-worktree-switch-drop-target')
+    expect(read('workspace-card/surface/worktree-card-surface.tsx')).toContain(
+      '<WorktreeCardDefaultSwitchDropZone'
+    )
+    expect(read('workspace-card/surface/worktree-card-default-switch-drop-zone.tsx')).toContain(
+      'data-default-worktree-switch-drop-target'
+    )
   })
 
+  // Upstream now draws cards from a JSON template, so the badge must be a template element.
   it('renders the Default badge on the repo-path row', () => {
-    expect(read('worktree-card-meta-row.tsx')).toContain('WorktreeCard.defaultWorktree')
+    expect(read('workspace-card/template/default-workspace-card.json')).toContain(
+      '{ "el": "DefaultBadge", "when": "ws.isDefaultWorktree" }'
+    )
+    expect(read('workspace-card/template/card-identity-parts.tsx')).toContain(
+      'DefaultBadge: part([], () => <WorktreeCardDefaultBadge />)'
+    )
+    expect(read('workspace-card/metadata/worktree-card-default-badge.tsx')).toContain(
+      'WorktreeCard.defaultWorktree'
+    )
   })
 
   // Upstream split WorktreeContextMenu.tsx into a model hook and a view; the menu
   // item and its handler moved with them, so the check follows them there.
   it('still offers the menu item when a handler is supplied', () => {
-    expect(read('use-worktree-context-menu-model.tsx')).toContain(
+    expect(read('workspace-actions/context-menu/use-worktree-context-menu-model.tsx')).toContain(
       'onDefaultSwitchRequest?.(worktree)'
     )
-    expect(read('WorktreeContextMenuView.tsx')).toContain(
+    expect(read('workspace-actions/context-menu/WorktreeContextMenuView.tsx')).toContain(
       '<DefaultWorktreeSwitchMenuItem model={model}'
     )
     expect(read('DefaultWorktreeSwitchMenuItem.tsx')).toContain(
