@@ -1,0 +1,34 @@
+// `agentSession.shellCommand` — a person's `!cmd`: the host runs it in the chat folder and records
+// the output as an Orca row, without a turn. Older hosts lack the method; clients say so.
+
+import { defineMethod } from '../../../core'
+import {
+  ensureStructuredHostInstalled,
+  requireStructuredCapability,
+  requireStructuredSessionHost
+} from '../creation/structured-agent-session-gate'
+import { ShellCommandParams } from '../../../../../../shared/rpc-contract/structured-agent-session-shell-command-params'
+import { runStructuredAgentSessionShellCommand } from '../../../../../native-chat/agent-session-wire/operations/structured-agent-session-shell-command'
+import { openStructuredChatJournal } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-open-journal'
+
+export const STRUCTURED_AGENT_SESSION_SHELL_COMMAND_METHODS = [
+  defineMethod({
+    name: 'agentSession.shellCommand',
+    permission: 'workspace',
+    params: ShellCommandParams,
+    handler: async (params, ctx) => {
+      requireStructuredCapability(ctx)
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredSessionHost(ctx, params.sessionId)
+      return runStructuredAgentSessionShellCommand(
+        {
+          store: host.deps.store,
+          resolveWorkspacePath: host.deps.resolveWorkspacePath,
+          openJournal: openStructuredChatJournal
+        },
+        params.sessionId,
+        params.command.trim()
+      )
+    }
+  })
+]

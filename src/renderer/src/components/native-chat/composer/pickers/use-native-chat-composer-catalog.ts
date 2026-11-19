@@ -6,7 +6,7 @@ import type {
   SlashCommandSuggestion
 } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
 import { nativeChatSessionSkills } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
-import { structuredSessionSlashCommands } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
+import { structuredSessionSlashCommands } from '../../../../../../shared/agent-session/view/structured-agent-session-slash-menu'
 import { withNativeChatResumeCommand } from '@/components/native-chat/composer/pickers/use-native-chat-resume-command'
 import { withNativeChatSideChatRows } from '@/components/native-chat/composer/pickers/use-native-chat-side-chat-command'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'

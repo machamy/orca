@@ -1743,7 +1743,12 @@
         "effortPickerFailed": "Could not open the effort picker.",
         "goalObjectiveMissing": "Describe the goal after /goal.",
         "modelApplyFailed": "Could not apply model {{value}}.",
-        "modelPickerFailed": "Could not open the model picker."
+        "modelPickerFailed": "Could not open the model picker.",
+        "shellCommandWorking": "Wait for the response to finish, then run the shell command.",
+        "shellCommandNotOpen": "Open this chat again, then run the shell command.",
+        "shellCommandFolderUnavailable": "This chat's folder is unavailable, so the shell command did not run.",
+        "shellCommandUnsupportedByHost": "This chat host cannot run ! shell commands. Update Orca on that host.",
+        "shellCommandFailed": "The shell command could not run."
       },
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",

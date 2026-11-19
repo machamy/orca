@@ -6,7 +6,7 @@ import type { PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
 import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { openStructuredChatJournal } from '../../native-chat/agent-session-wire/host/structured-agent-session-open-journal'
 import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
 
 export type PRWatchRuntimeDeps = {
@@ -20,16 +20,6 @@ export type PRWatchRuntimeDeps = {
 let generation = 0
 let starting: Promise<void> | null = null
 let running: PRWatchService | null = null
-
-/** The open chat's journal, if any: the publication feed hands a new observer it at once. */
-function openChatJournal(chatId: string): AgentSessionJournal | null {
-  let journal: AgentSessionJournal | null = null
-  getStructuredAgentSessionHost()?.observeConversationPublications(chatId, {
-    next: (hint) => (journal ??= hint.journal),
-    error: () => {}
-  })?.()
-  return journal
-}
 
 /** Idempotent; reuses the record store slot the chat host opens, so nothing opens twice. */
 export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
@@ -58,7 +48,7 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
           ? deps.resolveWorkspace(location.workspaceId).catch(() => null)
           : 'not-git'
       },
-      openJournal: openChatJournal,
+      openJournal: openStructuredChatJournal,
       logger: deps.logger
     })
     running = service

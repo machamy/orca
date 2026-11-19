@@ -20,6 +20,7 @@ import { resolveHandover } from '../operations/structured-agent-session-operatio
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-session-adapter'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { withShellCommandContext } from './structured-agent-session-shell-context'
 import {
   handOverStructuredAgentSessionCommand,
   structuredAgentSessionHandoverOrigin
@@ -240,7 +241,7 @@ async function dispatchSafely(
     const outcome = await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
-      body,
+      body: withShellCommandContext(ctx.journal, clientMessageId, body),
       ...(executionOptions ? { executionOptions } : {}),
       ...(signal ? { signal } : {}),
       ...(admitFreshInput

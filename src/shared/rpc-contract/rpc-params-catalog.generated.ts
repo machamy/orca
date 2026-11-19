@@ -675,6 +675,7 @@ import {
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
+import { ShellCommandParams } from './structured-agent-session-shell-command-params'
 import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalInferCodexQuestionSkip } from './terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
@@ -868,6 +869,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.send': SendParams,
   'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
+  'agentSession.shellCommand': ShellCommandParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeAvailability': AvailabilityParams,

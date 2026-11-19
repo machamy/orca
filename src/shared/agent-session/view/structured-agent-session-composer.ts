@@ -1,35 +1,25 @@
 import { agentSessionInteractionCommand } from '../options/agent-session-interaction-mode'
-import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../native-chat/input/native-chat-session-options'
-import {
-  sessionSlashCommandSuggestions,
-  type SlashCommandSuggestion
-} from '../../native-chat/input/native-chat-slash-commands'
+import type { SlashCommandSuggestion } from '../../native-chat/input/native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
 import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
+import {
+  CONVERSATION_COMMANDS,
+  STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
+} from './structured-agent-session-slash-menu'
+import type { AgentSessionShellCommandResult } from '../../rpc-contract/structured-agent-session-shell-command-params'
+import { nativeChatShellCommandOfDraft } from '../../native-chat/native-chat-shell-command'
+import { dispatchStructuredAgentSessionShellCommand } from './structured-agent-session-shell-command-dispatch'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
 import {
   structuredComposerFailure,
   type StructuredComposerFailureCode,
   type StructuredComposerFailureParams
 } from '../failures/structured-agent-session-composer-failure'
-
-const COMPACT_INSTRUCTIONS_HINT = '[instructions]'
-
-const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'clear', description: 'Clear conversation context' },
-  { name: 'compact', description: 'Compact conversation context' }
-]
-
-/** Session options remain available on hosts predating conversation commands. */
-export const STRUCTURED_AGENT_SESSION_SLASH_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'model', description: 'Choose the model' },
-  { name: 'effort', description: 'Choose reasoning effort' }
-]
 
 export type StructuredAgentSessionComposerOptions = {
   agent?: AgentType
@@ -48,6 +38,8 @@ export type StructuredAgentSessionComposerOptions = {
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
   changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
+  /** `!cmd` runs on the chat host; absent, `!` text goes to the agent as typed. */
+  runShellCommand?: (command: string) => Promise<AgentSessionShellCommandResult | 'unsupported'>
 }
 
 /** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
@@ -86,63 +78,6 @@ function commandParts(text: string): { name: string; argument: string } | null {
     : { name, argument }
 }
 
-/** Fallback menu combines host-owned and agent text-driven commands when no catalog is reported. */
-export function structuredSlashCommands(
-  commands: readonly AgentSessionConversationCommand[] = [],
-  agent?: AgentType | null,
-  compactInstructions = false
-): readonly SlashCommandSuggestion[] {
-  const hostOwned = [
-    ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
-    ...CONVERSATION_COMMANDS.filter((entry) =>
-      commands.includes(entry.name as AgentSessionConversationCommand)
-    ).map((entry) =>
-      entry.name === 'compact' && compactInstructions
-        ? { ...entry, argumentHint: COMPACT_INSTRUCTIONS_HINT }
-        : entry
-    )
-  ]
-  // No reported catalog must not hide agent-handled commands such as Codex /goal.
-  return [
-    ...hostOwned,
-    ...getTextDrivenNativeChatCommands(agent).filter(
-      (entry) => !hostOwned.some((offered) => offered.name === entry.name)
-    )
-  ]
-}
-
-/** Host commands remain first; reported catalogs add other names. */
-export function structuredSessionSlashCommands(
-  agent: AgentType,
-  conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
-  reported: readonly AgentSessionSlashCommand[] | undefined,
-  compactInstructions?: boolean,
-  interactionModeSupported = false
-): readonly SlashCommandSuggestion[] {
-  const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
-    ? [
-        { name: 'plan', description: 'Switch to Plan mode', orcaOwned: true },
-        ...(agent === 'codex'
-          ? [{ name: 'default', description: 'Switch to Build mode', orcaOwned: true as const }]
-          : [])
-      ]
-    : []
-  const hostOwned = [
-    ...modeCommands,
-    ...structuredSlashCommands(conversationCommands, agent, compactInstructions).filter(
-      ({ name }) => !modeCommands.some((entry) => entry.name === name)
-    )
-  ]
-  if (reported === undefined) {
-    return hostOwned
-  }
-  const offered = new Set(hostOwned.map(({ name }) => name))
-  return [
-    ...hostOwned,
-    ...sessionSlashCommandSuggestions(agent, reported).filter(({ name }) => !offered.has(name))
-  ]
-}
-
 function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
   return [...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS, ...CONVERSATION_COMMANDS]
 }
@@ -157,6 +92,7 @@ export function isStructuredAgentSessionComposerCommand(
 ): boolean {
   const command = commandParts(text)
   return Boolean(
+    nativeChatShellCommandOfDraft(text) !== null ||
     (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
     (agentSessionInteractionCommand(agent ?? '', text) !== null &&
       snapshot.some((entry) => entry.id === 'interactionMode'))
@@ -249,6 +185,12 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   /** A conversation command left for the host, so the composer can release its draft. */
   onSent?: () => void
 ): Promise<StructuredAgentSessionCommandOutcome> {
+  const shellCommand = nativeChatShellCommandOfDraft(text)
+  if (shellCommand !== null) {
+    return controller.runShellCommand
+      ? dispatchStructuredAgentSessionShellCommand(controller.runShellCommand, shellCommand, onSent)
+      : { handled: false, accepted: false, error: null }
+  }
   const interaction = agentSessionInteractionCommand(controller.agent ?? '', text)
   if (interaction !== null && controller.snapshot.some((entry) => entry.id === 'interactionMode')) {
     return {

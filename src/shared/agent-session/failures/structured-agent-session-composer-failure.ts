@@ -8,7 +8,14 @@ export const STRUCTURED_COMPOSER_FAILURE_COPY = {
   modelPickerFailed: 'Could not open the model picker.',
   effortPickerFailed: 'Could not open the effort picker.',
   modelApplyFailed: 'Could not apply model {{value}}.',
-  effortApplyFailed: 'Could not apply effort {{value}}.'
+  effortApplyFailed: 'Could not apply effort {{value}}.',
+  shellCommandWorking: 'Wait for the response to finish, then run the shell command.',
+  shellCommandNotOpen: 'Open this chat again, then run the shell command.',
+  shellCommandFolderUnavailable:
+    "This chat's folder is unavailable, so the shell command did not run.",
+  shellCommandUnsupportedByHost:
+    'This chat host cannot run ! shell commands. Update Orca on that host.',
+  shellCommandFailed: 'The shell command could not run.'
 } as const
 
 export type StructuredComposerFailureCode = keyof typeof STRUCTURED_COMPOSER_FAILURE_COPY

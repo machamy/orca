@@ -8,6 +8,7 @@ import {
 import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
+import { journalRestsBetweenTurns } from '../../native-chat/agent-session-journal/journal-between-turns'
 import {
   markPRDeliveryDelivered,
   readOldestPRPendingDelivery,
@@ -43,11 +44,6 @@ function eventItem(delivery: PRPendingDelivery) {
       text: pullRequestEventText(delivery.verdict, { ...pr, headSha: delivery.headSha })
     }
   }
-}
-
-/** Lines go between turns, never into one: a turn running or about to start waits for its end. */
-function canAppendBetweenTurns(journal: AgentSessionJournal): boolean {
-  return journal.newestTurn()?.state !== 'running' && journal.pendingSubmissions().length === 0
 }
 
 type DeliveryInput = {
@@ -91,7 +87,7 @@ async function drain(input: DeliveryInput): Promise<void> {
     return
   }
   for (;;) {
-    if (!canAppendBetweenTurns(journal)) {
+    if (!journalRestsBetweenTurns(journal)) {
       return
     }
     const delivery = readOldestPRPendingDelivery(database.db, sessionId)
@@ -150,7 +146,7 @@ export class PREventDeliveryTrigger {
 
   /** Streaming commits during a turn cost one set lookup and a turn check, nothing more. */
   committed(chatId: string, journal: AgentSessionJournal): void {
-    if (this.owed.has(chatId) && canAppendBetweenTurns(journal)) {
+    if (this.owed.has(chatId) && journalRestsBetweenTurns(journal)) {
       this.deliver(chatId, journal)
     }
   }

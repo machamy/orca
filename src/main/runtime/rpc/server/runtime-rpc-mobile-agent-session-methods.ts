@@ -24,6 +24,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.options',
   'agentSession.modelCatalog',
   'agentSession.conversationCommand',
+  // A person's `!cmd`, run in the chat folder without a turn.
+  'agentSession.shellCommand',
   // Gated on the phone by agent-session.thread-goal.phone.v1.
   'agentSession.threadGoal',
   'agentSession.commands',

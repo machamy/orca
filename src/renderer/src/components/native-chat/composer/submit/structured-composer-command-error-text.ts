@@ -38,7 +38,23 @@ const COPY: Record<StructuredComposerFailureCode, (name: string, value: string) 
   effortApplyFailed: (_name, value) =>
     translate('components.native-chat.composerErrors.effortApplyFailed', EN.effortApplyFailed, {
       value
-    })
+    }),
+  shellCommandWorking: () =>
+    translate('components.native-chat.composerErrors.shellCommandWorking', EN.shellCommandWorking),
+  shellCommandNotOpen: () =>
+    translate('components.native-chat.composerErrors.shellCommandNotOpen', EN.shellCommandNotOpen),
+  shellCommandFolderUnavailable: () =>
+    translate(
+      'components.native-chat.composerErrors.shellCommandFolderUnavailable',
+      EN.shellCommandFolderUnavailable
+    ),
+  shellCommandUnsupportedByHost: () =>
+    translate(
+      'components.native-chat.composerErrors.shellCommandUnsupportedByHost',
+      EN.shellCommandUnsupportedByHost
+    ),
+  shellCommandFailed: () =>
+    translate('components.native-chat.composerErrors.shellCommandFailed', EN.shellCommandFailed)
 }
 
 /** Translate refusals the shared composer worded; other errors arrive already translated. */

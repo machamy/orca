@@ -20,7 +20,15 @@ import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { translate } from '../../../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from '../agent-session/agent-session-failure-copy'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import { requestStructuredAgentSessionMutation } from '../agent-session/mobile-structured-agent-session-rpc'
+import {
+  callAgentSession,
+  requestStructuredAgentSessionMutation
+} from '../agent-session/mobile-structured-agent-session-rpc'
+import type { AgentSessionShellCommandResult } from '../../../../../src/shared/rpc-contract/structured-agent-session-shell-command-params'
+import {
+  NATIVE_CHAT_SHELL_COMMAND_CALL_TIMEOUT_MS,
+  isNativeChatShellCommandUnsupportedError
+} from '../../../../../src/shared/native-chat/native-chat-shell-command'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
 /** What the phone shows at keypress that holds a command; `background` also counts the strip mid-turn. */
@@ -72,6 +80,21 @@ export async function dispatchMobileStructuredCommand(input: {
   let unknown = false
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
+    runShellCommand: async (command) => {
+      try {
+        return await callAgentSession<AgentSessionShellCommandResult>(
+          input.client,
+          'agentSession.shellCommand',
+          { sessionId: input.sessionId, command },
+          NATIVE_CHAT_SHELL_COMMAND_CALL_TIMEOUT_MS
+        )
+      } catch (error) {
+        if (isNativeChatShellCommandUnsupportedError(error)) {
+          return 'unsupported'
+        }
+        throw error
+      }
+    },
     runConversationCommand: async (command, instructions) => {
       const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
         mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold))

@@ -1,7 +1,9 @@
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../shared/agent-session/agent-session-conversation-command'
+import { NATIVE_CHAT_SHELL_COMMAND_CALL_TIMEOUT_MS } from '../../../../../shared/native-chat/native-chat-shell-command'
 
 export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
   ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
+  ['agentSession.shellCommand', NATIVE_CHAT_SHELL_COMMAND_CALL_TIMEOUT_MS],
   // The host may start an agent at rest before rewinding it, as it does for a command.
   ['agentSession.rewind', 195_000],
   // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
