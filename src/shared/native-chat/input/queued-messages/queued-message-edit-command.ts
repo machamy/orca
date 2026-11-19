@@ -5,6 +5,7 @@ import {
   prepareStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionGoalCommand
 } from '../../../agent-session/view/structured-agent-session-composer'
+import { nativeChatShellCommandOfDraft } from '../../native-chat-shell-command'
 
 /** Provider prompt commands remain content; host actions cannot replace a queued body. */
 export function queuedMessageEditAcceptsText(
@@ -35,6 +36,7 @@ export function prepareQueuedMessageEditText(
   return (text) =>
     !(
       hostCommand(text) ||
+      nativeChatShellCommandOfDraft(text) !== null ||
       (hostSetsInteractionMode && agentSessionInteractionCommand(agent, text) !== null) ||
       (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
       /^\/resume(?:\s|$)/i.test(text) ||

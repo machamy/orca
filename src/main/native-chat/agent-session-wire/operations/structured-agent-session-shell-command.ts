@@ -86,7 +86,9 @@ export async function runStructuredAgentSessionShellCommand(
     // No terminal answers a prompt, so git must fail instead of waiting for one.
     env: { ...(await hostShellEnvironment()), GIT_TERMINAL_PROMPT: '0' },
     timeoutMs: NATIVE_CHAT_SHELL_COMMAND_TIMEOUT_MS,
-    maxOutputBytes: OUTPUT_CAPTURE_BYTES
+    maxOutputBytes: OUTPUT_CAPTURE_BYTES,
+    // The deadline stops what the shell started too, not only the shell.
+    terminationBarrier: true
   })
   const result: NativeChatShellCommandResult = {
     command,

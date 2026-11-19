@@ -2,11 +2,14 @@ import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
 } from '../agent-session/journal/agent-session-journal-types'
+import { sliceAtCodeUnitLimit } from '../text/surrogate-safe-text-slice'
 
 /** `!cmd` in a chat composer: the host runs it in the chat's folder and the agent reads it with the next message. */
 export const NATIVE_CHAT_SHELL_COMMAND_MAX_LENGTH = 8192
 export const NATIVE_CHAT_SHELL_COMMAND_TIMEOUT_MS = 120_000
 export const NATIVE_CHAT_SHELL_COMMAND_OUTPUT_MAX_CHARS = 32_000
+/** All runs one message carries; past it the oldest are only counted. */
+export const NATIVE_CHAT_SHELL_COMMAND_CONTEXT_MAX_CHARS = 64_000
 
 const ID_PREFIX = 'shell-command:'
 
@@ -25,7 +28,7 @@ export function nativeChatShellCommandClientMessageId(runId: string): string {
 /** One run as its row keeps it; `readWith` is the person's message the agent read it with. */
 export type NativeChatShellCommandRun = { runId: string; text: string; readWith?: string }
 
-/** A plain command-output row; the run rides open, as status rows keep unknown fields. */
+/** A plain command-output row carrying its run; the status-row storage schema names `shellCommand`. */
 export type NativeChatShellCommandItem = AgentJournalPlainStatusItem & {
   shellCommand: NativeChatShellCommandRun
 }
@@ -64,7 +67,7 @@ export type NativeChatShellCommandResult = {
 
 function boundedOutput(text: string): { text: string; cut: boolean } {
   return text.length > NATIVE_CHAT_SHELL_COMMAND_OUTPUT_MAX_CHARS
-    ? { text: text.slice(0, NATIVE_CHAT_SHELL_COMMAND_OUTPUT_MAX_CHARS), cut: true }
+    ? { text: sliceAtCodeUnitLimit(text, NATIVE_CHAT_SHELL_COMMAND_OUTPUT_MAX_CHARS), cut: true }
     : { text, cut: false }
 }
 
@@ -91,11 +94,22 @@ export function nativeChatShellCommandRowText(result: NativeChatShellCommandResu
 
 /** What the agent receives ahead of the next message: the rows it never saw run. */
 export function nativeChatShellCommandAgentContext(rowTexts: readonly string[]): string {
+  const kept: string[] = []
+  let room = NATIVE_CHAT_SHELL_COMMAND_CONTEXT_MAX_CHARS
+  for (const text of rowTexts.toReversed()) {
+    if (text.length > room) {
+      break
+    }
+    kept.unshift(text)
+    room -= text.length
+  }
+  const omitted = rowTexts.length - kept.length
   return [
     '<orca-shell-commands>',
     'Before this message, the user ran these shell commands in the chat folder through Orca. You did not run them; their output is context for the message.',
     '',
-    rowTexts.join('\n\n'),
+    ...(omitted > 0 ? [`[${omitted} earlier command${omitted === 1 ? '' : 's'} omitted]`, ''] : []),
+    kept.join('\n\n'),
     '</orca-shell-commands>'
   ].join('\n')
 }

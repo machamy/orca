@@ -57,7 +57,9 @@ describe('`!cmd` rows ride with the next message, once', () => {
 
     const [first, second] = dispatched()
     expect(first).toMatch(/^<orca-shell-commands>/)
-    expect(first.indexOf('$ pwd\n/repo')).toBeLessThan(first.indexOf('$ false\n[exit 1]'))
+    const pwd = first.indexOf('$ pwd\n/repo')
+    expect(pwd).toBeGreaterThanOrEqual(0)
+    expect(pwd).toBeLessThan(first.indexOf('$ false\n[exit 1]'))
     expect(first.endsWith('</orca-shell-commands>\n\nwhat failed?')).toBe(true)
     expect(second).toBe('after')
   })
@@ -73,5 +75,20 @@ describe('`!cmd` rows ride with the next message, once', () => {
     const second = dispatched()[1]
     expect(second).toContain('$ echo new')
     expect(second).not.toContain('$ echo old')
+  })
+
+  it('keeps the newest runs when their output outgrows one message', async () => {
+    rig = await createQueuedMessageTestRig()
+    const big = 'x'.repeat(30_000)
+    await shellRow('run-1', `$ echo one\n${big}`)
+    await shellRow('run-2', `$ echo two\n${big}`)
+    await shellRow('run-3', `$ echo three\n${big}`)
+    await nextSend('now?')
+
+    const [first] = dispatched()
+    expect(first).toContain('[1 earlier command omitted]')
+    expect(first).not.toContain('$ echo one')
+    expect(first).toContain('$ echo two')
+    expect(first).toContain('$ echo three')
   })
 })
