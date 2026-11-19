@@ -4,7 +4,10 @@ import { cn } from '@/lib/class-names'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/selection/active-workspace'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
@@ -61,6 +64,18 @@ export type WorktreeItemRowContext = {
   onCardDragEnd: () => void
 }
 
+// The drag state names the host-qualified key; the map is keyed by bare id.
+function defaultSwitchDragSource(
+  worktreeMap: ReadonlyMap<string, Worktree>,
+  draggingKey: string | null
+): Worktree | undefined {
+  if (!draggingKey) {
+    return undefined
+  }
+  const worktree = worktreeMap.get(getWorktreeIdFromHostIdentity(draggingKey))
+  return worktree && getWorktreeHostIdentity(worktree) === draggingKey ? worktree : undefined
+}
+
 export function renderWorktreeItemRow(
   ctx: WorktreeItemRowContext,
   itemRow: WorktreeItemRow,
@@ -92,9 +107,10 @@ export function renderWorktreeItemRow(
     })
   // Fork: while an eligible drag is over the list, the default row grows a
   // "Make default" drop zone; the ring lights up when the pointer is on it.
-  const dragSourceForDefaultSwitch = ctx.worktreeDragState.draggingWorktreeId
-    ? ctx.worktreeMap.get(ctx.worktreeDragState.draggingWorktreeId)
-    : undefined
+  const dragSourceForDefaultSwitch = defaultSwitchDragSource(
+    ctx.worktreeMap,
+    ctx.worktreeDragState.draggingWorktreeId
+  )
   const showDefaultSwitchDropTarget =
     ctx.onDefaultSwitchRequest !== undefined &&
     canSwitchWorktreeToDefault({

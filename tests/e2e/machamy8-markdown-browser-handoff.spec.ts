@@ -7,14 +7,15 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
 import type { Page } from '@stablyai/playwright-test'
 import {
   getActiveTabType,
   getActiveWorktreeId,
   waitForActiveWorktree,
   waitForSessionReady
-} from './helpers/store'
+} from './desktop/renderer-probes/store'
 
 function writeMarkdownFixture(): { path: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'orca-md-handoff-'))
@@ -57,8 +58,8 @@ test('markdown opened in the embedded browser hands off to the editor', async ({
     // exists as a rendered element, not as raw "# Fixture heading" source text.
     const openedPath = await page.evaluate(() => {
       const state = window.__store?.getState()
-      const active = state?.openFiles?.find?.((f: { isActive?: boolean }) => f.isActive)
-      return active?.filePath ?? state?.activeFilePath ?? null
+      const active = state?.openFiles.find((f) => f.id === state.activeFileId)
+      return active?.filePath ?? null
     })
     if (openedPath !== null) {
       expect(String(openedPath)).toContain('release-note.md')
@@ -70,8 +71,7 @@ test('markdown opened in the embedded browser hands off to the editor', async ({
     // No browser tab may be left holding the markdown URL (stray-tab guard).
     const strayBrowserUrls = await page.evaluate(() => {
       const state = window.__store?.getState()
-      const tabs = state?.browserTabs ?? state?.browserWorkspaces ?? []
-      return JSON.stringify(tabs)
+      return JSON.stringify(state?.browserPagesByWorkspace ?? {})
     })
     expect(strayBrowserUrls).not.toContain('release-note.md')
   } finally {

@@ -4,10 +4,15 @@
  * and actually move it — the menu is the only in-place way to reposition it.
  */
 
-import { expect, test } from './helpers/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
 import type { Page } from '@stablyai/playwright-test'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { splitActiveTerminalPane, waitForPaneIdentitySnapshot } from './helpers/terminal'
+import { waitForActiveWorktree, waitForSessionReady } from './desktop/renderer-probes/store'
+import { waitForPaneIdentitySnapshot } from './terminal/input/terminal'
+import {
+  splitActiveTerminalPane,
+  waitForActiveTerminalManager
+} from './terminal/layout/terminal-pane-operations'
 
 type ActivePane = { tabId: string; leafId: string }
 
@@ -42,22 +47,27 @@ async function reportClaudePane(
       const store = window.__store
       const paneKey = `${tabId}:${leafId}`
       const now = Date.now()
-      store?.setState({
-        agentStatusByPaneKey: {
-          ...store.getState().agentStatusByPaneKey,
-          [paneKey]: {
-            state: 'working',
-            prompt: '',
-            updatedAt: now,
-            stateStartedAt: now,
-            agentType: 'claude',
-            model: reportedModel,
-            ...(reportedEffort ? { effort: reportedEffort } : {}),
+      if (!store) {
+        return
+      }
+      store.setState({
+        agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace([
+          [
             paneKey,
-            tabId,
-            stateHistory: []
-          }
-        }
+            {
+              state: 'working',
+              prompt: '',
+              updatedAt: now,
+              stateStartedAt: now,
+              agentType: 'claude',
+              model: reportedModel,
+              ...(reportedEffort ? { effort: reportedEffort } : {}),
+              paneKey,
+              tabId,
+              stateHistory: []
+            }
+          ]
+        ])
       })
     },
     { tabId: pane.tabId, leafId: pane.leafId, reportedModel: model, reportedEffort: effort }
@@ -105,6 +115,7 @@ test('a split gives each pane its own badge, inside that pane', async ({ orcaPag
   await expect
     .poll(async () => (await readActivePane(page)) !== null, { timeout: 30_000 })
     .toBe(true)
+  await waitForActiveTerminalManager(page)
 
   await splitActiveTerminalPane(page, 'vertical')
   const snapshot = await waitForPaneIdentitySnapshot(page, 2)

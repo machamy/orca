@@ -124,12 +124,15 @@ export const FORK_ADDED_TESTS = [
   'src/renderer/src/runtime/rpc/targets/runtime-worktree-selector.fork.test.ts',
   'src/shared/git/compatibility/git-worktree-binary-compatibility.fork.test.ts',
   'src/renderer/src/components/sidebar/workspace-actions/context-menu/worktree-context-menu-policy.fork.test.ts',
-  'src/shared/worktree/workspace-kinds.fork.test.ts'
+  'src/shared/worktree/workspace-kinds.fork.test.ts',
+  'src/main/git/worktree-repair-capability.test.ts',
+  'src/renderer/src/components/sidebar/worktree-list/rows/repo-header-project-actions.test.tsx'
 ]
 
 /** Upstream test files carrying fork-added cases or fork-adjusted expectations. */
 export const FORK_CARRYING_TESTS = [
   'src/main/browser/browser-guest-context-menu.test.ts',
+  'src/main/claude/hooks/claude-status-line-install.test.ts',
   'src/main/workspaces/removal/local-worktree-filesystem-wsl-banner.wsl.test.ts',
   'src/main/workspaces/removal/local-worktree-filesystem.test.ts',
   'src/main/persistence/persistence-cohort-and-identity-migration.test.ts',

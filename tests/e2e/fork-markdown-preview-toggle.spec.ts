@@ -10,9 +10,13 @@
 
 import { copyFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { expect, test } from './helpers/orca-app'
-import { getActiveWorktreeContext, openMarkdownFixture } from './helpers/markdown-editor-fixture'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import {
+  getActiveWorktreeContext,
+  openMarkdownFixture
+} from './editor/markdown/markdown-editor-fixture'
+import { waitForActiveWorktree, waitForSessionReady } from './desktop/renderer-probes/store'
 
 function syntheticRefusedDoc(): string {
   const filler = Array.from(

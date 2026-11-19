@@ -71,6 +71,23 @@ describe('Claude statusLine by resolved version', () => {
     new ClaudeHookService().install({ claudeVersion: '1.0.63' })
     expect(readSettings().statusLine).toEqual(USER_STATUS_LINE)
   })
+
+  // Fork: the model badge wraps the user's command; uninstall puts the command back verbatim.
+  it.skipIf(process.platform === 'win32')(
+    'wraps a user statusLine with the model badge and restores it on remove',
+    () => {
+      mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+      writeFileSync(settingsPath, JSON.stringify({ statusLine: USER_STATUS_LINE }))
+      new ClaudeHookService().install({ claudeVersion: '2.1.261' })
+      const wrapper = '"${HOME-}/.orca/agent-hooks/claude-model-badge-statusline.sh"'
+      expect(readSettings().statusLine).toEqual({
+        type: 'command',
+        command: `if [ -r ${wrapper} ]; then exec /bin/sh ${wrapper}; fi; /usr/local/bin/my-statusline`
+      })
+      new ClaudeHookService().remove()
+      expect(readSettings().statusLine).toEqual(USER_STATUS_LINE)
+    }
+  )
 })
 
 describe('Claude statusLine on Windows', () => {

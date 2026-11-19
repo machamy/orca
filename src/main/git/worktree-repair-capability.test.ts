@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 
-vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('./command-runner/git-exec-file', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
 import { clearGitCapabilityStateForTests } from './command-runner/host-routing/git-capability-state'
 import { ensureWorktreeRepairSupported } from './worktree-repair-capability'

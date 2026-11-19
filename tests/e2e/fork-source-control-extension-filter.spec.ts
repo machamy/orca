@@ -7,10 +7,11 @@
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
 import type { Page } from '@stablyai/playwright-test'
-import { openSourceControl } from './helpers/source-control-ai-generation'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { openSourceControl } from './source-control/source-control-ai-generation'
+import { waitForActiveWorktree, waitForSessionReady } from './desktop/renderer-probes/store'
 
 const FIXTURES = [
   'Assets/Filter/Player.cs',

@@ -20,7 +20,10 @@ vi.mock('@/store', () => {
     })
   }
 })
-vi.mock('@/components/settings/repository-settings-targets', () => ({
+vi.mock('@/components/wsl-move/WslMovedUseHereMenuItem', () => ({
+  WslMovedRepoUseHereMenuItem: () => null
+}))
+vi.mock('@/components/settings/repository/repository-settings-targets', () => ({
   getRepositoryIconSectionId: () => 'icon'
 }))
 vi.mock('@/components/ui/button', () => ({

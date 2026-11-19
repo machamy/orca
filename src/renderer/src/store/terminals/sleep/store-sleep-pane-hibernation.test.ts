@@ -118,7 +118,10 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', {
+      keepHistory: true,
+      retainSurface: true
+    })
     expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-shell'])
     expect(state.tabsByWorktree[wt]?.[0]?.ptyId).toBe('pty-shell')
     expect(state.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({
