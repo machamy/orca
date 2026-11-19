@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook, act } from '@testing-library/react'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const runFlow = vi.fn(async () => ({ repoId: 'r1' }))

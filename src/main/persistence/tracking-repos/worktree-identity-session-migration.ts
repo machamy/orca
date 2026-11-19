@@ -1,7 +1,10 @@
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { remapPathInsideWorktreeRoot } from '../../../shared/cross-platform-path'
-import type { WorkspaceKey } from '../../../shared/workspace-scope'
-import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import { remapPathInsideWorktreeRoot } from '../../../shared/file-access/cross-platform-path'
+import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   getWorktreeIdFromHostIdentity,

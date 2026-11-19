@@ -1,10 +1,10 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { isValidResolvedWorktreeLineageEdge } from '../../../../shared/resolved-worktree-lineage'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { isValidResolvedWorktreeLineageEdge } from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
-import { getProjectedWorktreeLineage } from '../../../../shared/worktree/workspace-lineage-graph'
+import { getProjectedWorktreeLineage } from '../../../../shared/worktree/lineage/workspace-lineage-graph'
 
 /**
  * Fork E5: valid DIRECT lineage children of one worktree — the rows the

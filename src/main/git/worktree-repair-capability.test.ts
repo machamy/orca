@@ -4,7 +4,7 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn
 
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
-import { clearGitCapabilityStateForTests } from './command-runner/git-capability-state'
+import { clearGitCapabilityStateForTests } from './command-runner/host-routing/git-capability-state'
 import { ensureWorktreeRepairSupported } from './worktree-repair-capability'
 
 function unsupportedRepair(): Error {

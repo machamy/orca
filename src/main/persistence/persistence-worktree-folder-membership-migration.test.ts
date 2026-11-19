@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { testState, createStore } from './persistence-test-harness'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import { mergeWorktree } from '../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../ipc/worktrees/metadata/worktree-metadata-merge'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 
 const localTarget = (id: string) => hostWorktreeTarget({ id, hostId: 'local' })

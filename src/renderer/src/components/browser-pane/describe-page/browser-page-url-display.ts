@@ -1,42 +1,19 @@
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import '../../../../../shared/constants'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import '../../../../../shared/orca-profiles/constants'
 import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/navigation/browser-url'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
-
-export function getBrowserPageRuntimeEnvironmentId(
-  page: Pick<BrowserPageState, 'browserRuntimeEnvironmentId'>,
-  inferredRuntimeEnvironmentId: string | null | undefined
-): string | null {
-  if (page.browserRuntimeEnvironmentId !== undefined) {
-    return page.browserRuntimeEnvironmentId?.trim() || null
-  }
-  return inferredRuntimeEnvironmentId?.trim() || null
-}
 
 /** A blank tab shows an empty bar, so typing never merges into placeholder text. */
 export function toDisplayUrl(url: string): string {
   return isBlankBrowserUrl(url) ? '' : redactKagiSessionToken(url)
 }
 
-export function getBrowserDisplayTitle(title: string | null | undefined, url: string): string {
-  if (
-    url === 'about:blank' ||
-    url === ORCA_BROWSER_BLANK_URL ||
-    title === 'about:blank' ||
-    title === ORCA_BROWSER_BLANK_URL ||
-    !title
-  ) {
-    return 'New Tab'
-  }
-  return title
-}
+export { getBrowserDisplayTitle } from '../../../../../shared/browser/browser-display-title'
 
 export function isChromiumErrorPage(url: string): boolean {
   return url.startsWith('chrome-error://')

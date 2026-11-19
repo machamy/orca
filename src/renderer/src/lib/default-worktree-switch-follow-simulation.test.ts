@@ -28,7 +28,7 @@ import {
 } from '@/constants/terminal'
 
 const mountRequests = vi.hoisted(() => [] as { worktreeId: string; tabIds?: readonly string[] }[])
-vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
+vi.mock('@/components/terminal/workspace-mounting/background-terminal-worktree-mount', () => ({
   requestBackgroundTerminalWorktreeMount: (detail: {
     worktreeId: string
     tabIds?: readonly string[]
@@ -47,7 +47,7 @@ vi.mock('./workspace/activation/worktree-activation-pty-inventory', async (impor
   ...(await importOriginal<typeof PtyInventory>()),
   listActivationPtySessions: async () => []
 }))
-vi.mock('./worktree-agent-structured-inventory', () => ({
+vi.mock('./workspace/activation/worktree-agent-structured-inventory', () => ({
   readWorktreeStructuredActivationInventory: async () => false
 }))
 vi.mock('./workspace/ownership/worktree-live-terminal-surface-owners', async (importOriginal) => ({

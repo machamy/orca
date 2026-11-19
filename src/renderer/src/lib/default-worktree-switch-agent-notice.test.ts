@@ -4,6 +4,7 @@ import {
   collectDefaultSwitchNoticeTargets,
   deliverDefaultSwitchNotice
 } from './default-worktree-switch-agent-notice'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 
@@ -14,7 +15,7 @@ function state(agentState: string) {
     tabsByWorktree: { 'repo::/wt': [{ id: 'tab-1' } as never] },
     terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: 'pty-1' } } as never },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-    agentStatusByPaneKey: { [`tab-1:${LEAF}`]: { state: agentState } as never }
+    agentStatusByPaneKey: acceptedAgentStatuses([[`tab-1:${LEAF}`, { state: agentState } as never]])
   }
 }
 

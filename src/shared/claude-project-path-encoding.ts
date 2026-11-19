@@ -1,4 +1,4 @@
-import { normalizeRuntimePathSeparators } from './cross-platform-path'
+import { normalizeRuntimePathSeparators } from './file-access/cross-platform-path'
 
 /** Claude stores transcripts under `~/.claude/projects/<encoded-cwd>/`, where the
  *  dir name is the raw cwd with every non-alphanumeric replaced by `-`. */

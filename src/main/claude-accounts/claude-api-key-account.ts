@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
+import type { ClaudeRateLimitAccountsState } from '../../shared/agent-accounts/managed-account-types'
 import type {
   ClaudeAccountRuntime,
   ClaudeAccountSelection,
   ClaudeAccountStore,
   ClaudeAccountUsage
-} from './claude-account-selection'
+} from './selection/claude-account-selection'
 import {
   claudeApiKeyHelperCommand,
   deleteClaudeApiKey,

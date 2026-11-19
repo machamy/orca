@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import {
   selectSummaryFocusAgent,
   summaryFocusAgentLabel

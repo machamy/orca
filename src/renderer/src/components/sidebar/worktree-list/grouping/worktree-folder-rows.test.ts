@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeFolder } from '../../../../../../shared/worktree-folder/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getWorktreeDragUnitGroups } from '../drag/worktree-drag-units'
 import { shouldFiltersHideAllRows } from '../listing/sidebar-empty-state-gate'
 import { worktree as worktreeFixture } from './worktree-list-groups-test-fixtures'
 import { getRenderRowOptionId } from '../navigation/active-descendant-option'
-import { buildRenderableRows } from '../listing/renderable-rows'
 import { getRenderRowKey } from '../listing/render-row'
 import { buildRows } from './build-rows.test-fixture'
 import type {
@@ -371,23 +370,6 @@ describe('worktree folder rows — drag units and renderable rows (C8, C9)', () 
       [getWorktreeHostIdentity(rootOne), getWorktreeHostIdentity(childOfOne)],
       [getWorktreeHostIdentity(rootTwo)]
     ])
-  })
-
-  it('C9: lineage-group virtual rows are identical with and without folders', () => {
-    const withFolders = build({
-      worktrees,
-      lineageById,
-      settings: settingsOn,
-      repos: [repo1WithFolders]
-    })
-    const without = build({ worktrees, lineageById })
-    const lineageGroupsOf = (rows: Row[]) =>
-      buildRenderableRows(rows as never)
-        .filter((row) => row.type === 'lineage-group')
-        .map((row) =>
-          row.type === 'lineage-group' ? row.rows.map((item) => item.worktree.id) : []
-        )
-    expect(lineageGroupsOf(withFolders)).toEqual(lineageGroupsOf(without))
   })
 
   it('D3: a folder row never answers an option id for aria-activedescendant', () => {

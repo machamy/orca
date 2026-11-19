@@ -1,9 +1,9 @@
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
-import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
+import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { selectWslHostsServing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   type SidebarHostOption,
   buildSidebarHostOptions,

@@ -1,6 +1,6 @@
 import { setImmediate as nextEventLoopTurn } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { compareAppVersions } from '../../shared/app-version'
+import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import { loadUpdaterModule, warmUpdaterModule } from './testing/updater-test-module-loader'
 import { updaterMainWindow } from './testing/updater-test-main-window'
 
@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
-vi.mock('../ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
+vi.mock('../ipc/pty/provider/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-package/linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
 vi.mock('./releases/updater-changelog', () => moduleFactories.updaterChangelog())

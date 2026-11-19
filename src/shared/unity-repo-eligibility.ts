@@ -1,5 +1,5 @@
-import { isGitRepoKind } from './repo-kind'
-import type { Repo } from './repo-types'
+import { isGitRepoKind } from './repository/repo-kind'
+import type { Repo } from './repository/repo-types'
 import type { Worktree } from './worktree/types'
 
 /**

@@ -1,11 +1,12 @@
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import '../../../../../shared/constants'
+} from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
 import { getBrowserDisplayTitle, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import { loadBrowserGuestUrl } from './load-browser-guest-url'
 import type {
@@ -69,7 +70,9 @@ export function navigateBrowserPageToUrl({
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
       : null
-    webview.src = targetUrl
+    issueBrowserGuestNavigation(webview, () => {
+      webview.src = targetUrl
+    })
     if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
       focusWebviewNow()
     }

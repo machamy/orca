@@ -31,7 +31,7 @@ vi.mock('../../pty-transport/delivery/pty-pre-handler-buffer', () => ({
 }))
 
 const closeTerminalTab = vi.fn()
-vi.mock('../../../terminal/terminal-tab-actions', () => ({
+vi.mock('../../../terminal/tab-lifecycle/terminal-tab-actions', () => ({
   closeTerminalTab: (tabId: string, options?: unknown) => closeTerminalTab(tabId, options)
 }))
 

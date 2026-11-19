@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultSettings } from './constants'
+import { getDefaultSettings } from './orca-profiles/constants'
 
 describe('getDefaultSettings (fork defaults)', () => {
   it('keeps the browser markdown editor handoff enabled by default', () => {

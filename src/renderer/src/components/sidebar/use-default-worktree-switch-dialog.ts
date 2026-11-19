@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeDefaultWorktreeSwitchResult } from '../../../../shared/runtime-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { RuntimeDefaultWorktreeSwitchResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type {
   DefaultWorktreeSwitchConfirmOptions,
   DefaultWorktreeSwitchDialogRequest

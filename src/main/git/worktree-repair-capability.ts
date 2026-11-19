@@ -1,8 +1,8 @@
 import { isUnsupportedWorktreeRepairError } from '../../shared/git/worktrees/git-worktree-command-capabilities'
-import { getLocalGitCapabilityCache } from './command-runner/git-capability-state'
-import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitOptionsForWorktree } from './git-runtime-options'
-import { gitExecFileAsync } from './runner'
+import { getLocalGitCapabilityCache } from './command-runner/host-routing/git-capability-state'
+import type { GitRuntimeOptions } from './command-runner/git-runtime-options'
+import { gitOptionsForWorktree } from './command-runner/git-runtime-options'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 
 export async function repairMainWorktree(path: string, options: GitRuntimeOptions): Promise<void> {
   await gitExecFileAsync(['worktree', 'repair'], gitOptionsForWorktree(path, options))

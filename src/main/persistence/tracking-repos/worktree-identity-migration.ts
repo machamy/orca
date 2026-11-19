@@ -1,12 +1,18 @@
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../shared/browser/workspaces/browser-page-doc-location'
+import {
+  type WorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   isDefaultSwitchTempWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
-import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
-import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
-import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
+import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
 import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
 import { migrateWorkspaceSessionIdentity } from './worktree-identity-session-migration'
 
@@ -156,6 +162,10 @@ export function migrateWorktreeIdentity(
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {
     changed = moveKey(showDotfiles) || changed
+  }
+  const notificationsMuted = state.ui?.notificationsMutedByWorktree
+  if (notificationsMuted) {
+    changed = moveKey(notificationsMuted) || changed
   }
 
   return changed

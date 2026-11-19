@@ -10,8 +10,8 @@ import {
 import { useUnityWorktreeOpenActions } from './unity-worktree-open-actions'
 import { useUnityWorktreeTintMenu } from './worktree-unity-tint-menu'
 import { isLocallyRunnableUnityWorkspace } from '../../../../shared/unity-repo-eligibility'
-import { isDefaultCheckoutWorkspace } from '../../../../shared/worktree/ownership'
-import type { Repo } from '../../../../shared/repo-types'
+import { isDefaultCheckoutWorkspace } from '../../../../shared/worktree/visibility/ownership'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { UnityWorktreeStatus } from '../../../../shared/unity-worktree'
 

@@ -1,10 +1,13 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildStoreState, type StoreLike } from './ipc-events-agent-status-store-test-fixtures'
+import {
+  buildStoreState,
+  type StoreLike
+} from './ipc-events/agent-status/ipc-events-agent-status-store-test-fixtures'
 import {
   buildWindowApi,
   stubAuxiliaryModules
-} from './ipc-events-agent-status-window-test-fixtures'
+} from './ipc-events/agent-status/ipc-events-agent-status-window-test-fixtures'
 
 /**
  * Fork contract: the two fork UI listeners registered through

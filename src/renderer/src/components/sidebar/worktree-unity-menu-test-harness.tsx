@@ -10,7 +10,7 @@
 import React, { type ReactNode } from 'react'
 import { type Mock, vi } from 'vitest'
 import { act } from '@testing-library/react'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { UnityWorktreeStatus } from '../../../../shared/unity-worktree'
 // Type-only: a runtime import here would pull the mocked modules in while this

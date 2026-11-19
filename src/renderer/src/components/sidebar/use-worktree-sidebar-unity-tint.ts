@@ -2,19 +2,19 @@ import { useEffect, useMemo } from 'react'
 
 import { useAppStore } from '@/store'
 import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
-import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../shared/file-access/cross-platform-path'
 import { isLocallyRunnableUnityRepo } from '../../../../shared/unity-repo-eligibility'
 import {
   getUnityWorktreeTintAssignment,
   isUnityTintOptOut,
   pickUnityWorktreeTint
 } from '../../../../shared/unity-worktree-tint-palette'
-import { resolveUnitySidebarTintMode } from '../../../../shared/repo-types'
+import { resolveUnitySidebarTintMode } from '../../../../shared/repository/repo-types'
 import {
   areRuntimePathsEqual,
   isDefaultCheckoutWorkspace
-} from '../../../../shared/worktree/ownership'
-import type { Repo, UnitySidebarTintMode } from '../../../../shared/repo-types'
+} from '../../../../shared/worktree/visibility/ownership'
+import type { Repo, UnitySidebarTintMode } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 /** `mode` is `'off'` exactly when `hex` is null, so a row can switch on it alone. */

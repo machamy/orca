@@ -1,10 +1,10 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getWorktreeFolderGroupKey,

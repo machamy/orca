@@ -12,7 +12,7 @@ import {
 import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-position'
 import { toastWorkspaceSleepOutcome } from './sleep-worktree-flow'
 import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
-import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
+import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { keepsBrowserStateThroughSleep } from '@/lib/default-worktree-switch-browser-keep'
 
 type FollowedSleep = {

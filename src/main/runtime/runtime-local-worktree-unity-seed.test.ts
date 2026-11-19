@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 
 const seed = vi.fn()
 vi.mock('../unity/unity-project-worktree', () => ({

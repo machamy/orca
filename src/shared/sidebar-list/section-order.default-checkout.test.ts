@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import type { Worktree } from '../worktree/types'
-import { orderDefaultCheckoutFirst } from './section-order'
+import { orderDefaultCheckoutFirst } from './sections/section-order'
 
 function makeWorktree(id: string, path: string, isMainWorktree = false): Worktree {
   return {

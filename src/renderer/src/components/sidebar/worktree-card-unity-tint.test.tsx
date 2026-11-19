@@ -3,7 +3,7 @@
 import React, { type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
-import type { Repo, UnitySidebarTintMode } from '../../../../shared/repo-types'
+import type { Repo, UnitySidebarTintMode } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { UnityWorktreeStatus } from '../../../../shared/unity-worktree'
 

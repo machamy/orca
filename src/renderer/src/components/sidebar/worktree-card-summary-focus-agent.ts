@@ -1,6 +1,6 @@
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import type { AgentDotState } from '@/components/AgentStateDot'
-import { agentRowDisplayDotState as getAgentDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
+import { agentRowDisplayDotState as getAgentDotState } from '../../../../shared/agent-row-dot-state'
 
 /** Which agent the collapsed pill names. Ordered by "who is the card asking me
  *  about": something running beats something waiting on me, and both beat a

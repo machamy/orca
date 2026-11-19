@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { canSwitchWorktreeToDefault } from '../../default-worktree-switch-eligibility'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'

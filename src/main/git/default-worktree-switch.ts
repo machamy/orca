@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { rollbackBranchSwap } from './default-worktree-switch-rollback'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import {
   checkedOutBranch,
   revParseOrNull,
@@ -21,7 +21,7 @@ import {
   captureUncommittedAsStash,
   dropRescueRef
 } from './default-worktree-switch-work-capture'
-import type { GitRuntimeOptions } from './git-runtime-options'
+import type { GitRuntimeOptions } from './command-runner/git-runtime-options'
 import { listWorktreesStrict } from './worktrees/catalog/worktree-listing'
 
 export type DefaultWorktreeSwitchResult = {

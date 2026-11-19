@@ -17,14 +17,14 @@
 /** Test files that exist only in the fork. */
 export const FORK_ADDED_TESTS = [
   'src/main/claude-accounts/claude-api-key-account.fork.test.ts',
-  'src/main/claude-accounts/claude-profile-router-api-key.fork.test.ts',
+  'src/main/claude-accounts/profiles/routing/claude-profile-router-api-key.fork.test.ts',
   'src/renderer/src/components/editor/markdown-preview-reading-layout.test.ts',
   'src/renderer/src/components/editor/MarkdownPreviewBody.github.test.tsx',
   'src/renderer/src/components/editor/markdown-preview-table-widths-storage.test.ts',
   'src/renderer/src/components/editor/use-markdown-preview-table-column-resize.test.tsx',
-  'src/main/claude/statusline-model-badge-wrapper.test.ts',
+  'src/main/claude/hooks/statusline-model-badge-wrapper.test.ts',
   'src/renderer/src/components/terminal-pane/agent-model-badge/agent-model-badge-statusline-feed.test.ts',
-  'src/cli/handlers/worktree-default-set.test.ts',
+  'src/cli/workspaces/worktree-default-set.test.ts',
   'src/main/claude/claude-project-transcript-swap.test.ts',
   'src/main/git/default-worktree-switch-ignored-collision.test.ts',
   'src/main/git/default-worktree-switch.test.ts',
@@ -54,6 +54,7 @@ export const FORK_ADDED_TESTS = [
   'src/main/runtime/runtime-local-worktree-unity-seed.test.ts',
   'src/main/updater/updater.fork-official-checks-gate.test.ts',
   'src/main/updater/updater.fork-internal-feed.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-shell-command-ride-along.test.ts',
   'src/main/startup/inherited-pane-env.test.ts',
   'src/shared/agent-hook-listener-claude-model-effort.test.ts',
   'src/shared/agent-hook-listener/providers/claude-model-effort-fields.test.ts',
@@ -128,20 +129,16 @@ export const FORK_ADDED_TESTS = [
 
 /** Upstream test files carrying fork-added cases or fork-adjusted expectations. */
 export const FORK_CARRYING_TESTS = [
-  'src/renderer/src/components/sidebar/worktree-list/grouping/recent-project-rank-scan-budget.test.ts',
-  'src/main/claude/hook-service.test.ts',
   'src/main/browser/browser-guest-context-menu.test.ts',
   'src/main/workspaces/removal/local-worktree-filesystem-wsl-banner.wsl.test.ts',
   'src/main/workspaces/removal/local-worktree-filesystem.test.ts',
   'src/main/persistence/persistence-cohort-and-identity-migration.test.ts',
-  'src/main/window/attach-main-window-services.test.ts',
-  'src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx',
+  'src/main/updater/lifecycle/main-window-updater.fork-official-checks.test.ts',
   'src/renderer/src/components/settings/advanced/ExperimentalPane.test.tsx',
-  'src/renderer/src/components/sidebar/worktree-list/grouping/default-branch-visible-under-hide-sleeping.test.ts',
   'src/renderer/src/components/worktree-jump-palette-sleeping-filter.test.ts',
-  'src/renderer/src/hooks/worktree-change-refresh-queue.test.ts',
-  'src/renderer/src/store/terminals/store-sleep-pane-hibernation.test.ts',
-  'src/shared/cross-platform-path.test.ts'
+  'src/renderer/src/hooks/ipc-events/workspace-catalog/worktree-change-refresh-queue-identity-swap.test.ts',
+  'src/renderer/src/store/terminals/sleep/store-sleep-pane-hibernation.test.ts',
+  'src/shared/file-access/cross-platform-path.test.ts'
 ]
 
 export const FORK_CONTRACT_TESTS = [...FORK_ADDED_TESTS, ...FORK_CARRYING_TESTS]

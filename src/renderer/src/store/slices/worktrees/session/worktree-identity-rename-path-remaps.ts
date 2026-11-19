@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import { remapPathInsideWorktreeRoot } from '../../../../../../shared/cross-platform-path'
+import { remapPathInsideWorktreeRoot } from '../../../../../../shared/file-access/cross-platform-path'
 
 type RootPair = { oldWorktreePath: string | undefined; newWorktreePath: string | undefined }
 
@@ -41,15 +41,14 @@ export function rekeyAgentStatusWorktree(
   oldWorktreeId: string,
   newWorktreeId: string
 ): Partial<AppState> {
-  const current = s.agentStatusByPaneKey ?? {}
-  if (!Object.values(current).some((entry) => entry.worktreeId === oldWorktreeId)) {
+  const moved = [...s.agentStatusByPaneKey]
+    .filter(([, entry]) => entry.worktreeId === oldWorktreeId)
+    .map(([paneKey, entry]) => [paneKey, { ...entry, worktreeId: newWorktreeId }] as const)
+  if (moved.length === 0) {
     return {}
   }
-  const agentStatusByPaneKey = Object.fromEntries(
-    Object.entries(current).map(([paneKey, entry]) => [
-      paneKey,
-      entry.worktreeId === oldWorktreeId ? { ...entry, worktreeId: newWorktreeId } : entry
-    ])
-  )
-  return { agentStatusByPaneKey, agentStatusEpoch: s.agentStatusEpoch + 1 }
+  return {
+    agentStatusByPaneKey: s.agentStatusByPaneKey.replace(moved),
+    agentStatusEpoch: s.agentStatusEpoch + 1
+  }
 }

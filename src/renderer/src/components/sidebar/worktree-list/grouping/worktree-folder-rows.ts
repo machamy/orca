@@ -1,16 +1,16 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { WORKTREE_FOLDERS_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/resolved-worktree-lineage'
+} from '../../../../../../shared/execution-host/execution-host'
+import { WORKTREE_FOLDERS_RUNTIME_CAPABILITY } from '../../../../../../shared/fork-runtime-capabilities'
+import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import {
   resolveWorktreeFolderTree,
   type ResolvedWorktreeFolderTree,
@@ -21,8 +21,8 @@ import {
   type SidebarWorktreeFolderModel,
   type SidebarWorktreeFolderProject
 } from '../../../../../../shared/sidebar-list/worktree-folder-rows'
-import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/workspace-lineage-graph'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
+import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/lineage/workspace-lineage-graph'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 
 // Emission and row keys live in the shared builder; the window only resolves membership.

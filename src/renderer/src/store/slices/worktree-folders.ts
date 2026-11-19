@@ -1,16 +1,16 @@
 import type { StateCreator } from 'zustand'
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
-import type { Repo } from '../../../../shared/repo-types'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { AppState } from '../types'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import {
   collectRawWorktreeFolderMemberIds,
   environmentSupportsWorktreeFolders,

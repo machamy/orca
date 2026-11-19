@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { WorktreeFolderRow } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import { getRenderRowKey } from '../listing/render-row'
-import {
-  buildLineageRowRekeyMap,
-  estimateRenderRowSize,
-  WORKTREE_FOLDER_ROW_HEIGHT
-} from './virtual-rows'
+import { estimateRenderRowSize, WORKTREE_FOLDER_ROW_HEIGHT } from './virtual-rows'
 
 function makeFolderRow(memberCount: number): WorktreeFolderRow {
   return {
@@ -32,11 +28,9 @@ describe('worktree folder row virtualizer estimate (C3)', () => {
     expect(estimateRenderRowSize(rows, 0, -1, null)).not.toBe(116)
   })
 
-  it('C2: the render key is identical with zero members and with three — no rekey entry needed', () => {
+  it('C2: the render key is identical with zero members and with three', () => {
     const empty = makeFolderRow(0)
     const populated = makeFolderRow(3)
     expect(getRenderRowKey(empty)).toBe(getRenderRowKey(populated))
-    // A folder never flips row type on gaining/losing members, so the rekey map ignores it.
-    expect(buildLineageRowRekeyMap([empty, populated]).size).toBe(0)
   })
 })

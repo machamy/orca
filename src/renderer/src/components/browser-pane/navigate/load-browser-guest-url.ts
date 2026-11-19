@@ -11,11 +11,11 @@ import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import {
-  getBrowserPageRuntimeEnvironmentId,
   getEditorRenderedPathFromBrowserUrl,
   isBrowserMarkdownEditorHandoffEnabled
 } from '../describe-page/browser-page-url-display'

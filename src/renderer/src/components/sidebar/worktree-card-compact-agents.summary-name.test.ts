@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompactAgentSummaryButton } from './workspace-card/activity/worktree-card-compact-agents'
 

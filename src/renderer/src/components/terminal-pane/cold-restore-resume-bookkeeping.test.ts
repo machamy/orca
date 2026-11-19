@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { applyResumedAgentBookkeeping } from './cold-restore-resume-bookkeeping'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 
 const SESSION: AgentProviderSessionMetadata = {
   key: 'session_id',
@@ -25,7 +26,9 @@ function makeStore(existingStatus = false) {
       recordAgentProviderSession: vi.fn(() => {
         calls.push('record')
       }),
-      agentStatusByPaneKey: existingStatus ? { 'pane-key': { state: 'working' } } : {},
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        existingStatus ? [['pane-key', { state: 'working' } as never]] : []
+      ),
       setAgentStatus: vi.fn(() => {
         calls.push('seed')
       })

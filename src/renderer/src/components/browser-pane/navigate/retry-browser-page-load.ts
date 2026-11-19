@@ -1,5 +1,6 @@
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import { loadBrowserGuestUrl } from './load-browser-guest-url'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
@@ -29,7 +30,9 @@ export function retryBrowserTabLoad(
         loading: true,
         title: targetUrl
       })
-      webview.src = targetUrl
+      issueBrowserGuestNavigation(webview, () => {
+        webview.src = targetUrl
+      })
     }
   })
 }

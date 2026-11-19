@@ -1,7 +1,7 @@
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentSessionRecord
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 

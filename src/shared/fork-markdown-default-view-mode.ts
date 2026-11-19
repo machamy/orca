@@ -1,4 +1,4 @@
-import type { MarkdownDefaultViewMode } from './markdown-default-view-mode'
+import type { MarkdownDefaultViewMode } from './editor/markdown/markdown-default-view-mode'
 
 /** Fork: Preview joins upstream's Source/Rich choices and is the default, so docs the rich editor refuses read rendered. */
 export type ForkMarkdownDefaultViewMode = MarkdownDefaultViewMode | 'preview'

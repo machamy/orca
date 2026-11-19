@@ -53,7 +53,7 @@ export function collectDefaultSwitchNoticeTargets(
           continue
         }
         const paneKey = makePaneKey(tab.id, leafId)
-        const status = state.agentStatusByPaneKey[paneKey]
+        const status = state.agentStatusByPaneKey.get(paneKey)
         // Why only these states: 'working' means a turn is in flight and the
         // note would be typed into the agent's own composition.
         if (!status || (status.state !== 'done' && status.state !== 'waiting')) {

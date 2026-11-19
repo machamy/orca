@@ -73,7 +73,7 @@ export function useAgentModelBadgeReadings(args: {
           continue
         }
         const paneKey = makePaneKey(tabId, pane.leafId)
-        const status = state.agentStatusByPaneKey[paneKey]
+        const status = state.agentStatusByPaneKey.get(paneKey)
         // Why first: the statusline is the only feed that follows a mid-session `/model`.
         const live = agent === 'claude' ? readAgentModelBadgeStatusLine(paneKey) : undefined
         const reading = readAgentModelBadge({

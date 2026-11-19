@@ -9,7 +9,7 @@ vi.mock('../git/default-worktree-switch', () => ({
 import { RuntimeDefaultWorktree } from './orca-runtime-default-worktree'
 import type { RuntimeDefaultWorktreeHost } from './orca-runtime-default-worktree'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 
 type ResolvedWorktree = Worktree & { git: GitWorktreeInfo }
 

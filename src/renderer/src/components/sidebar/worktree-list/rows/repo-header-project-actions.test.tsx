@@ -3,7 +3,7 @@
 import React, { type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback

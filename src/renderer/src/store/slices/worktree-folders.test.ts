@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
 import { resolveWorktreeFolderTree } from '../../../../shared/worktree-folder/resolve'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   createCompatibleRuntimeStatusResponse,
   type RuntimeEnvironmentCallRequest

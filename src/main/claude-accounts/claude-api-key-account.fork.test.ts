@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
-} from '../../shared/managed-account-types'
-import type { ClaudeAccountSettings } from './claude-account-selection'
-import { ClaudeAccountSelection } from './claude-account-selection'
+} from '../../shared/agent-accounts/managed-account-types'
+import type { ClaudeAccountSettings } from './selection/claude-account-selection'
+import { ClaudeAccountSelection } from './selection/claude-account-selection'
 import { ClaudeApiKeyAccounts } from './claude-api-key-account'
 import {
   claudeApiKeyFile,

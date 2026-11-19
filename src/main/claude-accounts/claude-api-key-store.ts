@@ -3,7 +3,7 @@ import { chmodSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { execSecurityCommand, isKeychainNotFoundError } from '../macos-keychain/generic-password'
-import { readClaudeProfileObject } from './claude-profile-paths'
+import { readClaudeProfileObject } from './profiles/claude-profile-paths'
 
 /** Fork: where an API key account's key lives and how Claude's apiKeyHelper reads it back. */
 export const CLAUDE_API_KEY_KEYCHAIN_SERVICE = 'Orca Claude API key'

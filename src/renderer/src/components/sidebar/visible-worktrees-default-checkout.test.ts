@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { NO_HIDDEN_PROJECTS } from '../../../../shared/project/catalog/hidden-projects'
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree & { instanceId: string } {
   return {
@@ -51,6 +52,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
     worktreeLineageById: {},
+    hiddenProjects: NO_HIDDEN_PROJECTS,
     ...overrides
   }
 }

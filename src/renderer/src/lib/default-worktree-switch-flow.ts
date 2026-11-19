@@ -5,7 +5,7 @@
 // exercise the exact user path.
 import { toast } from 'sonner'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { RuntimeDefaultWorktreeSwitchResult } from '../../../shared/runtime-types'
+import type { RuntimeDefaultWorktreeSwitchResult } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {

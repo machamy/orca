@@ -7,9 +7,8 @@ import {
   requireStructuredCapability,
   requireStructuredSessionHost
 } from '../creation/structured-agent-session-gate'
-import { ShellCommandParams } from '../../../../../../shared/rpc-contract/structured-agent-session-shell-command-params'
+import { ShellCommandParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-shell-command-params'
 import { runStructuredAgentSessionShellCommand } from '../../../../../native-chat/agent-session-wire/operations/structured-agent-session-shell-command'
-import { openStructuredChatJournal } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-open-journal'
 
 export const STRUCTURED_AGENT_SESSION_SHELL_COMMAND_METHODS = [
   defineMethod({
@@ -21,11 +20,7 @@ export const STRUCTURED_AGENT_SESSION_SHELL_COMMAND_METHODS = [
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredSessionHost(ctx, params.sessionId)
       return runStructuredAgentSessionShellCommand(
-        {
-          store: host.deps.store,
-          resolveWorkspacePath: host.deps.resolveWorkspacePath,
-          openJournal: openStructuredChatJournal
-        },
+        { host },
         params.sessionId,
         params.command.trim()
       )

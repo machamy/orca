@@ -31,7 +31,7 @@ export function applyResumedAgentBookkeeping(
     { tabId: args.tabId, worktreeId: args.worktreeId },
     { launchToken: args.launchToken }
   )
-  if (!store.agentStatusByPaneKey[args.cacheKey]) {
+  if (!store.agentStatusByPaneKey.get(args.cacheKey)) {
     // The sidebar's agent rows come from live agent status, and tab.launchAgent
     // only demotes the tab to a muted terminal row — without a seeded row a
     // moved agent reads as a plain terminal after a switch.

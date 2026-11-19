@@ -1,5 +1,5 @@
-import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
-import { areRuntimePathsEqual } from '../../../../shared/worktree/ownership'
+import { getRuntimePathBasename } from '../../../../shared/file-access/cross-platform-path'
+import { areRuntimePathsEqual } from '../../../../shared/worktree/visibility/ownership'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 /**

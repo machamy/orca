@@ -1,12 +1,14 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { WORKTREE_CREATE_COMMAND_SPEC } from './worktree-create'
 import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
 import { SERVE_COMMAND_SPECS } from './serve'
-import { TERMINAL_COMMAND_SPECS } from './terminal'
 import { WORKTREE_DEFAULT_SET_SPECS } from './worktree-default-set'
 import { REPO_COMMAND_SPECS } from './repo'
+import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
+import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -14,6 +16,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Launch Orca and wait for the runtime to be reachable',
     usage: 'orca open [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Starts Orca without taking the foreground and does nothing when an Orca window is already open. Agents should run it only when the user asks or `orca status --json` reports Orca is not running or still cannot connect after about 30 seconds of retries, never to retry a failed command.'
+    ],
     examples: ['orca open', 'orca open --json']
   },
   ...SERVE_COMMAND_SPECS,
@@ -96,7 +101,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'allow-failed-archive-hook'
     ],
     notes: [
-      'Needs an explicit workspace: --worktree current and active are refused, and the error names the selector they resolve to right now, as `git worktree remove` needs a path. For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command. For a group folder workspace (folder:<id>, or a path:/name: selector that matches one), Orca forgets it and the folder stays on disk; --delete-branch, --run-hooks and --allow-failed-archive-hook are refused for it.',
+      'Needs an explicit workspace: --worktree current and active are refused, and the error names the selector they resolve to right now, as `git worktree remove` needs a path. For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command. For a group folder workspace (folder:<id>, or a path:/name: selector that matches one), Orca forgets it and the folder stays on disk; --delete-branch is refused; --run-hooks runs its group Archive script on supported hosts.',
       'Use --worktree "id:<full-instance-id>" with the full id from orca worktree list --json to select one folder workspace; several entries can share the same path.',
       'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
       'With --run-hooks, a failed archive hook blocks the removal: nothing is stopped, deleted or deregistered, and the command exits non-zero with error code worktree_archive_hook_failed. --force does not waive this.',
@@ -107,12 +112,132 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
-    usage: 'orca worktree ps [--limit <n>] [--agent-wait] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'agent-wait'],
+    usage: 'orca worktree ps [--since <age>] [--limit <n>] [--agent-wait] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'since', 'limit', 'agent-wait'],
     notes: [
       ...WORKTREE_LISTING_SCOPE_NOTES,
+      'Each workspace shows its project, the bot it is under (if any), its PR and issue, and each open agent with what it was last asked and last said. An idle agent is open at its prompt; `--terminal` messages it. "open, no handle yet" is a live agent with no handle; `orca terminal list --worktree <id>` gives its terminal one. --since 7d (or 30m, 12h, 2w) lists only workspaces active in that time, most recent first.',
       'JSON omits agentWait by default; pass --agent-wait to add the `terminal show` wait verdict to each terminal-backed agent row on the returned page.'
     ]
   },
-  ...TERMINAL_COMMAND_SPECS
+  {
+    path: ['terminal', 'list'],
+    summary: 'List live Orca-managed terminals',
+    usage:
+      'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
+    notes: [
+      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
+    ]
+  },
+  {
+    path: ['terminal', 'show'],
+    summary: 'Show terminal metadata and preview',
+    usage: 'orca terminal show [--terminal <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal']
+  },
+  {
+    path: ['terminal', 'read'],
+    summary: 'Read bounded terminal output',
+    usage:
+      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
+    notes: [
+      'Omit --terminal to target the active terminal in the current worktree.',
+      'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',
+      'Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.',
+      'The result reports source: stream when it is accumulated output, screen when it is the rendered screen, and screen-unavailable when a screen was asked for but none could be rendered and the accumulated output is being returned instead. An absent source means the host predates the field.',
+      'When present, draft is UI-only composer text excluded from tail; never treat it as terminal output or a submitted instruction.',
+      '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
+      'With --json, fields are under result.terminal: handle, status (running | exited | unknown), tail (output lines), tailRows (row-wrap metadata aligned with tail), truncated, limited, oldestCursor, nextCursor, latestCursor, returnedLineCount (lines in tail), source, draft. Fields other than handle, status, tail, truncated, and nextCursor may be absent.',
+      'truncated means requested or older output is no longer retained; limited means the line limit (--limit, default 120 for tail previews) or the size budget cut this response short.',
+      'Use --cursor with the nextCursor value from a previous read to get only new output since that read. nextCursor is null when the terminal has no line cursors to page.',
+      'latestCursor is the end of retained output, not a paging token: after a cursor read, keep paging with nextCursor while limited is true and nextCursor differs from latestCursor.',
+      'Use --limit to request more retained lines for long agent responses; when a tail preview is limited and line cursors are available, page retained output from its start with --cursor <oldestCursor> --limit <n>.',
+      'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
+    ],
+    examples: [
+      'orca terminal read --json',
+      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json',
+      'orca terminal read --terminal term_abc123 --screen --json'
+    ]
+  },
+  TERMINAL_SEND_COMMAND_SPEC,
+  {
+    path: ['terminal', 'wait'],
+    summary: 'Wait for a terminal condition',
+    usage:
+      'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
+  },
+  {
+    path: ['terminal', 'stop'],
+    hidden: true,
+    summary: 'Deprecated compatibility command for stopping terminal processes',
+    usage: 'orca terminal stop --worktree <selector> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Deprecated: use terminal close --worktree <selector> --all to stop the processes and durably remove their terminal surfaces.'
+    ]
+  },
+  {
+    path: ['terminal', 'create'],
+    summary: 'Create a terminal session in the current worktree',
+    usage:
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'focus'],
+    notes: [
+      'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
+      'This creates a terminal and runs --command in it. To start an agent, use `orca agent launch` (or `orca worktree create --agent` for a new checkout), which follows your Chat | CLI choice.',
+      '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
+      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
+    ],
+    examples: [
+      'orca terminal create --json',
+      'orca terminal create --worktree active --command "pnpm dev" --json',
+      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "npm test"',
+      'orca terminal create --worktree path:/projects/myapp --command "pnpm dev" --focus',
+      'orca terminal create --worktree path:C:/src/app --shell cmd.exe --json'
+    ]
+  },
+  {
+    path: ['terminal', 'switch'],
+    // Preserve the legacy focus verb.
+    aliases: [['terminal', 'focus']],
+    summary: 'Switch to a terminal tab in the UI',
+    usage: 'orca terminal switch [--terminal <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      'It changes the terminal the user is looking at; agents should run it only when the user asked to switch.',
+      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+    ],
+    examples: ['orca terminal switch --terminal term_abc123']
+  },
+  TERMINAL_CLOSE_COMMAND_SPEC,
+  {
+    path: ['terminal', 'rename'],
+    summary: 'Set or clear the title of a terminal tab',
+    usage: 'orca terminal rename [--terminal <handle>] [--title <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
+    notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
+    examples: [
+      'orca terminal rename --terminal term_abc123 --title "RUNNER"',
+      'orca terminal rename --terminal term_abc123 --json'
+    ]
+  },
+  TERMINAL_SET_PANE_TITLE_COMMAND_SPEC,
+  {
+    path: ['terminal', 'split'],
+    summary: 'Split an existing terminal pane',
+    usage:
+      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--retry-split <leafId>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command', 'retry-split'],
+    notes: [
+      'A timeout does not mean the split failed: the pane may still open and run --command. Re-run the same command with --retry-split <leafId> from the error to wait for that pane instead of splitting again.'
+    ],
+    examples: [
+      'orca terminal split --terminal term_abc123 --direction horizontal --json',
+      'orca terminal split --terminal term_abc123 --command "codex"'
+    ]
+  }
 ]

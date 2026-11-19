@@ -1,12 +1,12 @@
 // Fork: worktree folders (§6). Row emission lives here so the shared builder stays
 // pure; resolving membership needs host-correct repo records and stays in the window.
-import { getWorktreeExecutionHostId, type ExecutionHostId } from '../execution-host'
-import type { Repo } from '../repo-types'
+import { getWorktreeExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
+import type { Repo } from '../repository/repo-types'
 import type { ResolvedWorktreeFolderTree } from '../worktree-folder/resolve'
 import type { WorktreeFolder } from '../worktree-folder/types'
-import type { WorktreeOccurrence, WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
+import type { WorktreeOccurrence, WorktreeOccurrencePlan } from './lineage/worktree-occurrence-plan'
 import type { Worktree } from '../worktree/types'
-import { appendWorktreeOccurrenceRows, appendWorktreeRows } from './row-builders'
+import { appendWorktreeOccurrenceRows, appendWorktreeRows } from './sections/row-builders'
 import type { RepoOfWorktree, Row, WorktreeGroupBy } from './row-types'
 
 /** Collapse-state key — id-scoped (F4): one key folds every row of the folder. */
@@ -104,7 +104,7 @@ export function appendWorktreeRowsWithFolders(
   }
 
   if (blockKeys.length === 0) {
-    appendWorktreeOccurrenceRows(result, repoOf, planned, baseOptions)
+    appendWorktreeOccurrenceRows(result, repoOf, plan, planned, baseOptions)
     return
   }
 
@@ -144,7 +144,7 @@ export function appendWorktreeRowsWithFolders(
         continue
       }
       if (members.length > 0) {
-        appendWorktreeOccurrenceRows(result, repoOf, members, {
+        appendWorktreeOccurrenceRows(result, repoOf, plan, members, {
           ...baseOptions,
           worktreeFolderDepth: level.folderDepth + 1
         })
@@ -162,5 +162,5 @@ export function appendWorktreeRowsWithFolders(
       emitFolderBlock(blockKey, project)
     }
   }
-  appendWorktreeOccurrenceRows(result, repoOf, unfiled, baseOptions)
+  appendWorktreeOccurrenceRows(result, repoOf, plan, unfiled, baseOptions)
 }

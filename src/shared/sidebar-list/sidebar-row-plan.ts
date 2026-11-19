@@ -1,47 +1,48 @@
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
-import type { ProjectOrderBy } from '../ui-chrome-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
+import type { ProjectOrderBy } from '../ui-chrome/ui-chrome-types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
-import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
+import type { SidebarLineageParentIdentities } from './lineage/worktree-lineage-projection'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
-import { appendOrderedGroups, type SectionAppendContext } from './group-sections'
+import type { ExecutionHostId } from '../execution-host/execution-host'
+import type { HiddenProjects } from '../project/catalog/hidden-projects'
+import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './sections/group-keys'
+import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
 
 import {
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
   getMixedWorktreeHostContextLabels,
   getNoticeHostContextLabels
-} from './host-labels'
+} from './hosts/host-labels'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo,
   type ProjectSectionModel
-} from '../project-section-grouping'
+} from './sections/project-section-grouping'
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection
-} from '../worktree-occurrence-plan'
+} from './lineage/worktree-occurrence-plan'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
+import type { OrderedGroupEntry, WorktreeGroupEntry } from './sections/worktree-group-entry'
 
 import {
   appendProjectGroupSections,
   getProjectGroupOccurrencePaths
-} from './project-group-sections'
-import { getSidebarLineageChildren } from './pinned-section-worktrees'
-import { emitPinnedGroup } from './pinned-group-rows'
-import { buildPendingCreationRow } from './row-builders'
+} from './sections/project-group-sections'
+import { getSidebarLineageChildren } from './lineage/pinned-section-worktrees'
+import { emitPinnedGroup } from './sections/pinned-group-rows'
+import { buildPendingCreationRow } from './sections/row-builders'
 import type { SidebarWorktreeFolderModel } from './worktree-folder-rows'
 import { appendSectionWorktreeRows } from './section-worktree-rows'
-import { getRenderableFolderWorkspaces } from './folder-workspace-lanes'
+import { getRenderableFolderWorkspaces } from './folders/folder-workspace-lanes'
 import {
   getFolderLaneSections,
   getSidebarFolderOccurrences,
   isFolderLaneSectionKey
-} from './folder-workspace-occurrences'
+} from './folders/folder-workspace-occurrences'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -52,10 +53,10 @@ import type {
   SidebarPRGroupReader,
   WorktreeGroupBy
 } from './row-types'
-import { orderDefaultCheckoutFirst } from './section-order'
-import { appendImportedWorktreeLines } from './imported-worktree-lines'
-import { withRepoSectionDisplayLabels } from '../project-section-order'
-import { buildOrderedGroups } from './worktree-grouping'
+import { orderDefaultCheckoutFirst } from './sections/section-order'
+import { appendImportedWorktreeLines } from './sections/imported-worktree-lines'
+import { withRepoSectionDisplayLabels } from './sections/project-section-order'
+import { buildOrderedGroups } from './sections/worktree-grouping'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
@@ -89,6 +90,8 @@ export type SidebarRowPlanInputs = {
   defaultHostId: ExecutionHostId
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   filterRepoIds: readonly string[]
+  /** A hidden project's rows reach the plan only under a folder workspace; they never make its section. */
+  hiddenProjects?: HiddenProjects
   /** Fork: worktree folders, resolved by the window (needs host-correct repo records). */
   worktreeFolderModel?: SidebarWorktreeFolderModel | null
 }
@@ -135,7 +138,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
-  const folders = getSidebarFolderOccurrences(renderableFolderWorkspaces)
+  const folders = getSidebarFolderOccurrences(renderableFolderWorkspaces, inputs.hiddenProjects)
   const lineageChildren = nestLineage
     ? getSidebarLineageChildren(
         worktrees,
@@ -147,7 +150,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       )
     : new Map<string, Worktree[]>()
   const occurrencePlan = buildWorktreeOccurrencePlan({
-    rows: [...worktrees, ...folders.rows],
+    rows: folders.withPlacedRows(worktrees, lineageChildren),
     identityOf: getWorktreeHostIdentity,
     childrenByParentIdentity: lineageChildren,
     isPinned: (worktree) => worktree.isPinned === true && !folders.isFolder(worktree),
@@ -161,7 +164,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           ? folders.boundRowsByGroupId(natural, displayRootByIdentity, lineageChildren)
           : null
       // Rows under a folder still count in their own projects; only their display moves.
-      const naturalWorktrees = natural.filter((row) => !folders.isFolder(row))
+      const naturalWorktrees = folders.projectRows(natural, groupBy === 'repo')
       const groups: OrderedGroupEntry[] =
         groupBy === 'none'
           ? [[ALL_GROUP_KEY, { label: '', items: naturalWorktrees, repoIds: new Set() }]]

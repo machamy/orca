@@ -1,4 +1,7 @@
-import { parseAgentJournalItemKey } from '../agent-session/journal/agent-session-journal-item-key'
+import type {
+  AgentJournalItemBody,
+  AgentJournalPlainStatusItem
+} from '../agent-session/journal/agent-session-journal-types'
 
 /** `!cmd` in a chat composer: the host runs it in the chat's folder and the agent reads it with the next message. */
 export const NATIVE_CHAT_SHELL_COMMAND_MAX_LENGTH = 8192
@@ -19,9 +22,34 @@ export function nativeChatShellCommandClientMessageId(runId: string): string {
   return `${ID_PREFIX}${runId}`
 }
 
-export function isNativeChatShellCommandItemId(itemId: string): boolean {
-  const identity = parseAgentJournalItemKey(itemId)
-  return identity?.provider === 'orca' && identity.clientMessageId.startsWith(ID_PREFIX)
+/** One run as its row keeps it; `readWith` is the person's message the agent read it with. */
+export type NativeChatShellCommandRun = { runId: string; text: string; readWith?: string }
+
+/** A plain command-output row; the run rides open, as status rows keep unknown fields. */
+export type NativeChatShellCommandItem = AgentJournalPlainStatusItem & {
+  shellCommand: NativeChatShellCommandRun
+}
+
+export function nativeChatShellCommandBody(
+  run: NativeChatShellCommandRun
+): NativeChatShellCommandItem {
+  return { kind: 'status', presentation: 'command-output', text: run.text, shellCommand: run }
+}
+
+export function nativeChatShellCommandOf(
+  body: AgentJournalItemBody
+): NativeChatShellCommandRun | null {
+  if (body.kind !== 'status' || !('shellCommand' in body)) {
+    return null
+  }
+  const run: unknown = body.shellCommand
+  if (typeof run !== 'object' || run === null) {
+    return null
+  }
+  const { runId, text, readWith } = run as Record<string, unknown>
+  return typeof runId === 'string' && typeof text === 'string'
+    ? { runId, text, ...(typeof readWith === 'string' ? { readWith } : {}) }
+    : null
 }
 
 export type NativeChatShellCommandResult = {

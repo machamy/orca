@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { WorktreeDefaultSetSelector } from '../../../../shared/rpc-contract/worktree-params'
+import { WorktreeDefaultSetSelector } from '../../../../shared/rpc-contract/workspaces/worktree-params'
 
 /**
  * `worktree.defaultSet` — promote a worktree to the repo's default checkout.

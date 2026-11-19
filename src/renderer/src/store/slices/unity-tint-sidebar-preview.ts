@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand'
-import type { UnitySidebarTintMode } from '../../../../shared/repo-types'
+import type { UnitySidebarTintMode } from '../../../../shared/repository/repo-types'
 import type { AppState } from '../types'
 
 /**

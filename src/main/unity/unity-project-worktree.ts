@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { readdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { cloneWorktreePathWithApfs } from '../ipc/worktree-apfs-clone'
+import { cloneWorktreePathWithApfs } from '../ipc/worktrees/linked-paths/worktree-apfs-clone'
 import { launchDetachedEditor, type EditorLauncher } from './detached-editor-launch'
 import { unityEditorBinaryPath } from './unity-editor-install-path'
 import type { UnityProcessRow } from './unity-editor-process-lookup'

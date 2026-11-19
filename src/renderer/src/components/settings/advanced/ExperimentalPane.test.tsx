@@ -4,8 +4,8 @@ import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { ExperimentalPane } from './ExperimentalPane'
 import { getExperimentalPaneSearchEntries } from './experimental-search'
 
@@ -116,20 +116,6 @@ describe('ExperimentalPane', () => {
     expect(markup).not.toContain('Sleep after')
     expect(markup).toContain('aria-checked="false"')
     expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain('Agent sleep')
-  })
-
-  it('renders new card style as an off-by-default searchable experimental switch', () => {
-    const settings = getDefaultSettings('/tmp')
-    const markup = renderToStaticMarkup(
-      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
-    )
-
-    expect(settings.experimentalNewWorktreeCardStyle).toBe(false)
-    expect(markup).toContain('New card style')
-    expect(markup).toContain('aria-checked="false"')
-    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
-      'New card style'
-    )
   })
 
   it('renders the agent dashboard as an off-by-default searchable experiment', () => {
@@ -308,25 +294,6 @@ describe('ExperimentalPane', () => {
     )
 
     expect(switchButton?.getAttribute('aria-checked')).toBe('true')
-    root.unmount()
-  })
-
-  it('enables new card style through the experimental switch', async () => {
-    const updateSettings = vi.fn()
-    const { root, container } = await renderExperimentalPane({ updateSettings })
-
-    const switchButton = container.querySelector<HTMLButtonElement>(
-      '#experimental-new-worktree-card-style button[role="switch"]'
-    )
-    if (!switchButton) {
-      throw new Error('New card style switch was not rendered')
-    }
-
-    await act(async () => {
-      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ experimentalNewWorktreeCardStyle: true })
     root.unmount()
   })
 })

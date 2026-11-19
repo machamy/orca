@@ -3,7 +3,7 @@ import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { runDefaultWorktreeSwitchFlow } from '@/lib/default-worktree-switch-flow'
-import { areRuntimePathsEqual } from '../../../shared/worktree/ownership'
+import { areRuntimePathsEqual } from '../../../shared/worktree/visibility/ownership'
 
 /**
  * Fork: the Unity auto-seed offer + CLI default-switch UI IPC listeners.

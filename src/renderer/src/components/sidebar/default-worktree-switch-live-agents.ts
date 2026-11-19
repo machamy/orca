@@ -4,13 +4,13 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts
  *  so absolute paths these agents cached in their context (edit targets, spawn cwds)
  *  keep pointing at the OTHER checkout afterwards — the user must be warned. */
 export function countActiveAgentsForDefaultSwitch(args: {
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry>
   worktreeIdByTabId: (tabId: string) => string | undefined
   worktreeIds: readonly string[]
 }): number {
   const wanted = new Set(args.worktreeIds)
   let count = 0
-  for (const entry of Object.values(args.agentStatusByPaneKey)) {
+  for (const entry of args.agentStatusByPaneKey.values()) {
     if (entry.state === 'done') {
       continue
     }

@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import type {
   RuntimeDefaultWorktreeSwitchResult,
   RuntimeWorktreeIdentityMigration
-} from '../../shared/runtime-types'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import { DEFAULT_SWITCH_TEMP_ID_MARKER, composeWorktreeId } from '../../shared/worktree/id'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { swapClaudeProjectTranscripts } from '../claude/claude-project-transcript-swap'
 import { switchDefaultWorktree } from '../git/default-worktree-switch'
-import type { GitRuntimeOptions } from '../git/git-runtime-options'
+import type { GitRuntimeOptions } from '../git/command-runner/git-runtime-options'
 
 type ResolvedDefaultWorktree = Worktree & { git: GitWorktreeInfo }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { worktree as worktreeFixture } from '../grouping/worktree-list-groups-test-fixtures'

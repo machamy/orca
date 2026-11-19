@@ -1,8 +1,8 @@
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type ResumableTuiAgent,
-  type SleepingAgentSessionRecord
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import type {
+  AgentProviderSessionMetadata,
+  ResumableTuiAgent,
+  SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 /**

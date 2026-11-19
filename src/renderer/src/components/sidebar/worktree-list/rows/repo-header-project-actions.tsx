@@ -1,14 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import React from 'react'
-import { useAppStore } from '@/store'
-import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
+import { useRepoSshGate } from '@/lib/workspace/catalog/use-repo-ssh-gate'
 import {
   CircleX,
   Ellipsis,
   Eye,
+  EyeOff,
   FolderInput,
   FolderTree,
-  Palette,
   Plus,
   // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
@@ -18,12 +17,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  DropdownMenuCheckboxItem,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -34,17 +30,21 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo, UnitySidebarTintMode } from '../../../../../../shared/repo-types'
-import { resolveUnitySidebarTintMode } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import { isLocallyRunnableUnityRepo } from '../../../../../../shared/unity-repo-eligibility'
+import { WslMovedRepoUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type {
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/worktree/ownership'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
+import { setProjectHidden } from '../../hidden-projects/set-project-hidden'
+import { RepoHeaderUnityMenuItems } from './repo-header-unity-menu-items'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
@@ -88,11 +88,14 @@ export type RepoHeaderProjectActions = {
 // Memoized: the sidebar re-renders every header row when the active workspace changes.
 export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
+  hostRepos,
   label,
   projectGroups,
   actions
 }: {
   repo: Repo
+  /** A header spanning hosts: every copy it shows, which Hide hides together. */
+  hostRepos?: ReadonlyMap<string, Repo>
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
@@ -150,15 +153,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           <Shapes className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.e82d3589a1', 'Change Project Icon')}
         </DropdownMenuItem>
-        {/* The same predicate the tint hook and the worktree menu gate on, or
-            this settings block offers Unity options no surface will honour. */}
-        {isLocallyRunnableUnityRepo(repo) ? (
-          <>
-            <UnityAutoSeedToggleItem repo={repo} />
-            <UnityTintToggleItem repo={repo} />
-            <UnityTintInSidebarModeItem repo={repo} />
-          </>
-        ) : null}
+        <RepoHeaderUnityMenuItems repo={repo} />
         {isGitRepoKind(repo) ? (
           <DropdownMenuItem onSelect={() => actions.onOpenWorktreeVisibility(repo)}>
             <Eye className="size-3.5" />
@@ -196,7 +191,16 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           </DropdownMenuItem>
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
+        <WslMovedRepoUseHereMenuItem repo={repo} />
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() =>
+            void setProjectHidden(hostRepos ? [...hostRepos.values()] : [repo], true, label)
+          }
+        >
+          <EyeOff className="size-3.5" />
+          {t('sidebar.hiddenProjects.hideFromSidebar', 'Hide from Sidebar')}
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}
@@ -277,124 +281,3 @@ export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCre
     </Tooltip>
   )
 })
-
-/** Fork feature: opt this repo's new worktrees into automatic Unity cache
- *  seeding. The first eligible creation also asks via a toast; either surface
- *  writes the same per-repo setting. */
-/** Fork: a generated (gitignored) editor script paints each worktree's colour
- *  chip into Unity's main toolbar, so two open editors are told apart at a glance.
- *  Applied on the next seed or Orca-launched open; unchecking removes it there. */
-function UnityTintToggleItem({ repo }: { repo: Repo }): React.JSX.Element {
-  const updateRepo = useAppStore((store) => store.updateRepo)
-  return (
-    <DropdownMenuCheckboxItem
-      checked={repo.unityWorktreeTint !== false}
-      onSelect={(event) => {
-        event.preventDefault()
-        // Default-on: only an explicit false opts out.
-        void updateRepo(repo.id, { unityWorktreeTint: repo.unityWorktreeTint === false })
-      }}
-    >
-      {translate(
-        'auto.components.sidebar.WorktreeList.unityTintToggle',
-        'Colour each Unity worktree differently'
-      )}
-    </DropdownMenuCheckboxItem>
-  )
-}
-
-const UNITY_TINT_LABEL_NS = 'auto.components.sidebar.WorktreeList'
-
-const UNITY_SIDEBAR_TINT_OPTIONS: readonly {
-  mode: UnitySidebarTintMode
-  labelKey: string
-  labelFallback: string
-}[] = [
-  { mode: 'off', labelKey: `${UNITY_TINT_LABEL_NS}.unityTintInSidebarOff`, labelFallback: 'Off' },
-  {
-    mode: 'bar',
-    labelKey: `${UNITY_TINT_LABEL_NS}.unityTintInSidebarBar`,
-    labelFallback: 'Left colour bar'
-  },
-  {
-    mode: 'wash',
-    labelKey: `${UNITY_TINT_LABEL_NS}.unityTintInSidebarWash`,
-    labelFallback: 'Row background tint'
-  },
-  {
-    mode: 'chip',
-    labelKey: `${UNITY_TINT_LABEL_NS}.unityTintInSidebarChip`,
-    labelFallback: 'Right colour chip'
-  }
-]
-
-/** Fork: echo that same worktree colour on the sidebar row. Defaults to the bar
- *  and is gated on the repo being a Unity project, so the sidebar stays plain
- *  for every project the tint would mean nothing in; the shape is a choice
- *  because each reads very differently at sidebar width. Hovering an option
- *  previews it on the live rows. */
-function UnityTintInSidebarModeItem({ repo }: { repo: Repo }): React.JSX.Element {
-  const updateRepo = useAppStore((store) => store.updateRepo)
-  const setPreview = useAppStore((store) => store.setUnityTintSidebarPreview)
-  const mode = resolveUnitySidebarTintMode(repo.unityTintInSidebar)
-  // The root menu can unmount the submenu without ever reporting a close.
-  React.useEffect(() => () => setPreview(repo.id, null), [repo.id, setPreview])
-  return (
-    <DropdownMenuSub
-      onOpenChange={(open) => {
-        if (!open) {
-          setPreview(repo.id, null)
-        }
-      }}
-    >
-      <DropdownMenuSubTrigger>
-        <Palette className="size-3.5" />
-        {translate(
-          'auto.components.sidebar.WorktreeList.unityTintInSidebarMode',
-          'Unity colour in the sidebar'
-        )}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent onPointerLeave={() => setPreview(repo.id, null)}>
-        <DropdownMenuRadioGroup
-          value={mode}
-          onValueChange={(next) => {
-            setPreview(repo.id, null)
-            void updateRepo(repo.id, {
-              unityTintInSidebar: resolveUnitySidebarTintMode(next)
-            })
-          }}
-        >
-          {UNITY_SIDEBAR_TINT_OPTIONS.map((option) => (
-            <DropdownMenuRadioItem
-              key={option.mode}
-              value={option.mode}
-              onPointerEnter={() => setPreview(repo.id, option.mode)}
-              onFocus={() => setPreview(repo.id, option.mode)}
-            >
-              {translate(option.labelKey, option.labelFallback)}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  )
-}
-
-function UnityAutoSeedToggleItem({ repo }: { repo: Repo }): React.JSX.Element {
-  const updateRepo = useAppStore((store) => store.updateRepo)
-  return (
-    <DropdownMenuCheckboxItem
-      checked={repo.unityAutoSeedCache === true}
-      onSelect={(event) => {
-        // A toggle should not dismiss the menu it lives in.
-        event.preventDefault()
-        void updateRepo(repo.id, { unityAutoSeedCache: repo.unityAutoSeedCache !== true })
-      }}
-    >
-      {translate(
-        'auto.components.sidebar.WorktreeList.unityAutoSeedToggle',
-        'Auto-copy Unity cache into new worktrees'
-      )}
-    </DropdownMenuCheckboxItem>
-  )
-}

@@ -1,7 +1,7 @@
-import { isDefaultCheckoutWorkspace } from '../../../../../../shared/worktree/ownership'
+import { isDefaultCheckoutWorkspace } from '../../../../../../shared/worktree/visibility/ownership'
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-review-checks'
+import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
@@ -14,12 +14,12 @@ import { useWorktreeCardSecondaryDetails } from '../details/use-worktree-card-se
 import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-actions'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
-  const { worktree, repo } = props
+  const { worktree, repo, compactLine } = props
   // Why the repo path and not `isMainWorktree`: git's main worktree moves to the
   // displaced checkout after a default-worktree switch, so the star, the delete
   // guard and the primary badge would follow the wrong row.
   const isDefaultCheckout = isDefaultCheckoutWorkspace(worktree, repo)
-  const foundation = useWorktreeCardFoundation({ worktree, repo })
+  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine })
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
@@ -39,7 +39,9 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     prDisplay: review.prDisplay
   })
 
-  const showStatus = foundation.cardProps.includes('status')
+  // A bot's worker line on a disconnected server can't know its live state, so it shows none.
+  const showStatus =
+    foundation.cardProps.includes('status') && !(compactLine && foundation.isRuntimeDisconnected)
   const {
     issue: showIssue,
     linearIssue: showLinearIssue,
@@ -141,7 +143,9 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     showJiraIssue,
     showPR,
     showAutomation,
-    showCli,
+    // A line under its bot: the bot's avatar and its worker's CLI mark only repeat the section.
+    showCli: showCli && !compactLine,
+    showBot: !compactLine,
     showComment,
     showPorts,
     issueDisplay: linked.issueDisplay,

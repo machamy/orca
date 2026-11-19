@@ -1,10 +1,10 @@
-import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
+import { getTextDrivenNativeChatCommands } from '../../native-chat/input/commands/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
-} from '../../native-chat/input/native-chat-slash-commands'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
+} from '../../native-chat/input/commands/native-chat-slash-commands'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
 
 const COMPACT_INSTRUCTIONS_HINT = '[instructions]'
@@ -13,6 +13,13 @@ export const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear conversation context' },
   { name: 'compact', description: 'Compact conversation context' }
 ]
+
+/** Orca's MCP panel, offered where the host manages this agent's servers. */
+export const STRUCTURED_AGENT_SESSION_MCP_COMMAND: SlashCommandSuggestion = {
+  name: 'mcp',
+  description: 'Manage MCP servers',
+  orcaOwned: true
+}
 
 /** Session options remain available on hosts predating conversation commands. */
 export const STRUCTURED_AGENT_SESSION_SLASH_COMMANDS: readonly SlashCommandSuggestion[] = [
@@ -51,7 +58,8 @@ export function structuredSessionSlashCommands(
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
   reported: readonly AgentSessionSlashCommand[] | undefined,
   compactInstructions?: boolean,
-  interactionModeSupported = false
+  interactionModeSupported = false,
+  mcpPanel = false
 ): readonly SlashCommandSuggestion[] {
   const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
     ? [
@@ -61,10 +69,11 @@ export function structuredSessionSlashCommands(
           : [])
       ]
     : []
+  const orcaOwned = [...modeCommands, ...(mcpPanel ? [STRUCTURED_AGENT_SESSION_MCP_COMMAND] : [])]
   const hostOwned = [
-    ...modeCommands,
+    ...orcaOwned,
     ...structuredSlashCommands(conversationCommands, agent, compactInstructions).filter(
-      ({ name }) => !modeCommands.some((entry) => entry.name === name)
+      ({ name }) => !orcaOwned.some((entry) => entry.name === name)
     )
   ]
   if (reported === undefined) {

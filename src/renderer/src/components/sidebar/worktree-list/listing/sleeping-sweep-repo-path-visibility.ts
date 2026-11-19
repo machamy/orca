@@ -1,8 +1,8 @@
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isSleepingSweepExempt } from '../../../../../../shared/workspace-view/workspace-row-filters'
-import { isRepoPathEntryPoint } from '../../../../../../shared/worktree/ownership'
+import { isRepoPathEntryPoint } from '../../../../../../shared/worktree/visibility/ownership'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 
 /** Fork: "Hide sleeping" exempts the repo-path checkout, which an in-place default switch keeps as the entry point. */

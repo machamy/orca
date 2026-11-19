@@ -11,7 +11,7 @@ import remarkMath from 'remark-math'
 import { remarkMarkdownDocLinks } from '../../markdown/documents/markdown-doc-links'
 // Fork: alerts render as GitHub's own `markdown-alert` markup (remarkGithubAlerts), not
 // upstream's blockquote callouts; the attribute stays allowed so other renderers sanitize alike.
-import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../../../shared/github/github-callouts'
+import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../../../shared/github/markdown/github-callouts'
 import { remarkGithubAlerts } from '../../markdown-github-alerts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
 

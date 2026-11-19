@@ -1,14 +1,14 @@
 import { toast } from 'sonner'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
-} from '../../../../shared/execution-host'
-import { WORKTREE_FOLDERS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+} from '../../../../shared/execution-host/execution-host'
+import { WORKTREE_FOLDERS_RUNTIME_CAPABILITY } from '../../../../shared/fork-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AppState } from '../types'
 import { applyWorktreeUpdates } from '@/store/slices/worktrees/metadata/worktree-meta-update-application'
 import { applyDetectedWorktreeUpdates } from './worktrees/listing/detected-worktree-meta'

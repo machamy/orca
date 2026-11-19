@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { retryBrowserTabLoad } from './retry-browser-page-load'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
 

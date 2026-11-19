@@ -13,13 +13,16 @@ const entry = (overrides: Partial<AgentStatusEntry>): AgentStatusEntry =>
     ...overrides
   }) as AgentStatusEntry
 
+const statuses = (rows: Record<string, AgentStatusEntry>): ReadonlyMap<string, AgentStatusEntry> =>
+  new Map(Object.entries(rows))
+
 describe('countActiveAgentsForDefaultSwitch', () => {
   const worktreeIds = ['repo::/default', 'repo::/feature']
 
   it('counts working/blocked/waiting agents in either swapped worktree', () => {
     expect(
       countActiveAgentsForDefaultSwitch({
-        agentStatusByPaneKey: {
+        agentStatusByPaneKey: statuses({
           'tab-1:leaf-1': entry({ worktreeId: 'repo::/feature', state: 'working' }),
           'tab-2:leaf-1': entry({
             paneKey: 'tab-2:leaf-1',
@@ -36,7 +39,7 @@ describe('countActiveAgentsForDefaultSwitch', () => {
             worktreeId: 'repo::/feature',
             state: 'done'
           })
-        },
+        }),
         worktreeIdByTabId: () => undefined,
         worktreeIds
       })
@@ -46,9 +49,9 @@ describe('countActiveAgentsForDefaultSwitch', () => {
   it('falls back to tab ownership when the entry lacks a worktree stamp', () => {
     expect(
       countActiveAgentsForDefaultSwitch({
-        agentStatusByPaneKey: {
+        agentStatusByPaneKey: statuses({
           'tab-9:leaf-1': entry({ paneKey: 'tab-9:leaf-1' })
-        },
+        }),
         worktreeIdByTabId: (tabId) => (tabId === 'tab-9' ? 'repo::/feature' : undefined),
         worktreeIds
       })
@@ -58,9 +61,9 @@ describe('countActiveAgentsForDefaultSwitch', () => {
   it('returns zero when nothing is live in the swapped pair', () => {
     expect(
       countActiveAgentsForDefaultSwitch({
-        agentStatusByPaneKey: {
+        agentStatusByPaneKey: statuses({
           'tab-1:leaf-1': entry({ worktreeId: 'repo::/other' })
-        },
+        }),
         worktreeIdByTabId: () => undefined,
         worktreeIds
       })

@@ -1,9 +1,9 @@
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../shared/cross-platform-path'
-import { getCommandTokenPathBasename } from '../../shared/command-token-scanner'
-import { getFreshProcessTableSnapshot } from '../../shared/process-table-snapshot-reader'
+} from '../../shared/file-access/cross-platform-path'
+import { getCommandTokenPathBasename } from '../../shared/shell/command-resolution/command-token-scanner'
+import { getFreshProcessTableSnapshot } from '../../shared/process-observation/tables/process-table-snapshot-reader'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 
 /**

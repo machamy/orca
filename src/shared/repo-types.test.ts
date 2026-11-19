@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveUnitySidebarTintMode } from './repo-types'
+import { resolveUnitySidebarTintMode } from './repository/repo-types'
 
 describe('resolveUnitySidebarTintMode', () => {
   it('reads records written while the setting was a boolean', () => {

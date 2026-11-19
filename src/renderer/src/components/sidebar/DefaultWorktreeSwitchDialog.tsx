@@ -45,7 +45,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import type { RuntimeDefaultWorktreeSwitchResult } from '../../../../shared/runtime-types'
+import type { RuntimeDefaultWorktreeSwitchResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export type DefaultWorktreeSwitchDialogRequest = {

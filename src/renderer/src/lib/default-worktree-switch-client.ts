@@ -1,4 +1,4 @@
-import type { RuntimeDefaultWorktreeSwitchResult } from '../../../shared/runtime-types'
+import type { RuntimeDefaultWorktreeSwitchResult } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 

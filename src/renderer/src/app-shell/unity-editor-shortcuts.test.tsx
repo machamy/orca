@@ -5,18 +5,18 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { KEYBINDING_DEFINITIONS } from '../../../shared/keybindings/definitions'
 import {
-  KEYBINDING_DEFINITIONS,
   findKeybindingConflicts,
-  formatKeybindingList,
-  getEffectiveKeybindingsForAction,
-  keybindingMatchesAction
-} from '../../../shared/keybindings'
+  formatKeybindingList
+} from '../../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../../shared/keybindings/effective'
+import { keybindingMatchesAction } from '../../../shared/keybindings/matching'
 import { groupDefinitions } from '../components/settings/shortcuts/shortcut-groups'
 import { shouldOfferUnityCacheCopy } from '../components/sidebar/unity-cache-copy-offer'
 import { unityFocusFailureMessage } from '../components/sidebar/unity-focus-failure-message'
 import { isLocallyRunnableUnityWorkspace } from '../../../shared/unity-repo-eligibility'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { UnityWorktreeStatus } from '../../../shared/unity-worktree'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'

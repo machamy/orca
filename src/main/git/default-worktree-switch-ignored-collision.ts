@@ -1,6 +1,6 @@
-import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitOptionsForWorktree } from './git-runtime-options'
-import { gitExecFileAsync } from './runner'
+import type { GitRuntimeOptions } from './command-runner/git-runtime-options'
+import { gitOptionsForWorktree } from './command-runner/git-runtime-options'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 
 /** An ignored path at `worktreePath` that `branch` — the branch about to be
  *  checked out there — tracks. */

@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeFolder } from '../../../../shared/worktree-folder/types'
 import { useAppStore } from '@/store'
 import type { WorktreeFolderRow } from '../../../../shared/sidebar-list/row-types'

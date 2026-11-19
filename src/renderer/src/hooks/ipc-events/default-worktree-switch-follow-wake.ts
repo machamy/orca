@@ -15,7 +15,7 @@ import {
 import { remapOpenEditorTabsForPathChange } from '@/lib/editor/file-operations/remap-open-editor-tabs-for-path-change'
 import { wakeFollowedSleptAgentsForWorktree } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import type { RuntimeWorktreeIdentityMigration } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeIdentityMigration } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { useAppStore } from '../../store'
 
 /**
@@ -84,7 +84,7 @@ function reseedRecordsLostToSwapChurn(followWake: ConsumedDefaultSwitchWake): vo
   const missingRecords = filterReseedableSleepingRecords(
     followWake.records,
     state.sleepingAgentSessionsByPaneKey,
-    Object.values(state.agentStatusByPaneKey).map((entry) => ({
+    [...state.agentStatusByPaneKey.values()].map((entry) => ({
       worktreeId: entry.worktreeId,
       agent: entry.agentType,
       providerSession: entry.providerSession,

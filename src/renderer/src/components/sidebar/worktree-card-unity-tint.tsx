@@ -1,7 +1,7 @@
 import React from 'react'
 
 import { cn } from '@/lib/class-names'
-import type { UnitySidebarTintMode } from '../../../../shared/repo-types'
+import type { UnitySidebarTintMode } from '../../../../shared/repository/repo-types'
 
 /**
  * Card-relative geometry per treatment. All three are out of flow, so a row

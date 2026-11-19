@@ -1,4 +1,4 @@
-import type { AgentSessionShellCommandResult } from '../../rpc-contract/structured-agent-session-shell-command-params'
+import type { AgentSessionShellCommandResult } from '../../rpc-contract/structured-agent-session/structured-agent-session-shell-command-params'
 import {
   structuredComposerFailure,
   type StructuredComposerFailureCode

@@ -4,6 +4,7 @@ import {
   findUnreadyAgentPanes,
   waitForDefaultSwitchReadiness
 } from './default-worktree-switch-readiness'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 
 const WORKTREE = 'repo::/promoted'
 const AGENT_TAB = 'tab-agent'
@@ -14,7 +15,7 @@ function makeState(overrides: Partial<AppState>): AppState {
   return {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     sleepingAgentSessionsByPaneKey: {},
     ...overrides
   } as AppState
@@ -38,9 +39,9 @@ describe('findUnreadyAgentPanes', () => {
     const state = makeState({
       tabsByWorktree: { [WORKTREE]: [agentTab] as never },
       ptyIdsByTabId: { [AGENT_TAB]: [PTY] },
-      agentStatusByPaneKey: {
-        'pane-1': { tabId: AGENT_TAB, providerSession: { key: 'session_id', id: 's1' } }
-      } as never
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        ['pane-1', { tabId: AGENT_TAB, providerSession: { key: 'session_id', id: 's1' } } as never]
+      ])
     })
 
     expect(findUnreadyAgentPanes(state, [WORKTREE])).toEqual([])
@@ -79,7 +80,7 @@ describe('findUnreadyAgentPanes', () => {
       defaultSwitchInFlight: null,
       tabsByWorktree: { [WORKTREE]: [agentTab] },
       ptyIdsByTabId: { [AGENT_TAB]: [PTY] },
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(),
       sleepingAgentSessionsByPaneKey: {}
     } as never)
 

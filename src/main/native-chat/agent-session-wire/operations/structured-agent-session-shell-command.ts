@@ -2,26 +2,24 @@ import { randomUUID } from 'node:crypto'
 import { isAbsolute, win32 as pathWin32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
-import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import { resolveAgentSessionLaunchDirectory } from '../../../runtime/agent-session/agent-session-launch-directory'
+import { resolveAgentSessionLaunchDirectory } from '../../../runtime/agent-session/launch/agent-session-launch-directory'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
-import { resolveProfileLoadingShell } from '../../../startup/hydrate-shell-path'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { journalRestsBetweenTurns } from '../../agent-session-journal/journal-between-turns'
+import { resolveProfileLoadingShell } from '../../../startup/shell-environment/hydrate-shell-path'
+import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
+import { writeStructuredAgentSessionOrcaNote } from '../structured-agent-session-orca-note'
 import {
   NATIVE_CHAT_SHELL_COMMAND_TIMEOUT_MS,
+  nativeChatShellCommandBody,
   nativeChatShellCommandClientMessageId,
   nativeChatShellCommandRowText,
   type NativeChatShellCommandResult
 } from '../../../../shared/native-chat/native-chat-shell-command'
-import type { AgentSessionShellCommandResult } from '../../../../shared/rpc-contract/structured-agent-session-shell-command-params'
+import type { AgentSessionShellCommandResult } from '../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-shell-command-params'
 
 const OUTPUT_CAPTURE_BYTES = 256 * 1024
 
 export type StructuredShellCommandDeps = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
-  resolveWorkspacePath?: (workspaceId: string) => Promise<string>
-  openJournal: (sessionId: string) => AgentSessionJournal | null
+  host: Pick<StructuredAgentSessionHost, 'deps' | 'conversation'>
   run?: (spec: ProcessSpec) => ReturnType<typeof runProcess>
 }
 
@@ -46,15 +44,12 @@ function shellInvocation(
 }
 
 async function chatFolder(
-  deps: StructuredShellCommandDeps,
-  record: NonNullable<ReturnType<StructuredShellCommandDeps['store']['getRecord']>>
+  { store, resolveWorkspacePath }: StructuredShellCommandDeps['host']['deps'],
+  record: NonNullable<ReturnType<StructuredShellCommandDeps['host']['deps']['store']['getRecord']>>
 ): Promise<string | null> {
   try {
-    const folder = deps.resolveWorkspacePath
-      ? await resolveAgentSessionLaunchDirectory(
-          { store: deps.store, resolveWorkspacePath: deps.resolveWorkspacePath },
-          record
-        )
+    const folder = resolveWorkspacePath
+      ? await resolveAgentSessionLaunchDirectory({ store, resolveWorkspacePath }, record)
       : record.launchDirectory
     return folder && isAbsolute(folder) ? folder : null
   } catch {
@@ -68,15 +63,19 @@ export async function runStructuredAgentSessionShellCommand(
   sessionId: string,
   command: string
 ): Promise<AgentSessionShellCommandResult> {
-  const journal = deps.openJournal(sessionId)
-  const record = deps.store.getRecord(sessionId)
-  if (!journal || !record) {
+  const record = deps.host.deps.store.getRecord(sessionId)
+  if (!record) {
     return { ok: false, reason: 'not-open' }
   }
-  if (!journalRestsBetweenTurns(journal)) {
+  const { journal } = await deps.host.conversation(sessionId)
+  const [turn, pending] = await Promise.all([
+    journal.reads.newestTurn(),
+    journal.reads.pendingSubmissions()
+  ])
+  if (turn?.state === 'running' || pending.length > 0) {
     return { ok: false, reason: 'working' }
   }
-  const cwd = await chatFolder(deps, record)
+  const cwd = await chatFolder(deps.host.deps, record)
   if (!cwd) {
     return { ok: false, reason: 'folder-unavailable' }
   }
@@ -98,14 +97,12 @@ export async function runStructuredAgentSessionShellCommand(
     timedOut: outcome.timedOut,
     truncated: outcome.outputTruncated === true
   }
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: nativeChatShellCommandClientMessageId(randomUUID()) },
-    {
-      kind: 'status',
-      presentation: 'command-output',
-      text: nativeChatShellCommandRowText(result)
-    },
-    { fence: record.lease.runtimeFence, turnScope: { kind: 'thread' } }
+  const runId = randomUUID()
+  await writeStructuredAgentSessionOrcaNote(
+    deps.host,
+    sessionId,
+    nativeChatShellCommandClientMessageId(runId),
+    nativeChatShellCommandBody({ runId, text: nativeChatShellCommandRowText(result) })
   )
   return { ok: true }
 }

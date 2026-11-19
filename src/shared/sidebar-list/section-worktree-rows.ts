@@ -1,4 +1,4 @@
-import type { SectionAppendContext } from './group-sections'
+import type { SectionAppendContext } from './sections/group-sections'
 import { appendWorktreeRowsWithFolders } from './worktree-folder-rows'
 
 /** Fork: one section's worktree rows, with worktree folders when the window resolved any. */

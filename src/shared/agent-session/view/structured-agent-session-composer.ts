@@ -1,20 +1,20 @@
-import { agentSessionInteractionCommand } from '../options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../options/permissions/agent-session-interaction-mode'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../native-chat/input/native-chat-session-options'
-import type { SlashCommandSuggestion } from '../../native-chat/input/native-chat-slash-commands'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
+import type { SlashCommandSuggestion } from '../../native-chat/input/commands/native-chat-slash-commands'
 import {
   CONVERSATION_COMMANDS,
   STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
 } from './structured-agent-session-slash-menu'
-import type { AgentSessionShellCommandResult } from '../../rpc-contract/structured-agent-session-shell-command-params'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
+import type { AgentSessionThreadGoalChange } from '../thread-goals/agent-session-thread-goal-wire'
+import type { AgentSessionSlashCommand } from '../agent-session-wire'
+import type { AgentSessionShellCommandResult } from '../../rpc-contract/structured-agent-session/structured-agent-session-shell-command-params'
 import { nativeChatShellCommandOfDraft } from '../../native-chat/native-chat-shell-command'
 import { dispatchStructuredAgentSessionShellCommand } from './structured-agent-session-shell-command-dispatch'
-import type { AgentSessionSlashCommand } from '../agent-session-wire'
 import {
   structuredComposerFailure,
   type StructuredComposerFailureCode,
@@ -38,6 +38,8 @@ export type StructuredAgentSessionComposerOptions = {
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
   changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
+  /** Without it, /mcp remains agent-handled text. */
+  openMcpPanel?: () => void
   /** `!cmd` runs on the chat host; absent, `!` text goes to the agent as typed. */
   runShellCommand?: (command: string) => Promise<AgentSessionShellCommandResult | 'unsupported'>
 }
@@ -61,7 +63,7 @@ export type StructuredAgentSessionCommandOutcome = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
 
-function commandParts(text: string): { name: string; argument: string } | null {
+function commandParts(text: string, agent?: AgentType) {
   if (!text.startsWith('/')) {
     return null
   }
@@ -69,13 +71,15 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!match) {
     return null
   }
-  const name = match[1]!.toLowerCase()
+  const typed = match[1]!.toLowerCase()
+  // Codex's /new starts a new chat, which its app-server would read as prose; `$` skills never share the name.
+  const name = agent === 'codex' && typed === 'new' ? 'clear' : typed
   const argument = match[2]?.trim() ?? ''
   // Other commands take one line; a longer message that starts with their name is for the agent.
   return /[\n\r\u2028\u2029]/.test(argument) &&
     !CONVERSATION_COMMANDS.some((entry) => entry.name === name)
     ? null
-    : { name, argument }
+    : { name, typed, argument }
 }
 
 function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
@@ -90,7 +94,7 @@ export function isStructuredAgentSessionComposerCommand(
   agent: AgentType | undefined,
   snapshot: readonly SessionOptionDescriptor[]
 ): boolean {
-  const command = commandParts(text)
+  const command = commandParts(text, agent)
   return Boolean(
     nativeChatShellCommandOfDraft(text) !== null ||
     (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
@@ -99,37 +103,38 @@ export function isStructuredAgentSessionComposerCommand(
   )
 }
 
-/** Host actions send no message; /goal is an action only on hosts that set goals. */
+/** Host actions send no message; /goal and /mcp are actions only where the host offers them. */
 export function isStructuredAgentSessionHostCommand(
   text: string,
   hostSetsGoals: boolean,
   agent: AgentType | undefined,
-  snapshot: readonly SessionOptionDescriptor[]
+  snapshot: readonly SessionOptionDescriptor[],
+  opensMcpPanel = false
 ): boolean {
   return (
     isStructuredAgentSessionComposerCommand(text, agent, snapshot) ||
-    (hostSetsGoals && isStructuredAgentSessionGoalCommand(text))
+    (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
+    (opensMcpPanel && commandParts(text)?.name === 'mcp')
   )
 }
 
 export function prepareStructuredAgentSessionComposerCommand(
-  _agent: AgentType,
+  agent: AgentType,
   _reported?: readonly AgentSessionSlashCommand[]
 ): (text: string) => boolean {
   const names = new Set(structuredRecognizedCommands().map((entry) => entry.name))
   return (text) => {
-    const command = commandParts(text)
+    const command = commandParts(text, agent)
     return command !== null && names.has(command.name)
   }
 }
 
-/** `/clear` or `/compact` alone: a conversation command with nothing after it. */
+/** `/clear`, `/compact` or `/new` alone: a conversation command with nothing after it, for any agent. */
 export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
   const command = commandParts(text.trim())
-  return Boolean(
-    command &&
-    command.argument === '' &&
-    CONVERSATION_COMMANDS.some((entry) => entry.name === command.name)
+  return (
+    command?.argument === '' &&
+    (command.name === 'new' || CONVERSATION_COMMANDS.some((entry) => entry.name === command.name))
   )
 }
 
@@ -150,8 +155,11 @@ export function structuredAgentSessionGoalChange(argument: string): AgentSession
 }
 
 /** `/clear`, `/compact` and goal changes that start work change the conversation; pausing or clearing a goal does not. */
-export function structuredAgentSessionCommandChangesConversation(text: string): boolean {
-  const command = commandParts(text)
+export function structuredAgentSessionCommandChangesConversation(
+  text: string,
+  agent: AgentType | undefined
+): boolean {
+  const command = commandParts(text, agent)
   if (command?.name === 'goal') {
     const change = command.argument ? structuredAgentSessionGoalChange(command.argument) : null
     return change?.kind === 'set' || (change?.kind === 'status' && change.status === 'active')
@@ -163,12 +171,6 @@ export function structuredAgentSessionCommandChangesConversation(text: string): 
 export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
   const command = commandParts(text)
   return command?.name === 'goal' && command.argument === ''
-}
-
-/** Goal mode strips an optional /goal prefix instead of treating it as objective text. */
-export function structuredAgentSessionGoalObjective(text: string): string {
-  const goal = /^\/goal(?:\s+([\s\S]*))?$/i.exec(text.trimEnd())
-  return goal ? (goal[1]?.trim() ?? '') : text.trim()
 }
 
 function unavailable(name: string): StructuredAgentSessionCommandOutcome {
@@ -199,7 +201,11 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       error: null
     }
   }
-  const command = commandParts(text)
+  const command = commandParts(text, controller.agent)
+  if (command?.name === 'mcp' && controller.openMcpPanel) {
+    controller.openMcpPanel()
+    return { handled: true, accepted: true, error: null }
+  }
   if (command?.name === 'goal' && controller.changeThreadGoal) {
     if (!command.argument) {
       return {
@@ -228,7 +234,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       return {
         handled: true,
         accepted: false,
-        ...structuredComposerFailure('commandTakesNoArguments', { name: command.name })
+        ...structuredComposerFailure('commandTakesNoArguments', { name: command.typed })
       }
     }
     if (
@@ -238,7 +244,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       return {
         handled: true,
         accepted: false,
-        ...structuredComposerFailure('commandUnsupportedByHost', { name: command.name })
+        ...structuredComposerFailure('commandUnsupportedByHost', { name: command.typed })
       }
     }
     return {

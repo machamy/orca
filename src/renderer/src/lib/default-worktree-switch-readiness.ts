@@ -47,7 +47,7 @@ export function findUnreadyAgentPanes(
       // Checking only the status row refused every switch after an app restart
       // until the user manually prompted each agent.
       const capturable =
-        Object.values(state.agentStatusByPaneKey).some(
+        [...state.agentStatusByPaneKey.values()].some(
           (entry) =>
             entry.tabId === tab.id &&
             Boolean(entry.providerSession ?? entry.lastKnownProviderSession)

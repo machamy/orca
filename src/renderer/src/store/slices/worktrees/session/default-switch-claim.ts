@@ -1,6 +1,6 @@
 import type { StoreApi } from 'zustand'
 import { DEFAULT_SWITCH_IN_FLIGHT_STALE_MS } from '@/lib/default-worktree-switch-stale-bound'
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { AppState } from '../../../types'
 
 /**

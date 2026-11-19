@@ -7,9 +7,9 @@ import {
   loadBrowserGuestUrl
 } from './load-browser-guest-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
 
@@ -623,9 +623,14 @@ describe('browser pane guest navigation entry points', () => {
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = join(dir, entry.name)
-        if (entry.isDirectory()) {
+        // Extension side panels load their own panel URL, never a page the person navigated to.
+        if (entry.isDirectory() && entry.name !== 'extension-side-panel') {
           walk(full)
-        } else if (/\.tsx?$/.test(entry.name) && !entry.name.includes('.test.')) {
+        } else if (
+          !entry.isDirectory() &&
+          /\.tsx?$/.test(entry.name) &&
+          !entry.name.includes('.test.')
+        ) {
           sources.push(full)
         }
       }

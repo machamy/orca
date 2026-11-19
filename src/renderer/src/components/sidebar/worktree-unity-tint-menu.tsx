@@ -28,8 +28,8 @@ import {
   pickUnityWorktreeTint,
   unityToolbarPreviewHex
 } from '../../../../shared/unity-worktree-tint-palette'
-import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
-import type { Repo } from '../../../../shared/repo-types'
+import { getRuntimePathBasename } from '../../../../shared/file-access/cross-platform-path'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 /**

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitOptionsForWorktree } from './git-runtime-options'
-import { gitExecFileAsync } from './runner'
+import type { GitRuntimeOptions } from './command-runner/git-runtime-options'
+import { gitOptionsForWorktree } from './command-runner/git-runtime-options'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 
 /** Uncommitted work parked for the duration of a default-worktree switch. The
  *  rescue ref keeps `sha` reachable (and named) until the switch succeeds. */

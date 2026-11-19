@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadBrowserGuestUrl } from './load-browser-guest-url'
-import { createBrowserPageWebviewNavigationHandlers } from '../host-guest/browser-page-webview-navigation-handlers'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import { createBrowserPageWebviewNavigationHandlers } from '../host-guest/lifecycle/browser-page-webview-navigation-handlers'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 type PathStat = { isDirectory: boolean; escapesWorktree: boolean }
 

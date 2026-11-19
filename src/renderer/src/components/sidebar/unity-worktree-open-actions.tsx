@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { shouldOfferUnityCacheCopy } from './unity-cache-copy-offer'
 import { unityFocusFailureMessage } from './unity-focus-failure-message'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { UnityWorktreeStatus } from '../../../../shared/unity-worktree'
 import type { Worktree } from '../../../../shared/worktree/types'
 

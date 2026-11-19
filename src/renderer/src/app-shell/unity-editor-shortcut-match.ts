@@ -1,9 +1,9 @@
-import {
-  keybindingMatchesAction,
-  type KeybindingInput,
-  type KeybindingMatchOptions,
-  type KeybindingOverrides
-} from '../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../shared/keybindings/matching'
+import type {
+  KeybindingInput,
+  KeybindingMatchOptions,
+  KeybindingOverrides
+} from '../../../shared/keybindings/types'
 
 /** Which editor a keypress asks for, or null when it asks for neither. */
 export type UnityEditorShortcut = 'unity' | 'rider'

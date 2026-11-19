@@ -1,6 +1,9 @@
 import { transitionLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-transition'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeWorktreeIdentityMigration } from '../../../../shared/runtime-worktree-contracts'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { RuntimeWorktreeIdentityMigration } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { useAppStore } from '../../store/index'
 import { armWorktreeIdentityGrace } from '../../store/worktree-identity-grace'
 

@@ -14,10 +14,10 @@ import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-c
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useAppStore } from '../store'
 import { isLocallyRunnableUnityWorkspace } from '../../../shared/unity-repo-eligibility'
-import { isDefaultCheckoutWorkspace } from '../../../shared/worktree/ownership'
-import type { Repo } from '../../../shared/repo-types'
+import { isDefaultCheckoutWorkspace } from '../../../shared/worktree/visibility/ownership'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { getKeybindingContext } from './app-command-handlers'
+import { getKeybindingContext } from '../lib/app-commands/app-command-handlers'
 import { matchUnityEditorShortcut, type UnityEditorShortcut } from './unity-editor-shortcut-match'
 
 /**

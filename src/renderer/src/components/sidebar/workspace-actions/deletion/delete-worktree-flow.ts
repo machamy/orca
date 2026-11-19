@@ -2,7 +2,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
-import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   showNoDeletableWorkspacesToast,
@@ -12,8 +12,8 @@ import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   resolveWorktreeBatchDeleteTargets,
   toWorktreeDeleteIdentities,
@@ -23,7 +23,7 @@ import {
 } from './worktree-delete-request'
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
 import { runWorktreeDeleteWithToast } from './run-worktree-delete-with-toast'
-import { isProjectFolderRow } from '../../../../../../shared/worktree/ownership'
+import { isProjectFolderRow } from '../../../../../../shared/worktree/visibility/ownership'
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 
 /** Standard Git-worktree deletion funnel; stale record/instance guards precede confirmation preferences. */

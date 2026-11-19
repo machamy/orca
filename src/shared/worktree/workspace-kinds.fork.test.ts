@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDefaultBranchWorkspaceAtRepoPath } from './workspace-kinds'
+import { isDefaultBranchWorkspaceAtRepoPath } from './visibility/workspace-kinds'
 
 function makeWorktree(id: string, isMainWorktree = false) {
   return { path: `/tmp/${id}`, branch: 'refs/heads/main', isMainWorktree }

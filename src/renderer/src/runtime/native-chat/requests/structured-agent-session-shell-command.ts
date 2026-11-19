@@ -1,5 +1,5 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { AgentSessionShellCommandResult } from '../../../../../shared/rpc-contract/structured-agent-session-shell-command-params'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { AgentSessionShellCommandResult } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-shell-command-params'
 import { isNativeChatShellCommandUnsupportedError } from '../../../../../shared/native-chat/native-chat-shell-command'
 import { callStructuredAgentSession } from './structured-agent-session-call'
 

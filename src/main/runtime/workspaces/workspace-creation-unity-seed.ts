@@ -1,9 +1,9 @@
-import type { Repo } from '../../../shared/repo-types'
-import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from './startup/workspace-terminal-provisioning'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { OrcaRuntimeWithGroupFolderSetup } from './creation/runtime-group-folder-setup-host'
 import { scheduleUnitySeedAfterLocalWorktreeCreate } from '../runtime-local-worktree-unity-seed'
 
 /** Fork: the create path's Unity seed hook, a class link so workspace-creation.ts carries one fork line. */
-export abstract class OrcaRuntimeWithUnitySeedAfterCreate extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
+export abstract class OrcaRuntimeWithUnitySeedAfterCreate extends OrcaRuntimeWithGroupFolderSetup {
   /** Seeds a Unity repo's fresh worktree from the default checkout in the background, so the first open skips the full reimport. */
   protected scheduleUnitySeedForCreatedWorktree(repo: Repo, worktreePath: string): void {
     scheduleUnitySeedAfterLocalWorktreeCreate({

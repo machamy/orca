@@ -24,6 +24,15 @@ source.
 
 ---
 
+## machamy.29 — upstream `1.4.263` base · 2026-11-19
+
+Merged upstream through `v1.4.263` (1,839 commits, 114 conflicts).
+
+- **`!cmd` in Chat UI:** in a chat opened as Chat UI, typing `!ls` makes Orca run the command in the chat folder and leave the result as a card, without starting an agent turn. The output goes to the agent once, with your next message (your own bubble stays as typed). It is not attached to `/command` messages and is refused while the agent is replying. Commands stop after 120 seconds and cannot read input. Works from the desktop and phone composers.
+- Upstream moved the journal to SQL storage and added a ride-along path for host notes; `!` output uses it, as automation result notes do.
+- Upstream turned agent statuses into a dedicated Map class; the default-worktree switch, cold restore and model badge moved off the old record-style access (which type-checks but silently reads nothing).
+- The updater test harness upstream deleted is kept for the fork contract tests.
+
 ## machamy.28 — upstream `1.4.256` · 2026-11-11
 
 Merged upstream through `v1.4.256` (1,996 commits, 128 conflicts). Upstream moved most of the sidebar, editor, settings and runtime folders, so the fork's features were laid back on top of the new layout.

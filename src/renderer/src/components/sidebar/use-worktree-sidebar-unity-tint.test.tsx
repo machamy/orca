@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
-import type { Repo, UnitySidebarTintMode } from '../../../../shared/repo-types'
+import type { Repo, UnitySidebarTintMode } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { UnityWorktreeStatus } from '../../../../shared/unity-worktree'
 import type { UnityTintSidebarPreviewSlice } from '@/store/slices/unity-tint-sidebar-preview'

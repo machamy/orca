@@ -1,8 +1,8 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { Repo } from '../../../../shared/repo-types'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 
 function samePath(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
