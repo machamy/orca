@@ -3,6 +3,7 @@ import { SquareTerminal } from 'lucide-react'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { translate } from '@/i18n/i18n'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const TERMINAL_TAB_ROW_CAP = 4
@@ -11,17 +12,19 @@ const TERMINAL_TAB_ROW_CAP = 4
  *  discoverable from the sidebar; click activates the workspace + tab. */
 export const WorktreeCardTerminalTabRows = React.memo(function WorktreeCardTerminalTabRows({
   worktreeId,
+  executionHostId,
   tabs
 }: {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   tabs: readonly TerminalTab[]
 }) {
   const handleOpenTab = useCallback(
     (tabId: string) => {
-      activateAndRevealWorktree(worktreeId)
+      activateAndRevealWorktree(worktreeId, executionHostId ? { executionHostId } : undefined)
       activateTabAndFocusPane(tabId, null)
     },
-    [worktreeId]
+    [worktreeId, executionHostId]
   )
   if (tabs.length === 0) {
     return null

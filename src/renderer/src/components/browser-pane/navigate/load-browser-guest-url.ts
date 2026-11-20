@@ -14,6 +14,7 @@ import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import {
   getEditorRenderedPathFromBrowserUrl,
@@ -50,6 +51,11 @@ export function browserGuestUrlProbeFenceCount(): number {
 }
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
+
+// The floating panel shows its own tabs whichever workspace is active.
+function handoffWorkspaceShown(worktreeId: string): boolean {
+  return isFloatingWorkspaceId(worktreeId) || useAppStore.getState().activeWorktreeId === worktreeId
+}
 
 // Why: closed pages otherwise keep their fence forever; ids of live pages (and
 // the page being loaded) stay, so in-flight probes still compare correctly.
@@ -159,7 +165,7 @@ export function loadBrowserGuestUrl({
     // Fall back to the decline path so the guest and store agree (a bare return
     // left the store on the markdown URL with a guest that never loaded it, and
     // returning to the workspace never re-probed).
-    if (useAppStore.getState().activeWorktreeId !== worktreeId) {
+    if (!handoffWorkspaceShown(worktreeId)) {
       loadInGuest(url)
       return
     }
@@ -294,7 +300,7 @@ export async function openBrowserPathInEditor(
   // workspace's view. Declining routes the caller to its browser-tab fallback
   // in the ORIGINAL worktree (tab activation there is already workspace-local),
   // and returning to that workspace re-runs the handoff through the URL sync.
-  if (useAppStore.getState().activeWorktreeId !== worktreeId) {
+  if (!handoffWorkspaceShown(worktreeId)) {
     return false
   }
   commitHandoff()

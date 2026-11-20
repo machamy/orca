@@ -48,6 +48,15 @@ function rowBelongsToHost(
     row.tab.ptyId,
     stampedHosts.get(row.tab.id)
   )
+  return paneHostServesCardHost(paneHost, hostId, owner)
+}
+
+/** Whether a pane on `paneHost` belongs to the card for `hostId`, aliases of the owner included. */
+export function paneHostServesCardHost(
+  paneHost: ReturnType<typeof getAgentPaneExecutionHost>,
+  hostId: ExecutionHostId,
+  owner: ReturnType<typeof resolveQualifiedWorktreeExecutionOwner> | undefined
+): boolean {
   return (
     paneHost === hostId ||
     Boolean(

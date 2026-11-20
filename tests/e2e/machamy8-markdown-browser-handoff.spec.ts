@@ -78,3 +78,47 @@ test('markdown opened in the embedded browser hands off to the editor', async ({
     fixture.cleanup()
   }
 })
+
+// Mirror FLOATING_TERMINAL_WORKTREE_ID without loading renderer/shared modules into Playwright.
+const FLOATING_WORKTREE_ID = 'global-floating-terminal'
+
+test('markdown opened in the floating browser hands off while a project is active', async ({
+  orcaPage: page
+}) => {
+  await waitForSessionReady(page)
+  await waitForActiveWorktree(page)
+  await page.evaluate(async () => {
+    const store = window.__store!
+    await store.getState().updateSettings({ floatingTerminalEnabled: true })
+    store.setState({ floatingWorkspacePanelOpen: true })
+  })
+  await expect(page.locator('[data-floating-terminal-panel][aria-hidden="false"]')).toBeVisible()
+
+  const fixture = writeMarkdownFixture()
+  try {
+    await openInOrcaBrowser(page, FLOATING_WORKTREE_ID, fixture.path)
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            (floatingId) =>
+              window.__store
+                ?.getState()
+                .openFiles.some(
+                  (file) =>
+                    file.worktreeId === floatingId && file.filePath.endsWith('release-note.md')
+                ) ?? false,
+            FLOATING_WORKTREE_ID
+          ),
+        { timeout: 15_000 }
+      )
+      .toBe(true)
+    const strayBrowserUrls = await page.evaluate(() =>
+      JSON.stringify(window.__store?.getState().browserPagesByWorkspace ?? {})
+    )
+    expect(strayBrowserUrls).not.toContain('release-note.md')
+  } finally {
+    fixture.cleanup()
+  }
+})
