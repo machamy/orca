@@ -54,8 +54,6 @@ export type WorktreeDropCommitContext = {
     pickedCopies: DraggedWorktreeCopies,
     parentIdentity: string
   ) => boolean
-  // Fork: dropping on the default row's "Make default" zone opens the switch dialog.
-  commitWorktreeDefaultSwitchDrop: (draggedIds: readonly string[], targetId: string) => boolean
   captureFolderRetention?: (
     point: WorktreeReorderDropPoint | undefined,
     pickedCopies: DraggedWorktreeCopies,

@@ -5,7 +5,6 @@ import {
 import { getFirstTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
-import { planFollowSwitchShellPtyRelease } from '@/lib/default-worktree-switch-shell-pty-release'
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount
@@ -15,96 +14,8 @@ import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../termi
 export function createTerminalPtyReleaseActions(
   set: TerminalStoreSet,
   get: TerminalStoreGet
-): Pick<
-  TerminalSlice,
-  'clearTabPtyId' | 'clearDeadLeafPtyBindings' | 'releaseFollowSwitchShellPtyBindings'
-> {
+): Pick<TerminalSlice, 'clearTabPtyId'> {
   return {
-    // Fork: after a mode-B follow switch the moved tabs still name their pre-swap
-    // PTY ids; recordless shells bare-attach to sessions the sleep already killed.
-    releaseFollowSwitchShellPtyBindings: (worktreeIds) => {
-      const state = get()
-      const plan = planFollowSwitchShellPtyRelease({
-        worktreeIds,
-        tabsByWorktree: state.tabsByWorktree,
-        terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-        sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey ?? {}
-      })
-      const releasedTabIds = new Set(plan.tabIds)
-      const touchedTabIds = new Set([...plan.tabIds, ...Object.keys(plan.leafIdsByTabId)])
-      if (touchedTabIds.size === 0) {
-        return 0
-      }
-      set((s) => {
-        const nextTabsByWorktree = { ...s.tabsByWorktree }
-        for (const worktreeId of worktreeIds) {
-          const tabs = s.tabsByWorktree[worktreeId]
-          if (!tabs?.some((tab) => releasedTabIds.has(tab.id) && tab.ptyId)) {
-            continue
-          }
-          nextTabsByWorktree[worktreeId] = tabs.map((tab) =>
-            releasedTabIds.has(tab.id) && tab.ptyId ? { ...tab, ptyId: null } : tab
-          )
-        }
-        const nextTerminalLayoutsByTabId = { ...s.terminalLayoutsByTabId }
-        for (const [tabId, leafIds] of Object.entries(plan.leafIdsByTabId)) {
-          const layout = s.terminalLayoutsByTabId[tabId]
-          if (!layout?.ptyIdsByLeafId) {
-            continue
-          }
-          const nextPtyIdsByLeafId = { ...layout.ptyIdsByLeafId }
-          for (const leafId of leafIds) {
-            delete nextPtyIdsByLeafId[leafId]
-          }
-          nextTerminalLayoutsByTabId[tabId] = { ...layout, ptyIdsByLeafId: nextPtyIdsByLeafId }
-        }
-        return {
-          tabsByWorktree: nextTabsByWorktree,
-          terminalLayoutsByTabId: nextTerminalLayoutsByTabId
-        }
-      })
-      return touchedTabIds.size
-    },
-
-    // Fork: after a swap-back the stale ids embed the CURRENT worktree, so the ownership
-    // check passes and a remount reattaches to a killed session instead of respawning.
-    clearDeadLeafPtyBindings: (tabIds) => {
-      let cleared = 0
-      set((s) => {
-        const nextLayouts = { ...s.terminalLayoutsByTabId }
-        const nextTabsByWorktree = { ...s.tabsByWorktree }
-        for (const tabId of tabIds) {
-          const livePtyIds = new Set(s.ptyIdsByTabId[tabId] ?? [])
-          const layout = s.terminalLayoutsByTabId[tabId]
-          const bindings = layout?.ptyIdsByLeafId
-          if (bindings) {
-            const kept: Record<string, string> = {}
-            for (const [leafId, leafPtyId] of Object.entries(bindings)) {
-              if (livePtyIds.has(leafPtyId)) {
-                kept[leafId] = leafPtyId
-              } else {
-                cleared += 1
-              }
-            }
-            if (Object.keys(kept).length !== Object.keys(bindings).length) {
-              nextLayouts[tabId] = { ...layout, ptyIdsByLeafId: kept }
-            }
-          }
-          for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
-            const index = tabs.findIndex((tab) => tab.id === tabId)
-            if (index === -1 || !tabs[index].ptyId || livePtyIds.has(tabs[index].ptyId as string)) {
-              continue
-            }
-            const nextTabs = (nextTabsByWorktree[worktreeId] ?? tabs).slice()
-            nextTabs[index] = { ...nextTabs[index], ptyId: null }
-            nextTabsByWorktree[worktreeId] = nextTabs
-          }
-        }
-        return { terminalLayoutsByTabId: nextLayouts, tabsByWorktree: nextTabsByWorktree }
-      })
-      return cleared
-    },
-
     clearTabPtyId: (tabId, ptyId) => {
       if (ptyId && get().pendingPtyShutdownIds[ptyId]) {
         // Why: an owner exit can arrive before its post-stop inventory; keep the renderer binding retryable until verification commits.

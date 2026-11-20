@@ -8,7 +8,6 @@ import { AI_VAULT_METHODS } from './history/ai-vault'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
-import { DEFAULT_SET_METHOD } from './worktree-default-set-method'
 import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspaces/workspace-cleanup-runner-methods'
 import { WORKTREE_ARCHIVE_METHODS } from './workspaces/worktree-archive-methods'
 import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
@@ -136,8 +135,6 @@ const CORE_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
-  // Fork: registered here, not in WORKTREE_METHODS, so worktree.ts stays within its line limit.
-  DEFAULT_SET_METHOD,
   ...WORKSPACE_CLEANUP_RUNNER_METHODS,
   ...WORKTREE_ARCHIVE_METHODS,
   ...AGENT_ACTIVITY_METHODS,

@@ -2,22 +2,6 @@ import type { AgentModelBadgeSettings } from './agent-model-badge-settings'
 
 /** Fork-only settings, kept apart so global-settings-types.ts tracks upstream line for line. */
 export type ForkGlobalSettings = {
-  /** Default-worktree switch: when true, sleep both worktrees' agents and resume each
-   *  in the worktree that now holds its branch (agents follow); when false, agents
-   *  stay put and their branch changes under them. */
-  defaultSwitchAgentsFollow?: boolean
-  /** Default-worktree switch: seed each affected agent with a one-line note about the
-   *  branch/location change on the next turn. */
-  defaultSwitchNotifyAgents?: boolean
-  /** Set once the first-run explanation of the in-place branch swap was read. */
-  defaultSwitchWarningAcknowledged?: boolean
-  /** Which side's agents the switch note reaches: both, only the branch being
-   *  promoted, or only the one leaving the default path. */
-  defaultSwitchNotifyScope?: 'both' | 'promoted' | 'demoted'
-  /** Default-worktree switch: when true (the default for older profiles too), untracked
-   *  files travel with their branch; when false they stay in the folder they are in and
-   *  the branch swaps around them. */
-  defaultSwitchKeepUntrackedInPlace?: boolean
   /** Fork: embedded-browser markdown file URLs hand off to the editor (machamy.8). Off restores
    *  upstream's raw rendering for markdown only — notebooks predate the generalization and always hand off. */
   browserMarkdownEditorHandoff?: boolean

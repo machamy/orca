@@ -40,8 +40,6 @@ export type RuntimeStore = {
   getProfileStorageDirectory?: Store['getProfileStorageDirectory']
   getWorktreeMeta: Store['getWorktreeMeta']
   setWorktreeMeta: Store['setWorktreeMeta']
-  /** Fork (default-worktree switch, follow mode): re-key one worktree id's persisted state. */
-  migrateWorktreeIdentity?: Store['migrateWorktreeIdentity']
   getWorktreeMetaForHost?: Store['getWorktreeMetaForHost']
   removeWorktreeMeta: Store['removeWorktreeMeta']
   removeUnhostedWorktreeMeta?: Store['removeUnhostedWorktreeMeta']

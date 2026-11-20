@@ -11,7 +11,6 @@ import {
   WorktreeCardFolderPath,
   WorktreeCardMetaRepoBadge
 } from './worktree-card-meta-items'
-import { WorktreeCardDefaultBadge } from './worktree-card-default-badge'
 import type { WorktreeCardPresentation } from '../surface/worktree-card-presentation'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -43,7 +42,6 @@ export function WorktreeCardMetaRow({
     showBranch,
     showDetachedHeadInMetaRow,
     showConflictOperationBadge,
-    isDefaultWorktree,
     showMetaRowDetails,
     detailsAndPorts
   } = presentation
@@ -90,8 +88,6 @@ export function WorktreeCardMetaRow({
         {showConflictOperationBadge && conflictOperation && (
           <WorktreeCardConflictBadge operation={conflictOperation} />
         )}
-
-        {isDefaultWorktree ? <WorktreeCardDefaultBadge /> : null}
 
         {cacheStartedAt != null && <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />}
       </div>

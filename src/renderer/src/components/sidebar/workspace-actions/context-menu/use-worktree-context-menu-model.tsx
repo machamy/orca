@@ -48,8 +48,6 @@ export type WorktreeContextMenuProps = {
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   onOpenChange?: (open: boolean) => void
   onLifecycleComplete?: () => void
-  /** Fork: the sidebar's entry point into the default-worktree switch dialog. */
-  onDefaultSwitchRequest?: (worktree: Worktree) => void
 }
 
 export function useWorktreeContextMenuModel({
@@ -60,8 +58,7 @@ export function useWorktreeContextMenuModel({
   onContextMenuSelect,
   onAssignWorkspaceStatus,
   onOpenChange,
-  onLifecycleComplete,
-  onDefaultSwitchRequest
+  onLifecycleComplete
 }: WorktreeContextMenuProps) {
   const t = useTranslate()
   const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
@@ -330,16 +327,10 @@ export function useWorktreeContextMenuModel({
     [openPendingParentPicker]
   )
 
-  const handleDefaultSwitch = useCallback(() => {
-    onDefaultSwitchRequest?.(worktree)
-  }, [onDefaultSwitchRequest, worktree])
-
   return {
     ...commands,
     showsUnread,
     activeContextWorktrees,
-    onDefaultSwitchRequest,
-    handleDefaultSwitch,
     batchDeleteWorktrees,
     browserTabsByWorktree,
     children,

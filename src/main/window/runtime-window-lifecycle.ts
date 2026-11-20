@@ -44,13 +44,7 @@ export function registerRuntimeWindowLifecycle(
       if (options?.invalidateGitScans !== false) {
         runWorktreeChangeInvalidators(repoId)
       }
-      const migrations = options?.migrations
-      send('worktrees:changed', {
-        repoId,
-        ...(renamed ? { renamed } : {}),
-        ...(migrations && migrations.length > 0 ? { migrations } : {}),
-        ...(options?.shieldOnly ? { shieldOnly: true } : {})
-      })
+      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
     },
     // Why: interim transport for the workspaceMetadata set record; the record shape, not this channel, is the contract.
     workspaceMetadataSet: (set) => send('worktrees:metadataSet', set),

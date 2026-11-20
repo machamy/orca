@@ -35,7 +35,6 @@ export type WorktreePointerDragFrameArgs = {
   setWorktreeDragState: React.Dispatch<React.SetStateAction<WorktreeRowDragState>>
   setDragOverStatus: (status: WorkspaceStatus | null) => void
   setPinDragOver: (pinDragOver: boolean) => void
-  setPointerDefaultSwitchDropTargetId: (worktreeId: string | null) => void
 }
 
 function showStatusHoverWithoutInsertionLine(
@@ -129,7 +128,6 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
   if (boardTarget.status || boardTarget.isPinDrop) {
     drag.reorderIntent = null
     drag.latestStatusDropTarget = null
-    args.setPointerDefaultSwitchDropTargetId(null)
     clearInsertionLine(args)
     return
   }
@@ -145,16 +143,7 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
       : NO_WORKTREE_SIDEBAR_DROP_TARGET,
     drag.pickedCopies
   )
-  args.setPointerDefaultSwitchDropTargetId(preferredStatusTarget.defaultSwitchTargetId)
   const lineageParentIdentity = preferredStatusTarget.lineageParentIdentity
-  // Fork: a default-switch drop is a status target, not nesting — no nesting preview.
-  if (!lineageParentIdentity && preferredStatusTarget.defaultSwitchTargetId) {
-    drag.reorderIntent = null
-    updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
-    clearWorkspaceKanbanSidebarDropTargetVisual()
-    clearInsertionLine(args)
-    return
-  }
   if (lineageParentIdentity) {
     drag.reorderIntent = null
     updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)

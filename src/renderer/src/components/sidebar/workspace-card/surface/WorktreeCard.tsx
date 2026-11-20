@@ -44,10 +44,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   lineageChildrenStyle,
   onLineageToggle,
   isLineageDropTarget = false,
-  isDefaultWorktree = false,
-  showDefaultSwitchDropTarget = false,
-  isDefaultSwitchDropTarget = false,
-  onDefaultSwitchRequest,
   affiliateListMode = false,
   showUnityTint = false,
   statusPrDisplay = null
@@ -90,10 +86,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
     lineageChildrenStyle,
     onLineageToggle,
     isLineageDropTarget,
-    isDefaultWorktree,
-    showDefaultSwitchDropTarget,
-    isDefaultSwitchDropTarget,
-    onDefaultSwitchRequest,
     affiliateListMode,
     showUnityTint,
     statusPrDisplay

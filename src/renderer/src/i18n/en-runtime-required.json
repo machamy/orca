@@ -910,11 +910,6 @@
           "foundRepositories_one": "Found {{count}} repository in {{path}}.",
           "foundRepositories_other": "Found {{count}} repositories in {{path}}."
         },
-        "DefaultWorktreeSwitchDialog": {
-          "description": "Orca swaps the two worktrees' branches in place — no folders move, so git's main worktree stays at the repo path. Each worktree ends on the other's branch, carrying its uncommitted changes.",
-          "notifyHint": "Seeds each affected agent with a one-line note about the branch/location change on its next turn.",
-          "recoveryRequired": "The branch swap failed and could not be fully rolled back. Check the two worktrees' branches; the error lists what to restore."
-        },
         "DeleteWorktreeDialog": {
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
           "removeBatchFolder_other": "Remove <target>{{count}} workspaces</target> from Orca. Project folders on disk will not be deleted.",

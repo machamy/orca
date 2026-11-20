@@ -39,8 +39,6 @@ export type WorkspaceCardFacts = {
     isMain: boolean
     /** Fork: the checkout at the repo path; a default-worktree switch can move it off git's main worktree. */
     isDefaultCheckout: boolean
-    /** Fork: the row the user marked as the project's default worktree. */
-    isDefaultWorktree: boolean
     isSparse: boolean
     detachedHead: boolean
     isPinned: boolean

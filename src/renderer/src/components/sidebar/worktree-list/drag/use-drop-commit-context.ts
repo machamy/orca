@@ -1,39 +1,22 @@
-import { useCallback, useMemo } from 'react'
-import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
+import { useMemo } from 'react'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { useWorktreeDragRuntime } from './use-runtime'
 import type { useWorktreeDragSession } from './use-session'
 import type { useWorktreeLineageDropCommit } from './use-lineage-drop-commit'
-import type { useWorktreeDefaultSwitchDropCommit } from './use-default-switch-drop-commit'
-import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
 export function useWorktreeDropCommitContext(args: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   session: ReturnType<typeof useWorktreeDragSession>
   lineageDrop: ReturnType<typeof useWorktreeLineageDropCommit>
-  defaultSwitchDrop: ReturnType<typeof useWorktreeDefaultSwitchDropCommit>
   runtime: ReturnType<typeof useWorktreeDragRuntime>
   onMoveWorktreesToStatus: WorktreeDropCommitContext['onMoveWorktreesToStatus']
   onMoveWorktreesToStatusAtIndex: WorktreeDropCommitContext['onMoveWorktreesToStatusAtIndex']
   onReorderWorktrees: WorktreeDropCommitContext['onReorderWorktrees']
   onPinWorktrees: WorktreeDropCommitContext['onPinWorktrees']
 }): WorktreeDropCommitContext {
-  const { scrollRef, workspaceStatuses, session, lineageDrop, defaultSwitchDrop, runtime } = args
-  // Fork: one filter pass answers both "can nest here" and "can become default here",
-  // so hover ring and drop commit always agree.
-  const getEligibleDropTarget = useCallback(
-    (
-      target: WorktreeSidebarLineageDropTarget,
-      pickedCopies: DraggedWorktreeCopies
-    ): WorktreeSidebarLineageDropTarget =>
-      defaultSwitchDrop.filterEligibleDefaultSwitchTarget(
-        lineageDrop.getEligibleLineageDropTarget(target, pickedCopies),
-        pickedCopies.map((copy) => copy.id)
-      ),
-    [defaultSwitchDrop, lineageDrop]
-  )
+  const { scrollRef, workspaceStatuses, session, lineageDrop, runtime } = args
   const {
     onMoveWorktreesToStatus,
     onMoveWorktreesToStatusAtIndex,
@@ -54,9 +37,8 @@ export function useWorktreeDropCommitContext(args: {
       computeWorktreeDrop: session.computeWorktreeDrop,
       computeWorktreeStatusDrop: session.computeWorktreeStatusDrop,
       refreshWorktreeDragSession: session.refreshWorktreeDragSession,
-      getEligibleLineageDropTarget: getEligibleDropTarget,
+      getEligibleLineageDropTarget: lineageDrop.getEligibleLineageDropTarget,
       commitWorktreeLineageParentDrop: lineageDrop.commitWorktreeLineageParentDrop,
-      commitWorktreeDefaultSwitchDrop: defaultSwitchDrop.commitWorktreeDefaultSwitchDrop,
       captureFolderRetention: lineageDrop.captureFolderRetention,
       clearReorderedWorktreeParents: lineageDrop.clearReorderedWorktreeParents,
       clearWorktreeDrag: runtime.clearWorktreeDrag,
@@ -69,10 +51,9 @@ export function useWorktreeDropCommitContext(args: {
       onPinWorktrees: (worktreeIds) => onPinWorktrees(worktreeIds, draggedCopies())
     }
   }, [
-    defaultSwitchDrop.commitWorktreeDefaultSwitchDrop,
-    getEligibleDropTarget,
     lineageDrop.clearReorderedWorktreeParents,
     lineageDrop.commitWorktreeLineageParentDrop,
+    lineageDrop.getEligibleLineageDropTarget,
     onMoveWorktreesToStatus,
     onMoveWorktreesToStatusAtIndex,
     onPinWorktrees,

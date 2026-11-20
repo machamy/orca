@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { isInDefaultSwitchTeardownWindow } from '@/lib/default-worktree-switch-sleep-guard'
 import { worktreeUsesRemoteConnection } from '@/store/terminals/tabs/creation/terminal-workspace-routing'
 import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
 import {
@@ -170,19 +169,13 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
       processAgent,
       processShellForeground
     })
-    if (launchedAgentExited && !isInDefaultSwitchTeardownWindow(tab.worktreeId)) {
-      // Why the guard: a default switch kills every PTY, so the pane reads as a
-      // bare shell for a moment and this heuristic concludes the agent exited —
-      // permanently demoting the tab to a plain terminal in the sidebar. The
-      // agent is resuming, not gone. Measured: agent tabs came back with
-      // launchAgent stripped after a switch while a freshly created one keeps it.
+    if (launchedAgentExited) {
       clearTabLaunchAgent(tab.id)
     }
   }, [
     clearTabLaunchAgent,
     completedHookEvidence,
     focusedHookAgent,
-    tab.worktreeId,
     siblingHookAgent,
     hasObservedAgentSignal,
     isRemoteLike,

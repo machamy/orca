@@ -1553,7 +1553,6 @@
       "connectorRequests_one": "{{count}} request",
       "connectorRequests_other": "{{count}} requests",
       "connectorOnlyYou": "Only you",
-      "connectorStatus": {},
       "memorySource": "From {{source}}",
       "memorySourceLink": "link",
       "lookAround": {
@@ -1816,7 +1815,6 @@
         "recipeDescription": "Clean up dictated text before it lands."
       }
     },
-    "experimental": {},
     "groupHooks": {
       "title": "Project Settings > {{name}}",
       "example": "Example: create a worktree in each repo (this machine only)",
@@ -2840,27 +2838,6 @@
         "title": "Add Windows drive folders on this computer",
         "descriptionWithPath": "{{value0}} is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly.",
         "description": "This folder is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly."
-      },
-      "defaultWorktreeSwitchAgentNotice": {
-        "moved": "[Orca] Your worktree moved to {{path}} ({{branch}}). Same branch and files, new path — re-check paths before running commands."
-      },
-      "defaultWorktreeSwitchFlow": {
-        "agentsNotReady": "These agents had not reported a resumable session yet, so they move with their tab but start a new session: {{tabs}}.",
-        "agentsNotReadyTitle": "Some agents move without their session",
-        "checkoutWarned": "Check the files in both worktrees. Your uncommitted work is also kept at: {{refs}}",
-        "checkoutWarnedTitle": "Switch finished with git warnings",
-        "notReadyTitle": "Default switch postponed",
-        "switchInFlight": "Another default switch is still finishing. Try again in a moment."
-      },
-      "defaultWorktreeSwitchProgress": {
-        "restoring": "Reopening terminals and resuming agents…",
-        "settling": "Bringing back any pane that lagged…",
-        "sleeping": "Pausing terminals and capturing sessions…",
-        "swapping": "Exchanging branches…",
-        "swappingNamed": "Exchanging branches with {{detail}}…",
-        "verifying": "Switch done — still checking every pane…",
-        "waitingForAgent": "Waiting for {{detail}} to report its session…",
-        "waitingForAgents": "Waiting for agents to report their sessions…"
       },
       "environmentSetupAgentLaunch": {
         "noAgent": "No enabled AI agent was detected for this workspace.",
@@ -7680,9 +7657,6 @@
           "runtimeHostProject": "Project on Orca server",
           "runtimeHostProjectNamed": "Project on {{hostName}}",
           "ef18787206": "Queued for deletion",
-          "defaultSwitchDropAriaLabel": "Move the selected worktree to the default project path",
-          "defaultSwitchDropLabel": "Make default",
-          "defaultWorktree": "Default",
           "unityTintDot": "Unity colour for this worktree",
           "notificationsMuted": "Notifications muted"
         },
@@ -7690,8 +7664,7 @@
           "1b0a156717": "Agents",
           "agentUnavailable": "Agent is not available",
           "sendingTarget": "Sending...",
-          "moreTerminals": "+{{count}} more",
-          "movingAgents": "Moving agents…"
+          "moreTerminals": "+{{count}} more"
         },
         "WorktreeCardMeta": {
           "3e65e11cc6": "Workspace metadata",
@@ -7780,7 +7753,6 @@
           "sleepThisWorkspace": "This Workspace",
           "sleepDescendantsOption": "With Descendants ({{value0}})",
           "deleteWithDescendants": "Delete with Descendants…",
-          "defaultSwitch": "Make Default Worktree…",
           "openBranchOnHost": "View branch on {{host}}",
           "unityCachePresent": "Unity Cache Already Present",
           "unityConfirmBody": "This worktree has no Library yet, so Unity would reimport everything on first open. Copying the default worktree’s cache takes seconds and skips that.",
@@ -7868,8 +7840,6 @@
           "childCount_other": "{{count}} children",
           "groupProjectsRemained_one": "{{remaining}} of {{count}} contained project remained after deleting the group.",
           "groupProjectsRemained_other": "{{remaining}} of {{count}} contained projects remained after deleting the group.",
-          "defaultWorktreeSwitched": "Default worktree switched",
-          "defaultWorktreeSwitchedNotify": "{{repoPath}} is now on {{promoted}}; {{selectedPath}} is now on {{demoted}}.",
           "unityAutoSeedToggle": "Auto-copy Unity cache into new worktrees",
           "unityTintInSidebarBar": "Left colour bar",
           "unityTintInSidebarChip": "Right colour chip",
@@ -8616,50 +8586,6 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
-        },
-        "DefaultWorktreeSwitchDialog": {
-          "action": "Switch Default",
-          "alreadyDefault": "This worktree is already at the default project path.",
-          "currentDefault": "Selected worktree — checks out",
-          "description": "Orca swaps the two worktrees' branches in place — no folders move, so git's main worktree stays at the repo path. Each worktree ends on the other's branch, carrying its uncommitted changes.",
-          "detachedHead": "One of these worktrees is on a detached HEAD (no branch). Check out a branch in both, then try again.",
-          "externalToolsWarning": "Uncommitted, staged AND untracked files move with their branch — untracked files leave the folder they are in now. Ignored files (build output, node_modules) stay in place, and if the other branch tracks an ignored path, the switch is refused rather than overwriting it.",
-          "externalToolsWarningKeepUntracked": "Uncommitted and staged changes to tracked files move with their branch. Untracked and ignored files stay in the folder they are in — and if the other branch tracks one of those paths, the switch is refused rather than overwriting your local file.",
-          "followLabel": "Agents follow their branch",
-          "followOffHint": "Agents stay in their worktree; the branch changes under them. Fastest, no move.",
-          "followOnHint": "Sleeps both worktrees and resumes each agent where its branch now lives. Only sleep/resume-capable agents (Claude, Codex) follow.",
-          "ignoredWouldBeOverwritten": "The branch moving in tracks files that are ignored (and present) in the other worktree, so the switch would destroy them with no way back. Move or delete the paths listed below, then try again.",
-          "keepUntrackedLabel": "Leave untracked files where they are",
-          "keepUntrackedOffHint": "Untracked files travel with their branch, so work-in-progress new files land with the agent that made them.",
-          "keepUntrackedOnHint": "Untracked files stay in their folder and the branch swaps around them, like ignored files.",
-          "liveAgentsWarning": "{{count}} agent(s) are still mid-task in these worktrees. Their working tree will switch branches under them — let them finish or sleep them first.",
-          "notifyBoth": "Both",
-          "notifyDemoted": "Current default only",
-          "notifyHint": "Seeds each affected agent with a one-line note about the branch/location change on its next turn.",
-          "notifyLabel": "Tell agents what changed",
-          "notifyPromoted": "Incoming default only",
-          "operationInProgress": "One of these worktrees has a merge, cherry-pick, or revert in progress. Finish or abort it, then try again.",
-          "recoveryRequired": "The branch swap failed and could not be fully rolled back. Check the two worktrees' branches; the error lists what to restore.",
-          "selectedWorktree": "Repo default path — checks out",
-          "sleepAndSwitch": "Sleep & Switch (in place)",
-          "sleepFailed": "Could not sleep the running agents, so the switch was not started. Try again.",
-          "sleepMoveSwitch": "Sleep, Switch & Move Agents",
-          "switchAnyway": "Switch Anyway",
-          "title": "Make This the Default Worktree?",
-          "wslUnsupported": "Default worktree switching is not available for WSL projects yet."
-        },
-        "DefaultWorktreeSwitchFirstRunWarning": {
-          "acknowledge": "Got it, continue",
-          "cancel": "Cancel",
-          "changesBody": "Staged and untracked files move too, leaving the folder they are in now. Ignored files (build output, node_modules) stay put.",
-          "changesTitle": "Uncommitted work travels with its branch",
-          "intro": "The two worktrees swap branches in place. No folder moves.",
-          "namesBody": "A folder named after one branch can end up holding another. If you navigate by folder name, this is the part that confuses.",
-          "namesTitle": "Folder names stop matching branches",
-          "title": "Switching the default worktree moves branches, not folders",
-          "toolsBody": "Editors, GitHub Desktop and terminals left open on that folder follow the swap.",
-          "toolsTitle": "Tools pointed at a path will see a different branch",
-          "undo": "Run the same switch again to undo it."
         },
         "worktreeFolderMenu": {
           "convertPartial": "Some lineage children could not be moved into the folder",
@@ -20989,9 +20915,6 @@
         "title": "Orca refused this browser",
         "retry": "Try again"
       }
-    },
-    "common": {
-      "cancel": "Cancel"
     }
   },
   "components": {

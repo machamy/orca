@@ -60,7 +60,6 @@ import { createEphemeralVmLifecycleSlice } from '../slices/ephemeral-vm/ephemera
 import { createUnityProjectRepoProbeSlice } from '../slices/unity-project-repo-probe'
 import { createUnityTintSidebarPreviewSlice } from '../slices/unity-tint-sidebar-preview'
 import { createWorktreeFolderSlice } from '../slices/worktree-folders'
-import { createSleepingAgentSessionReseedSlice } from '../sleeping-agent-session-reseed'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../slices/editor/buffers/editor-buffer-record-lifecycle'
 import { withAgentConversationRetention } from '../slices/agent-status/conversation/agent-conversation-retention'
@@ -135,8 +134,7 @@ export function createTestStore(
         ...createEphemeralVmLifecycleSlice(...a),
         ...createUnityProjectRepoProbeSlice(...a),
         ...createUnityTintSidebarPreviewSlice(...a),
-        ...createWorktreeFolderSlice(...a),
-        ...createSleepingAgentSessionReseedSlice(...a)
+        ...createWorktreeFolderSlice(...a)
       }),
       true
     )

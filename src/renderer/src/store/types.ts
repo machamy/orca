@@ -51,7 +51,6 @@ import type { TerminalQuickCommandHostsSlice } from './terminals/quick-commands/
 import type { UnityProjectRepoProbeSlice } from './slices/unity-project-repo-probe'
 import type { UnityTintSidebarPreviewSlice } from './slices/unity-tint-sidebar-preview'
 import type { WorktreeFolderSlice } from './slices/worktree-folders'
-import type { SleepingAgentSessionReseedSlice } from './sleeping-agent-session-reseed'
 import type { StructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-sessions/structured-session-launch-directories'
 import type { StructuredChatSleptAtSlice } from './slices/agent-status/structured-sessions/structured-chat-slept-at'
 import type { StructuredChatCompanionWritesSlice } from './slices/agent-status/structured-sessions/structured-chat-companion-writes'
@@ -109,7 +108,6 @@ export type AppState = RepoSlice &
   UnityProjectRepoProbeSlice &
   UnityTintSidebarPreviewSlice &
   WorktreeFolderSlice &
-  SleepingAgentSessionReseedSlice &
   StructuredSessionLaunchDirectorySlice &
   StructuredChatSleptAtSlice &
   StructuredChatCompanionWritesSlice &

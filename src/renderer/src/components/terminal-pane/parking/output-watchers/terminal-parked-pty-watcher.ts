@@ -26,8 +26,6 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from '../../layout/close/terminal-pane-close-identity'
-import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
-import { isInDefaultSwitchTeardownWindow } from '@/lib/default-worktree-switch-sleep-guard'
 import {
   capturedPanesByTabId,
   retainParkedWatcherPty,
@@ -70,14 +68,6 @@ export function startParkedPtyWatcher(args: {
     useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
     if (isPtyExitReplacedByRestart(ptyId)) {
       // Why: the pane lives on under its replacement PTY; only this watcher's subscription ends.
-      entry.disposersByPtyId.get(ptyId)?.()
-      entry.disposersByPtyId.delete(ptyId)
-      return
-    }
-    // Fork: this sidecar runs for unmounted panes and bypasses the suppressed-exit set, so a
-    // default-worktree switch's own sleep kills would collapse leaves/close tabs. The switch owns them.
-    if (isInDefaultSwitchTeardownWindow(worktreeId)) {
-      discardPreHandlerPtyState(ptyId)
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
       return
@@ -196,14 +186,6 @@ export function collapseParkedTerminalLeaf(tabId: string, leafId: string, ptyId?
   if (!detached) {
     return false
   }
-  // TEMP swap-2 diagnostics: the parked sidecar is NOT filtered through the
-  // suppressed-exit set the mounted handler uses, so a sleep-driven kill during
-  // a default switch can collapse a background split with no trace at all.
-  recordRendererCrashBreadcrumb('leaf_collapse_parked', {
-    tabId: tabId.slice(0, 8),
-    leafId: leafId.slice(0, 8),
-    ptyId: ptyId?.slice(-10) ?? null
-  })
   const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
   const terminalTab = worktreeId
     ? state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)

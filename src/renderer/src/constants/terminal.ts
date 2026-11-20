@@ -85,12 +85,6 @@ export type BackgroundMountTerminalWorktreeDetail = {
   worktreeId: string
   /** Target background mounts to exact tabs to avoid connecting every saved pane; omitted IDs preserve legacy whole-worktree mount, lifted by real activation. */
   tabIds?: readonly string[]
-  /** Narrow an ALREADY-mounted worktree to `tabIds` instead of leaving it fully
-   *  mounted. Only the default-worktree switch sets this: its panes were just
-   *  torn down and remounting all of them in one render pass is the freeze that
-   *  activation deferral exists to prevent. Everyone else must leave a visited
-   *  worktree alone — narrowing it retroactively unmounts live panes. */
-  narrowExisting?: boolean
 }
 
 export type WakeHibernatedAgentsWorktreeDetail = {

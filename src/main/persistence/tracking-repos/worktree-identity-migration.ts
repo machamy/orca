@@ -8,10 +8,7 @@ import {
   worktreeWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
-import {
-  isDefaultSwitchTempWorktreeId,
-  splitWorktreeIdForFilesystem
-} from '../../../shared/worktree/id'
+import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
 import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
 import { migrateWorkspaceSessionIdentity } from './worktree-identity-session-migration'
@@ -74,18 +71,8 @@ export function migrateWorktreeIdentity(
   const newMeta = state.worktreeMeta[newWorktreeId]
   if (newMeta) {
     const prior = newMeta.priorWorktreeIds ?? []
-    // Fork: the default switch re-keys through a throwaway
-    // `.orca-default-switch-<uuid>` id, so a plain dedupe can never match and
-    // every switch appended one more entry — unbounded persisted growth. Temp
-    // ids identify nothing after the swap; cap is a backstop, not a limit.
-    const MAX_PRIOR_WORKTREE_IDS = 32
-    const durable = prior.filter((id) => !isDefaultSwitchTempWorktreeId(id))
-    if (!isDefaultSwitchTempWorktreeId(oldWorktreeId) && !durable.includes(oldWorktreeId)) {
-      durable.push(oldWorktreeId)
-    }
-    const capped = durable.slice(-MAX_PRIOR_WORKTREE_IDS)
-    if (capped.length !== prior.length || capped.some((id, index) => id !== prior[index])) {
-      newMeta.priorWorktreeIds = capped
+    if (!prior.includes(oldWorktreeId)) {
+      newMeta.priorWorktreeIds = [...prior, oldWorktreeId]
       changed = true
     }
   }

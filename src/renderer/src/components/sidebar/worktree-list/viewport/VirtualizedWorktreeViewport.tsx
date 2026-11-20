@@ -22,7 +22,6 @@ import { useWorktreeDragRuntime } from '../drag/use-runtime'
 import { useWorktreeDragSession } from '../drag/use-session'
 import { useWorktreeDocumentDrop } from '../drag/use-document-drop'
 import { useWorktreeLineageDropCommit } from '../drag/use-lineage-drop-commit'
-import { useWorktreeDefaultSwitchDropCommit } from '../drag/use-default-switch-drop-commit'
 import { withKeyboardPreview } from '../navigation/use-keyboard'
 import { useWorktreeViewportKeyboardNavigation } from './use-keyboard-navigation'
 import { useWorktreeRowGeometry } from './use-row-geometry'
@@ -168,7 +167,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     keepsFolderParent: rowGeometry.keepsFolderParent,
     captureFolderRetention: rowGeometry.captureFolderRetention
   })
-  const defaultSwitchDrop = useWorktreeDefaultSwitchDropCommit({ ...props, repoMap, worktreeMap })
   const runtime = useWorktreeDragRuntime({
     worktreeDragSessionRef: session.worktreeDragSessionRef,
     statusDropAnchorsRef: session.statusDropAnchorsRef,
@@ -246,7 +244,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     workspaceStatuses,
     session,
     lineageDrop,
-    defaultSwitchDrop,
     runtime,
     onMoveWorktreesToStatus: props.onMoveWorktreesToStatus,
     onMoveWorktreesToStatusAtIndex: props.onMoveWorktreesToStatusAtIndex,

@@ -19,12 +19,7 @@ export function getPointerDropStatusTarget(args: {
   }
   const pinTarget = target.closest<HTMLElement>('[data-workspace-pin-drop-target]')
   if (pinTarget && args.container.contains(pinTarget)) {
-    return {
-      status: null,
-      isPinDrop: true,
-      lineageParentIdentity: null,
-      defaultSwitchTargetId: null
-    }
+    return { status: null, isPinDrop: true, lineageParentIdentity: null }
   }
   const lineageParentIdentity = getWorktreeLineageDropTargetIdentity({
     container: args.container,
@@ -32,21 +27,13 @@ export function getPointerDropStatusTarget(args: {
     pointerY: args.y
   })
   const statusTarget = target.closest<HTMLElement>('[data-workspace-status-drop-target]')
-  // Fork: the "Make default" zone rendered on the default row while an eligible drag is active.
-  const defaultSwitchTarget = target.closest<HTMLElement>(
-    '[data-default-worktree-switch-drop-target]'
-  )
   return {
     status:
       statusTarget && args.container.contains(statusTarget)
         ? ((statusTarget.dataset.workspaceStatus as WorkspaceStatus | undefined) ?? null)
         : null,
     isPinDrop: false,
-    lineageParentIdentity,
-    defaultSwitchTargetId:
-      defaultSwitchTarget && args.container.contains(defaultSwitchTarget)
-        ? (defaultSwitchTarget.dataset.defaultWorktreeSwitchDropTarget ?? null)
-        : null
+    lineageParentIdentity
   }
 }
 

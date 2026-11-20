@@ -26,10 +26,7 @@ export type WorktreeSidebarStatusDropTarget = {
 }
 
 export type WorktreeSidebarTrackedStatusDropTarget = {
-  target: WorktreeSidebarStatusDropTarget & {
-    lineageParentIdentity: string | null
-    defaultSwitchTargetId?: string | null
-  }
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity: string | null }
   preview: WorktreeSidebarDropPreview | null
   x: number
   y: number
@@ -38,48 +35,33 @@ export type WorktreeSidebarTrackedStatusDropTarget = {
 const STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX = 6
 
 function hasWorktreeSidebarStatusDropTarget(
-  target: WorktreeSidebarStatusDropTarget & {
-    lineageParentIdentity?: string | null
-    defaultSwitchTargetId?: string | null
-  }
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null }
 ): boolean {
   return (
-    target.isPinDrop ||
-    target.status !== null ||
-    (target.lineageParentIdentity ?? null) !== null ||
-    (target.defaultSwitchTargetId ?? null) !== null
+    target.isPinDrop || target.status !== null || (target.lineageParentIdentity ?? null) !== null
   )
 }
 
 export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
-  currentTarget: WorktreeSidebarStatusDropTarget & {
-    lineageParentIdentity?: string | null
-    defaultSwitchTargetId?: string | null
-  }
+  currentTarget: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null }
   currentPreview: WorktreeSidebarDropPreview | null
   latestTrackedTarget: WorktreeSidebarTrackedStatusDropTarget | null
   x: number
   y: number
 }): {
-  target: WorktreeSidebarStatusDropTarget & {
-    lineageParentIdentity?: string | null
-    defaultSwitchTargetId?: string | null
-  }
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null }
   preview: WorktreeSidebarDropPreview | null
 } {
   if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {
     return { target: args.currentTarget, preview: args.currentPreview }
   }
   const latest = args.latestTrackedTarget
-  // Fork: a default switch must be committed only while the pointer is ON its
-  // zone — the near-miss fallback may not resurrect one the pointer left.
-  const latestTarget = latest ? { ...latest.target, defaultSwitchTargetId: null } : null
-  if (!latest || !latestTarget || !hasWorktreeSidebarStatusDropTarget(latestTarget)) {
+  if (!latest || !hasWorktreeSidebarStatusDropTarget(latest.target)) {
     return { target: args.currentTarget, preview: args.currentPreview }
   }
   const distance = Math.hypot(args.x - latest.x, args.y - latest.y)
   return distance <= STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX
-    ? { target: latestTarget, preview: latest.preview }
+    ? { target: latest.target, preview: latest.preview }
     : { target: args.currentTarget, preview: args.currentPreview }
 }
 

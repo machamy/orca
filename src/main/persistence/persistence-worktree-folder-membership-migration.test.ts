@@ -63,9 +63,7 @@ function gitInfo(path: string): GitWorktreeInfo {
 // Membership lives on WorktreeMeta precisely so `moveKey` carries it; an id list
 // on the folder record would need its own migration on both paths below.
 describe('worktree folder membership across worktree identity changes', () => {
-  const DEFAULT = 'repo1::/ws/repo1'
   const SIDE = 'repo1::/ws/feature-a'
-  const TEMP = 'repo1::/ws/.orca-default-switch-11111111-2222-3333-4444-555555555555'
 
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -90,28 +88,6 @@ describe('worktree folder membership across worktree identity changes', () => {
 
     expect(store.getWorktreeMeta(SIDE)).toBeUndefined()
     expect(store.getWorktreeMeta(renamed)?.worktreeFolderId).toBe('folder-a')
-  })
-
-  it('follows the workspace through a default switch, displaced one unfiled', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(localTarget(DEFAULT), { displayName: 'repo1' })
-    store.setWorktreeMeta(localTarget(SIDE), {
-      displayName: 'feature-a',
-      worktreeFolderId: 'folder-a'
-    })
-
-    // DEFAULT -> TEMP, SIDE -> DEFAULT, TEMP -> SIDE (what RuntimeDefaultWorktree emits).
-    store.migrateWorktreeIdentity(localTarget(DEFAULT), TEMP)
-    store.migrateWorktreeIdentity(localTarget(SIDE), DEFAULT)
-    store.migrateWorktreeIdentity(localTarget(TEMP), SIDE)
-
-    // The filed workspace took the default checkout's id and kept its folder.
-    expect(store.getWorktreeMeta(DEFAULT)?.displayName).toBe('feature-a')
-    expect(store.getWorktreeMeta(DEFAULT)?.worktreeFolderId).toBe('folder-a')
-    // The workspace it displaced moved to the side id and is unfiled, as it was.
-    expect(store.getWorktreeMeta(SIDE)?.displayName).toBe('repo1')
-    expect(store.getWorktreeMeta(SIDE)?.worktreeFolderId).toBeUndefined()
-    expect(store.getWorktreeMeta(TEMP)).toBeUndefined()
   })
 
   it('clears membership when the update carries an explicit undefined', async () => {

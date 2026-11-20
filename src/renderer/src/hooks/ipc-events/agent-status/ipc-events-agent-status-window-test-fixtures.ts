@@ -61,7 +61,6 @@ export function buildWindowApi(args: {
         onJumpToTabIndex: () => () => {},
         onWorktreeHistoryNavigate: () => () => {},
         onActivateWorktree: () => () => {},
-        onDefaultWorktreeSwitchRequest: () => () => {},
         onUnityAutoSeedOffer: () => () => {},
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},

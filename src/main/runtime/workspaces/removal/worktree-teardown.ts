@@ -40,11 +40,6 @@ export type WorktreeTeardownRuntime = StructuredWorktreeSweepRuntime &
 
 export type WorktreeTeardownDeps = {
   runtime?: WorktreeTeardownRuntime
-  /** Session ids embed the spawn-time worktree id; after an identity migration
-   *  (default-worktree swap) that id names ANOTHER live worktree. Returning true
-   *  excludes the pty from prefix/registry sweeps so deleting the displaced
-   *  worktree can't kill the promoted workspace's agents. */
-  isPtyOwnedByAnotherWorktree?: (ptyId: string, sweptWorktreeId: string) => boolean
   /** Authoritative id for callers whose selector no longer resolves (orphaned workspace). */
   resolvedWorktreeId?: string
   /** SSH connection owning `resolvedWorktreeId`; prevents same-id cross-host graph matches. */
@@ -147,8 +142,7 @@ export async function killAllProcessesForWorktree(
               deadline,
               stopPty,
               deps.onPtyStopped,
-              deps.requirePhysicalStop,
-              deps.isPtyOwnedByAnotherWorktree
+              deps.requirePhysicalStop
             )
           ),
           0,
@@ -165,8 +159,7 @@ export async function killAllProcessesForWorktree(
               deps.localProvider,
               deadline,
               stopPty,
-              deps.onPtyStopped,
-              deps.isPtyOwnedByAnotherWorktree
+              deps.onPtyStopped
             )
           ),
           0,

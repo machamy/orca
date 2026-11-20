@@ -50,12 +50,10 @@ describe('useIpcEvents fork listener cleanup', () => {
     stubAuxiliaryModules()
 
     const offerUnsub = vi.fn()
-    const switchUnsub = vi.fn()
     const win = buildWindowApi({ onSet: () => () => {} }) as unknown as {
       api: { ui: Record<string, unknown> }
     }
     win.api.ui.onUnityAutoSeedOffer = () => offerUnsub
-    win.api.ui.onDefaultWorktreeSwitchRequest = () => switchUnsub
     vi.stubGlobal('window', win)
 
     const { useIpcEvents } = await import('./useIpcEvents')
@@ -63,12 +61,10 @@ describe('useIpcEvents fork listener cleanup', () => {
     await Promise.resolve()
 
     expect(offerUnsub).not.toHaveBeenCalled()
-    expect(switchUnsub).not.toHaveBeenCalled()
 
     for (const cleanup of cleanups) {
       cleanup()
     }
     expect(offerUnsub).toHaveBeenCalledTimes(1)
-    expect(switchUnsub).toHaveBeenCalledTimes(1)
   })
 })

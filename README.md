@@ -48,9 +48,8 @@
 
 ## What this fork adds
 
-It addresses the two confusions that show up when one Unity project is run across
-several worktrees at once — **"which worktree is this editor?"** and **"which
-branch is sitting in the repo folder?"**
+It addresses the confusion that shows up when one Unity project is run across
+several worktrees at once — **"which worktree is this editor?"**
 
 <table>
 <tr>
@@ -112,37 +111,6 @@ mid-copy can never leave half a Library behind.
   <img src="docs/assets/fork-unity-worktree-menu.png" alt="The worktree right-click menu with Copy Unity Cache, Open in Unity, Open in Rider, and Unity Toolbar Color" width="100%" />
 </td>
 </tr>
-<tr>
-<td width="50%" valign="middle">
-
-### Make Default Worktree
-
-Promote a sub-worktree to the repo's default checkout. Nothing moves on disk:
-it **swaps the two worktrees' branches in place** — git's main worktree (the
-`.git` holder) and the repo folder path stay exactly where they were, so GitHub
-Desktop or an IDE pointed at the repo folder sees the promoted branch right away.
-Uncommitted, staged and untracked changes follow their branch (the switch dialog
-can leave untracked files in place instead); ignored files stay put.
-
-Drag a worktree onto the **Default** card, or run
-`orca worktree default set --worktree <selector>`. The optional **agents follow
-the branch** toggle sleeps both worktrees and resumes each agent where its branch
-now lives (Claude/Codex).
-
-> **Commit or stash before you switch.** This is the fork's most invasive
-> operation: it rewrites both worktrees' checkouts and moves uncommitted work
-> across them, and with _agents follow the branch_ it also swaps the two
-> workspaces' session metadata. Upstream never runs this path, so it carries
-> only the fork's own tests. Interrupting it — quitting Orca, losing the machine,
-> a failure partway — can leave a checkout or an agent session somewhere you did
-> not expect. Clean worktrees switch safely; a pile of uncommitted work is the
-> case to think twice about.
-
-</td>
-<td width="50%">
-  <img src="docs/assets/fork-make-default-worktree.png" alt="Dragging a worktree onto the Default card to promote it to the repo's default checkout" width="100%" />
-</td>
-</tr>
 </table>
 
 **Also added by this fork:**
@@ -159,30 +127,14 @@ now lives (Claude/Codex).
   first import storm after a seed killed Unity (the "have to open it twice"
   symptom). The mtime is aligned so the regeneration is skipped — but only when the
   generated file is byte-identical to its source.
-- **Sidebar default-row fixes** — the primary star, sort anchor, hide filters and
-  delete guards key on the **repo path** rather than git's `isMainWorktree`, so the
-  correct row still reads as "default" after a switch.
-- **Branch-swap data-safety hardening** — partial-capture restore, post-checkout
-  hook resilience, and up-front rejection of worktrees mid-merge/cherry-pick/revert.
 
 > [!IMPORTANT]
 > **What's verified, and the known limits** — written down rather than hidden.
 >
-> - The branch swap, "agents stay" mode and the data-safety cases are verified
->   against real git repos with regression tests. **"Agents follow"** passed all 14
->   contract items for 36 consecutive rounds on a real 12-pane fixture, but on
->   **macOS arm64 only** — Linux, Windows and SSH are unverified.
 > - The Unity work was checked on a real editor (6000.3.16f1). **The Library copy
 >   and "Open in Rider" are macOS-only** (the copy depends on APFS copy-on-write).
 >   "Open in Unity" and the toolbar tint are written to work on other platforms,
 >   but are **verified on macOS only**.
-> - **The "notify agents" toggle really does write into the panes, but it cannot
->   guarantee the note is sent.** At 6/15/30/60/90s after the switch it types the
->   new path and branch into each woken agent pane, once per pane (panes mid-turn
->   are left alone). The note ends with an Enter, but some agent TUIs do not take
->   it and leave the text sitting in the prompt — then you press Enter yourself.
-> - A plain shell loses its scrollback across a switch (the process cannot move).
->   Tabs, placement and splits are preserved.
 > - The toolbar tint paints the main toolbar on Unity 6000.3 and newer, and falls
 >   back to a Scene view bar on older editors. If either fails, the toolbar is
 >   silently left at its default colour.

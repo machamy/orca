@@ -13,7 +13,6 @@ import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-positi
 import { toastWorkspaceSleepOutcome } from './sleep-worktree-flow'
 import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
 import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
-import { keepsBrowserStateThroughSleep } from '@/lib/default-worktree-switch-browser-keep'
 
 type FollowedSleep = {
   settle: (stop: HostTerminalStop) => void
@@ -63,9 +62,7 @@ export function followWorkspaceSleep(
       state.setActiveWorktree(null)
       restoreSidebarPosition()
     }
-    if (keepsBrowserStateThroughSleep(worktreeId)) {
-      state.shutdownWorktreeBrowsers(worktreeId, { keepState: true })
-    } else if (!options.keepBrowserTabs) {
+    if (!options.keepBrowserTabs) {
       state.shutdownWorktreeBrowsers(worktreeId)
     }
     let settle!: (stop: HostTerminalStop) => void

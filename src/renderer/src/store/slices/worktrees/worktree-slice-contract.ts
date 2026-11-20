@@ -58,7 +58,6 @@ import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/workspace/creation/pending-worktree-creation'
-import type { DefaultSwitchProgress } from '@/lib/default-worktree-switch-progress'
 
 import type { WorktreeRefreshAllOptions } from './listing/worktree-refresh-options'
 import type { WorktreeRefreshResult } from './listing/worktree-refresh-result'
@@ -93,29 +92,6 @@ export type WorktreeSlice = {
   // Why: signals the matching worktree card's inline title editor to open. The
   // workspace.rename shortcut sets this; the card clears it on consume.
   renamingWorktreeId: WorktreeRenameRequest | null
-  /** Worktrees mid default-switch (sleep -> swap -> wake); cards show a moving
-   *  indicator while their id is listed. startedAt bounds staleness. */
-  defaultSwitchInFlight: {
-    worktreeIds: string[]
-    startedAt: number
-    /** Refreshed by every progress update. Staleness judges THIS, not
-     *  startedAt: a healthy switch on a big repo runs longer than any fixed
-     *  bound measured from its start, and judging the start let a rival treat
-     *  a live switch as wedged. */
-    heartbeatAt: number
-    /** False while the flow is still waiting to be let in. Only an admitted
-     *  switch excludes another one; an unadmitted marker is display only. */
-    admitted: boolean
-    /** False once recovery is confirmed: the card still says it is verifying,
-     *  but another switch may start. Splits the lock from the indicator so a
-     *  healthy swap does not sit behind 75s of checks it does not need. */
-    blocking: boolean
-    /** Owner token. Every mutation presents it; a mismatch is ignored, so a
-     *  rejected rival, a stale fallback timer, or another repo's flow can no
-     *  longer clear or downgrade a claim it does not own. */
-    token: string
-    progress?: DefaultSwitchProgress
-  } | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
@@ -308,23 +284,6 @@ export type WorktreeSlice = {
   ) => void
   setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
-  /** Compare-and-set claim. `admitted: false` publishes a display-only marker
-   *  (never excludes or overwrites a live claim). `admitted: true` takes the
-   *  lock — it succeeds only when no LIVE blocking claim by another owner
-   *  exists; pass the display marker's token to upgrade in place. Returns the
-   *  owner token, or null when a rival holds the lock. */
-  claimDefaultSwitch: (
-    worktreeIds: readonly string[],
-    options?: { admitted?: boolean; token?: string; progress?: DefaultSwitchProgress }
-  ) => string | null
-  /** No-op unless `token` owns the current claim. Refreshes the heartbeat. */
-  setDefaultSwitchProgress: (progress: DefaultSwitchProgress, token: string | null) => void
-  /** Keeps an owned claim alive without reporting a stage. */
-  touchDefaultSwitchHeartbeat: (token: string | null) => void
-  /** Hands the lock back while keeping the indicator; owner-checked. */
-  downgradeDefaultSwitchBlocking: (token: string | null, progress?: DefaultSwitchProgress) => void
-  /** Clears the marker; owner-checked, so it can only clear its own. */
-  releaseDefaultSwitch: (token: string | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (
     worktreeId: string,

@@ -51,11 +51,6 @@ export type WorktreeCardProps = {
   lineageChildrenStyle?: React.CSSProperties
   onLineageToggle?: (event: React.MouseEvent<HTMLElement>) => void
   isLineageDropTarget?: boolean
-  /** This row is the repo's default checkout — the one the sidebar reads as 기본. */
-  isDefaultWorktree?: boolean
-  showDefaultSwitchDropTarget?: boolean
-  isDefaultSwitchDropTarget?: boolean
-  onDefaultSwitchRequest?: (worktree: Worktree) => void
   onActivate?: () => void
   onWorktreeCardClick?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
@@ -93,9 +88,6 @@ type DefaultedWorktreeCardProp =
   | 'lineageChildCount'
   | 'lineageCollapsed'
   | 'isLineageDropTarget'
-  | 'isDefaultWorktree'
-  | 'showDefaultSwitchDropTarget'
-  | 'isDefaultSwitchDropTarget'
   | 'affiliateListMode'
   | 'showUnityTint'
   | 'statusPrDisplay'
@@ -114,9 +106,6 @@ export type ResolvedWorktreeCardProps = Omit<WorktreeCardProps, DefaultedWorktre
   lineageChildCount: number
   lineageCollapsed: boolean
   isLineageDropTarget: boolean
-  isDefaultWorktree: boolean
-  showDefaultSwitchDropTarget: boolean
-  isDefaultSwitchDropTarget: boolean
   affiliateListMode: boolean
   showUnityTint: boolean
   statusPrDisplay: WorktreeCardPrDisplay | null

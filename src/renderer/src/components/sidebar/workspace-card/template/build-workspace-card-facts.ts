@@ -50,7 +50,6 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       identity: card.identityDisplay ?? null,
       isMain: worktree.isMainWorktree,
       isDefaultCheckout: card.isDefaultCheckout,
-      isDefaultWorktree: card.isDefaultWorktree,
       isSparse: worktree.isSparse === true,
       detachedHead: card.detachedHeadDisplay !== null,
       isPinned: worktree.isPinned,

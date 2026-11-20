@@ -8,7 +8,6 @@ import type {
   GitStatusMetadataChangedEvent,
   WorktreeHeadIdentity
 } from '../../../shared/worktree/types'
-import type { RuntimeWorktreeIdentityMigration } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { PreloadApi } from '../../api-types'
 import type { WorkspaceMetadataSet } from '../../../shared/worktree/metadata/workspace-metadata-set'
 import type { BranchAutoRenameAttemptEvent } from '../../../shared/worktree/branch-auto-rename-attempt'
@@ -90,20 +89,11 @@ export const worktreesApi = {
     callback: (data: {
       repoId: string
       renamed?: { oldWorktreeId: string; newWorktreeId: string }
-      // Fork: a default-worktree swap renames three ids at once, and main sends a
-      // shield-only event before the on-disk move so in-flight refreshes hold off.
-      migrations?: readonly RuntimeWorktreeIdentityMigration[]
-      shieldOnly?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: {
-        repoId: string
-        renamed?: { oldWorktreeId: string; newWorktreeId: string }
-        migrations?: readonly RuntimeWorktreeIdentityMigration[]
-        shieldOnly?: boolean
-      }
+      data: { repoId: string; renamed?: { oldWorktreeId: string; newWorktreeId: string } }
     ) => callback(data)
     ipcRenderer.on('worktrees:changed', listener)
     return () => ipcRenderer.removeListener('worktrees:changed', listener)

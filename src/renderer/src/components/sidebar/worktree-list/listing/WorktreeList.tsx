@@ -1,5 +1,3 @@
-import { WorktreeListDefaultSwitchDialog } from '../../WorktreeListDefaultSwitchDialog'
-import { useDefaultWorktreeSwitchDialog } from '../../use-default-worktree-switch-dialog'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
@@ -162,8 +160,6 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     agentSendTargetWorktreeId
   })
-  // Fork: default-worktree switch UI — context-menu request → confirm dialog.
-  const defaultWorktreeSwitch = useDefaultWorktreeSwitchDialog(repoMap, visibleWorktrees)
   const visibleProjectRepoIdsBySection = useMemo(
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
     [rowModel.occurrencePlan]
@@ -341,7 +337,6 @@ const WorktreeList = React.memo(function WorktreeList({
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={openHeaderCreateComposer}
         handleOpenRepoSettings={handleOpenRepoSettings}
-        {...defaultWorktreeSwitch.viewportProps}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={externalWorktreeCards.handleKeepImportedWorktreesHidden}
@@ -408,7 +403,6 @@ const WorktreeList = React.memo(function WorktreeList({
         scrollOffsetRef={scrollOffsetRef}
         scrollAnchorRef={scrollAnchorRef}
       />
-      <WorktreeListDefaultSwitchDialog state={defaultWorktreeSwitch} />
     </>
   )
 })

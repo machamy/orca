@@ -4,7 +4,6 @@ import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { WORKTREE_CREATE_COMMAND_SPEC } from './worktree-create'
 import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
 import { SERVE_COMMAND_SPECS } from './serve'
-import { WORKTREE_DEFAULT_SET_SPECS } from './worktree-default-set'
 import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
@@ -58,7 +57,6 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca worktree show --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
-  ...WORKTREE_DEFAULT_SET_SPECS,
   {
     path: ['worktree', 'activate'],
     summary: 'Open a worktree on its host, waking a sleeping recipe VM behind it',

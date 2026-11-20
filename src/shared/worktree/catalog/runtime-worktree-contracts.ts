@@ -168,28 +168,6 @@ export type RuntimeWorktreePsSummary = {
   recipeEnvironment?: { name: string; destroys?: boolean }
 }
 
-export type RuntimeDefaultWorktreeSwitchResult = {
-  repoId: string
-  defaultPath: string
-  selectedPath: string
-  /** Branch now checked out at the repo path (promoted from the selected worktree). */
-  promotedBranch: string
-  /** Branch now checked out at the selected worktree (demoted from the repo path). */
-  demotedBranch: string
-  /** Git errors swallowed because HEAD still landed on the right branch (a hook
-   *  that exited non-zero after the move, an LFS smudge failure). The tree may
-   *  be incomplete; when present, the rescue refs below were kept on purpose. */
-  checkoutWarnings?: string[]
-  /** Refs pinning each side's captured uncommitted work, retained because a
-   *  checkout warned. `git stash apply <ref>` restores one. */
-  retainedRescueRefs?: string[]
-}
-
-export type RuntimeWorktreeIdentityMigration = {
-  oldWorktreeId: string
-  newWorktreeId: string
-}
-
 export type RuntimeGitLocalBranches = {
   current: string | null
   branches: string[]

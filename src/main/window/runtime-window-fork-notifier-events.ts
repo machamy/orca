@@ -2,20 +2,12 @@ import type { RuntimeNotifier } from '../runtime/client/events/runtime-notifier-
 
 type RendererSend = (channel: string, ...values: unknown[]) => boolean
 
-/** Fork: renderer relays for the Unity auto-seed offer and the CLI-driven default-worktree switch. */
+/** Fork: renderer relay for the Unity auto-seed offer. */
 export function createForkRuntimeNotifierEvents(
   send: RendererSend
-): Pick<RuntimeNotifier, 'unityAutoSeedOffer' | 'defaultWorktreeSwitchRequest'> {
+): Pick<RuntimeNotifier, 'unityAutoSeedOffer'> {
   return {
     unityAutoSeedOffer: (repoId, worktreePath) =>
-      send('ui:unityAutoSeedOffer', { repoId, worktreePath }),
-    defaultWorktreeSwitchRequest: (repoId, worktreeId, opts) =>
-      send('ui:defaultWorktreeSwitchRequest', {
-        repoId,
-        worktreeId,
-        followAgents: opts.followAgents,
-        notifyAgents: opts.notifyAgents,
-        includeUntracked: opts.includeUntracked
-      })
+      send('ui:unityAutoSeedOffer', { repoId, worktreePath })
   }
 }

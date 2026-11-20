@@ -13,7 +13,6 @@ import {
   getOrphanTerminalIds,
   terminalTabHasReconnectablePty
 } from '../../terminals/retirement/terminal-orphan-cleanup'
-import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import {
   createReconciliationDrafts,
   finishReconciliationDrafts,
@@ -66,14 +65,6 @@ export function projectWorktreeTabModelReconciliation(
     },
     worktreeId
   )
-  // TEMP mode-B diagnostics: the unified-model reconciler drops runtime tabs it
-  // considers orphaned; name them so a switch that loses tabs is attributable.
-  if (orphanTerminalIds.size > 0) {
-    recordRendererCrashBreadcrumb('orphan_sweep_reconcile', {
-      worktreeId,
-      tabIds: [...orphanTerminalIds].map((id) => id.slice(0, 8)).join(',')
-    })
-  }
   const ensuredGroup =
     legacyRuntimeTerminalTabs.length > 0
       ? ensureWorktreeGroup(storedGroups, worktreeId, storedActiveGroupId)

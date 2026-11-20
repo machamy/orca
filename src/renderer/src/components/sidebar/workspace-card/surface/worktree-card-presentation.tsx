@@ -60,8 +60,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     hoverReview,
     hoverComment,
     showDeleteQuickAction,
-    isDefaultCheckout,
-    isDefaultWorktree
+    isDefaultCheckout
   } = card
 
   // Why: pinned trees mix repos, so ordinary rows lead with the project chip; cross-repo children keep the regular project badge.
@@ -89,7 +88,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     !newCardStyle &&
     (!compactCards || branch !== worktree.displayName)
   const showConflictOperationBadge = conflictOperation === 'cherry-pick'
-  const hasMetadataBadge = showConflictOperationBadge || isDefaultWorktree
+  const hasMetadataBadge = showConflictOperationBadge
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
   const showCombinedStatusSlot = showStatus
@@ -106,8 +105,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showBranch ||
     showIdentityInNewCard ||
     showDetachedHeadInMetaRow ||
-    // Fork: the Default badge must mount the meta row even on an otherwise bare card.
-    hasMetadataBadge ||
+    showConflictOperationBadge ||
     cacheStartedAt != null ||
     showMetaRowDetails
   )
@@ -185,7 +183,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showDetachedHeadInMetaRow,
     showBranch,
     showConflictOperationBadge,
-    isDefaultWorktree,
     showUnreadQuickAction,
     showCombinedStatusSlot,
     showTitleRowPrimary,

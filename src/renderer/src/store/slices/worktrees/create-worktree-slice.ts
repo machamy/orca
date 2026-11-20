@@ -58,7 +58,6 @@ import {
 } from './session/worktree-slice-lookups'
 import { createPurgeStaleRuntimeHostState } from './teardown/purge-stale-runtime-host-state'
 import { createMigrateWorktreeIdentity } from './session/migrate-worktree-identity'
-import { createDefaultSwitchClaimActions } from './session/default-switch-claim'
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   ...worktreeSliceInitialState,
@@ -101,7 +100,5 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   getKnownWorktreeById: createGetKnownWorktreeById(set, get),
   purgeWorktreeTerminalState: createPurgeWorktreeTerminalState(set, get),
   purgeStaleRuntimeHostState: createPurgeStaleRuntimeHostState(set, get),
-  migrateWorktreeIdentity: createMigrateWorktreeIdentity(set, get),
-  // Fork feature: default-worktree switch marker with owner-token CAS.
-  ...createDefaultSwitchClaimActions(set)
+  migrateWorktreeIdentity: createMigrateWorktreeIdentity(set, get)
 })

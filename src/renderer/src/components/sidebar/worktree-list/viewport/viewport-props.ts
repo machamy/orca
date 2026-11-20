@@ -74,10 +74,6 @@ export type VirtualizedWorktreeViewportProps = {
   folderWorkspaces: readonly FolderWorkspace[]
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
-  // Fork: default-worktree switch entry points.
-  defaultSwitchDropTargetId?: string | null
-  onDefaultSwitchRequest?: (worktree: Worktree) => void
-  findDefaultWorktree?: (repoId: string) => Worktree | undefined
   focusedWorktree?: Worktree | null
   focusedWorkspaceExecutionHostId?: ExecutionHostId | null
   onKeyboardSelect?: (worktree: Worktree) => void

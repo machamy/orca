@@ -59,7 +59,6 @@ import { createTerminalQuickCommandHostsSlice } from './terminals/quick-commands
 import { createUnityProjectRepoProbeSlice } from './slices/unity-project-repo-probe'
 import { createUnityTintSidebarPreviewSlice } from './slices/unity-tint-sidebar-preview'
 import { createWorktreeFolderSlice } from './slices/worktree-folders'
-import { createSleepingAgentSessionReseedSlice } from './sleeping-agent-session-reseed'
 import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-sessions/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-sessions/structured-chat-slept-at'
 import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-sessions/structured-chat-companion-writes'
@@ -86,7 +85,6 @@ import {
   summarizeStateCollectionSizes
 } from '@/diagnostics/memory/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/diagnostics/memory/state-collection-byte-estimate'
-import { installTabRemovalDiagnostic } from './tab-removal-diagnostic'
 import { registerWindowsPathAccessEnvironments } from '@/lib/files/os-open/windows-path-access'
 import { STORE_OBSERVER_INSTALLERS } from './store-observer-installers'
 
@@ -114,7 +112,6 @@ export const useAppStore = create<AppState>()(
             }
             // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
             installStoreListenerCensus(a[2])
-            installTabRemovalDiagnostic(a[2])
             return {
               ...createRepoSlice(...a),
               ...createSparsePresetsSlice(...a),
@@ -171,8 +168,7 @@ export const useAppStore = create<AppState>()(
               ...createEphemeralVmLifecycleSlice(...a),
               ...createUnityProjectRepoProbeSlice(...a),
               ...createUnityTintSidebarPreviewSlice(...a),
-              ...createWorktreeFolderSlice(...a),
-              ...createSleepingAgentSessionReseedSlice(...a)
+              ...createWorktreeFolderSlice(...a)
             }
           })
         ),

@@ -4,7 +4,6 @@ import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { workspaceSleepTarget } from './workspace-sleep-target'
-import { withDefaultSwitchBrowserKeep } from '@/lib/default-worktree-switch-browser-keep'
 
 /** One per host asked to stop the workspace's chats. */
 export type WorkspaceSleepResult = {
@@ -75,21 +74,6 @@ export async function runSleepWorktrees(
   )
   toastSleepFailures(new Set(worktreeIds).size, errors, vmStillRunningIds.length > 0)
   return results
-}
-
-/** Fork: the default-worktree switch keeps browser records so the identity migration moves them. */
-export async function runSleepWorktreesForDefaultSwitch(
-  worktreeIds: readonly string[]
-): Promise<WorktreeSleepOutcome> {
-  const outcome = await withDefaultSwitchBrowserKeep(worktreeIds, () =>
-    sleepWorktreesReportingFailures(worktreeIds, { markChatsAsleep: true })
-  )
-  toastSleepFailures(
-    new Set(worktreeIds).size,
-    outcome.errors,
-    outcome.vmStillRunningIds.length > 0
-  )
-  return outcome
 }
 
 /** A phone or CLI's sleep that did not fully succeed: the same toast as the window's own Sleep. */

@@ -18,7 +18,6 @@ type WorktreeChangeOwner = {
 type WorktreeChangeEvent = {
   repoId: string
   renamed?: WorktreeRename
-  migrations?: readonly WorktreeRename[]
   // Local change events must pin refresh to local ownership even while a remote runtime is active.
   forceLocalOwner?: boolean
   executionHostId?: ExecutionHostId
@@ -30,14 +29,10 @@ type WorktreeChangeEvent = {
 type WorktreeChangeRefreshHandler = (
   repoId: string,
   renamed?: WorktreeRename,
-  options?: WorktreeChangeOwner,
-  migrations?: readonly WorktreeRename[]
+  options?: WorktreeChangeOwner
 ) => Promise<void>
 
-type QueuedWorktreeChange = WorktreeChangeOwner & {
-  renamed?: WorktreeRename
-  migrations?: readonly WorktreeRename[]
-}
+type QueuedWorktreeChange = WorktreeChangeOwner & { renamed?: WorktreeRename }
 
 type RepoRefreshState = {
   running: boolean
@@ -72,17 +67,14 @@ export function createWorktreeChangeRefreshQueue(
       while (!disposed && state.queue.length > 0) {
         const next = state.queue.shift()
         try {
-          const owner = {
+          await handler(repoId, next?.renamed, {
             forceLocalOwner: next?.forceLocalOwner,
             ...(next?.executionHostId ? { executionHostId: next.executionHostId } : {}),
             ...(next?.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
             ...(next?.sortOrderOnly === true && next.sortOrders
               ? { sortOrders: next.sortOrders, sortOrderFence: next.sortOrderFence }
               : {})
-          }
-          await (next?.migrations?.length
-            ? handler(repoId, next.renamed, owner, next.migrations)
-            : handler(repoId, next?.renamed, owner))
+          })
         } catch (error) {
           console.error('Failed to refresh changed worktrees:', error)
         }
@@ -113,10 +105,9 @@ export function createWorktreeChangeRefreshQueue(
         states.set(event.repoId, state)
       }
 
-      if (event.renamed || (event.migrations && event.migrations.length > 0)) {
+      if (event.renamed) {
         state.queue.push({
           renamed: event.renamed,
-          migrations: event.migrations,
           forceLocalOwner: event.forceLocalOwner,
           executionHostId: event.executionHostId
         })

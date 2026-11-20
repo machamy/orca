@@ -1,16 +1,13 @@
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
-import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
-import { runDefaultWorktreeSwitchFlow } from '@/lib/default-worktree-switch-flow'
-import { areRuntimePathsEqual } from '../../../shared/worktree/visibility/ownership'
 
 /**
- * Fork: the Unity auto-seed offer + CLI default-switch UI IPC listeners.
+ * Fork: the Unity auto-seed offer UI IPC listener.
  * A plain function, called inside useIpcEvents' effect where the blocks used
  * to sit, so registration order and the cleanup boundary are unchanged.
  * Optional-chained because desktop preloads older than these fork APIs
- * omit them (the web preload stubs both).
+ * omit them (the web preload stubs it).
  */
 export function registerForkUiIpcListeners(): (() => void)[] {
   const unsubs: (() => void)[] = []
@@ -76,39 +73,6 @@ export function registerForkUiIpcListeners(): (() => void)[] {
   })
   if (unityOfferUnsub) {
     unsubs.push(unityOfferUnsub)
-  }
-
-  const defaultSwitchRequestUnsub = window.api.ui.onDefaultWorktreeSwitchRequest?.(
-    ({ repoId, worktreeId, followAgents, notifyAgents, includeUntracked }) => {
-      const state = useAppStore.getState()
-      const repo = state.repos.find((candidate) => candidate.id === repoId)
-      const rows = state.worktreesByRepo[repoId] ?? []
-      const source = rows.find((row) => row.id === worktreeId)
-      const currentDefault = repo
-        ? rows.find((row) => areRuntimePathsEqual(row.path, repo.path))
-        : undefined
-      recordRendererCrashBreadcrumb('mode_b_cli_request', {
-        worktreeId,
-        found: Boolean(source && currentDefault)
-      })
-      if (!source || !currentDefault || source.id === currentDefault.id) {
-        return
-      }
-      void runDefaultWorktreeSwitchFlow(
-        { source, currentDefault },
-        {
-          agentsFollow: followAgents,
-          notifyAgents,
-          sleepInPlace: false,
-          includeUntracked: includeUntracked !== false
-        }
-      ).catch((error) => {
-        console.error('CLI default-switch flow failed:', error)
-      })
-    }
-  )
-  if (defaultSwitchRequestUnsub) {
-    unsubs.push(defaultSwitchRequestUnsub)
   }
 
   return unsubs

@@ -26,7 +26,7 @@
     "metaLead": "vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive",
     "metaIndicators": "vars.metaRow && vars.indicators && (vars.classic || vars.metaLead)",
     "titleIndicators": "vars.indicators && !vars.metaIndicators",
-    "hasMetaRow": "vars.metaRow ? vars.metaLead || vars.metaIndicators || ws.isDefaultWorktree : vars.conflict || git.cacheTimerActive || ws.isDefaultWorktree",
+    "hasMetaRow": "vars.metaRow ? vars.metaLead || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
     "star": "vars.compact && ws.isDefaultCheckout && !vars.folder",
     "headerActions": "vars.star || place.deleteQuickAction",
     "inlineAgents": "options.show.inlineAgents && !vars.compact",
@@ -176,7 +176,6 @@
                   "when": "!vars.identityInMeta && !(vars.folder && !vars.newStyle) && !vars.branch && vars.detachedInMeta"
                 },
                 { "el": "ConflictBadge", "when": "vars.conflict" },
-                { "el": "DefaultBadge", "when": "ws.isDefaultWorktree" },
                 { "el": "CacheTimer", "when": "git.cacheTimerActive" }
               ]
             },

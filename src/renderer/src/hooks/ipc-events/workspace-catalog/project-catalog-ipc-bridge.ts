@@ -2,7 +2,6 @@ import { applyLocalWorktreeMetadataSet } from './worktree-metadata-set-events'
 import { applyWorktreeHeadIdentities } from '../../../store/slices/worktrees/listing/worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { useAppStore } from '../../../store/index'
-import { armWorktreeIdentityGrace } from '../../../store/worktree-identity-grace'
 import { adoptFromEndpoint } from '../../../store/host-catalog/endpoint-catalog-adoption'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { refreshBotHost } from '@/lib/bot-catalog'
@@ -48,28 +47,7 @@ export function registerProjectCatalogIpcBridge(
       async (data: {
         repoId: string
         renamed?: { oldWorktreeId: string; newWorktreeId: string }
-        migrations?: readonly { oldWorktreeId: string; newWorktreeId: string }[]
-        shieldOnly?: boolean
       }) => {
-        // Why: arm the purge shield on arrival, not when the queue drains — a refresh
-        // already in flight must not read the identity change's window as deletions.
-        const identityMigrations = data.migrations?.length
-          ? data.migrations
-          : data.renamed
-            ? [data.renamed]
-            : []
-        if (identityMigrations.length > 0) {
-          armWorktreeIdentityGrace(
-            identityMigrations.flatMap((migration) => [
-              migration.oldWorktreeId,
-              migration.newWorktreeId
-            ])
-          )
-        }
-        // A shield-only event precedes the on-disk move; the post-move event carries the migrations to apply.
-        if (data.shieldOnly) {
-          return
-        }
         // Preserve local event origin through queue/focus changes; rekey folder renames before deletion diff so moved state survives.
         worktreeChangeRefreshQueue.enqueue(
           adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })

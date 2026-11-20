@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithDefaultWorktreeCommands } from '../../orca-runtime-default-worktree-commands'
+import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/catalog/workspace-repo-scan-refresh'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -22,8 +22,7 @@ import {
 } from '../surface/pty-recorded-surface-topology'
 import { followExportedPaneKeys } from './exported-pane-key-follow'
 
-// Fork: the default-worktree commands link sits between repo-scan refresh and this record.
-export abstract class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithDefaultWorktreeCommands {
+export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceRepoScanRefresh {
   /** Switch-on, a pane main owns is no proof its terminal runs: its record decides (L80). */
   protected mainDecidesLiveness(worktreeId: string): boolean {
     return mainDecidesLeafLiveness(this, worktreeId)

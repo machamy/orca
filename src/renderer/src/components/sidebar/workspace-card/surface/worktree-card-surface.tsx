@@ -11,7 +11,6 @@ import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-c
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
 import { WorktreeCardUnityTint } from '../../worktree-card-unity-tint'
 import { useWorktreeSidebarUnityTint } from '../../use-worktree-sidebar-unity-tint'
-import { WorktreeCardDefaultSwitchDropZone } from './worktree-card-default-switch-drop-zone'
 import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
 
 /** Shape, inset and transitions every sidebar card row shares; inactive rows add `worktree-sidebar-card-hover`. */
@@ -30,7 +29,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     worktree,
     selectedWorktrees,
     onAssignWorkspaceStatus,
-    onDefaultSwitchRequest,
     affiliateListMode,
     isActiveSurface,
     activeSurfaceVariant,
@@ -39,8 +37,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     revealHighlightTone,
     flushSurface,
     isLineageDropTarget,
-    showDefaultSwitchDropTarget,
-    isDefaultSwitchDropTarget,
     nativeDragEnabled,
     lineageChildren,
     lineageChildrenStyle,
@@ -93,11 +89,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         titleOnlyCard ? (card.compactLine ? 'py-px' : 'py-2') : 'pt-1.25 pb-1.5',
         flushSurface && 'w-[calc(100%-0.25rem)]',
         // Navigation updates the live attribute before React; it must own the complete active style.
-        isDefaultSwitchDropTarget
-          ? 'border-worktree-sidebar-ring/50 bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40'
-          : isLineageDropTarget
-            ? 'border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
-            : !isActiveSurface && 'worktree-sidebar-card-hover',
+        isLineageDropTarget
+          ? 'border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
+          : !isActiveSurface && 'worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         // Why: the wash sits at -z-10 so the row's glyphs stay above it; without a
         // stacking context here it would drop behind the sidebar and disappear.
@@ -136,12 +130,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         // A title-only card is padded py-2, so its title row sits 3px lower.
         className={unityTintMode === 'chip' && titleOnlyCard ? 'top-[15.5px]' : undefined}
       />
-      {showDefaultSwitchDropTarget ? (
-        <WorktreeCardDefaultSwitchDropZone
-          worktreeId={worktree.id}
-          active={isDefaultSwitchDropTarget}
-        />
-      ) : null}
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
@@ -181,7 +169,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
           onAssignWorkspaceStatus={onAssignWorkspaceStatus}
-          onDefaultSwitchRequest={onDefaultSwitchRequest}
           onOpenChange={card.detailsHoverControl.setContextMenuOpen}
         >
           {cardBody}

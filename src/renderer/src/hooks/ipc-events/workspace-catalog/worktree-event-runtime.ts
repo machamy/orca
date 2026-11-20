@@ -1,8 +1,11 @@
+import { transitionLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-transition'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { AppState } from '../../../store/types'
@@ -28,18 +31,12 @@ import {
   createWorktreeChangeRefreshQueue,
   type WorktreeChangeRefreshQueue
 } from './worktree-change-refresh-queue'
-import type { RuntimeWorktreeIdentityMigration } from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
-import {
-  isWorktreeIdentityShielded,
-  sweepExpiredWorktreeIdentityGrace
-} from '../../../store/worktree-identity-grace'
-import { applyWorktreeIdentityMigrations } from '../worktree-identity-migration-apply'
-import { runDefaultWorktreeSwitchFollowWake } from '../default-worktree-switch-follow-wake'
-export { worktreeIdentityGraceExpiryById as recentlyRenamedWorktreeIdExpiry } from '../../../store/worktree-identity-grace'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+
+const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 
 // Why the subscription key: it changes on reconnect, re-pair and event-stream replay invalidation.
 function runtimeSortOrderFence(environmentId: string): string {
@@ -86,9 +83,7 @@ export function createWorktreeEventRuntime(
       sortOrderOnly?: boolean
       sortOrders?: WorktreeSortOrderUpdate[]
       sortOrderFence?: string
-    },
-    // Fork: a default-worktree swap renames three ids in one event, not one.
-    migrations?: readonly RuntimeWorktreeIdentityMigration[]
+    }
   ): Promise<void> => {
     const sortOrderOwner = parseExecutionHostId(options?.executionHostId)
     if (
@@ -133,16 +128,34 @@ export function createWorktreeEventRuntime(
     const localRefreshStartedWithRuntime =
       options?.forceLocalOwner === true && isRuntimeEnvironmentActive()
     // Capture activation before migration, then rekey maps before deletion diff so renames retain state.
-    const identityMigrations = migrations?.length ? migrations : renamed ? [renamed] : []
-    const activeBeforeMigration = useAppStore.getState().activeWorktreeId
+    const renamedWasActive =
+      renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
     const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
-    const activeAfterMigration = applyWorktreeIdentityMigrations({
-      repoId,
-      migrations: identityMigrations,
-      executionHostId: options?.executionHostId,
-      forceLocalOwner: options?.forceLocalOwner,
-      activeWorktreeId: activeBeforeMigration
-    })
+    if (renamed) {
+      const owners = new Set(
+        useAppStore
+          .getState()
+          .repos.filter(
+            (repo) =>
+              repo.id === repoId &&
+              (!options?.forceLocalOwner || !getRepoExecutionHostId(repo).startsWith('runtime:'))
+          )
+          .map(getRepoExecutionHostId)
+      )
+      const owner = options?.executionHostId ?? (owners.size === 1 ? [...owners][0] : undefined)
+      if (owner) {
+        transitionLaunchDrafts((source) =>
+          source.executionHostId === owner && source.workspaceId === renamed.oldWorktreeId
+            ? { executionHostId: owner, workspaceId: renamed.newWorktreeId }
+            : undefined
+        )
+      }
+      // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
+      const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
+      recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)
+      recentlyRenamedWorktreeIdExpiry.set(renamed.newWorktreeId, expiry)
+      useAppStore.getState().migrateWorktreeIdentity(renamed.oldWorktreeId, renamed.newWorktreeId)
+    }
     // Diff around refetch to purge externally deleted worktree state and prevent zombie PTY entries.
     const state = useAppStore.getState()
     const before =
@@ -178,19 +191,20 @@ export function createWorktreeEventRuntime(
         )
     }
     // ID changes unmount active panes; reactivate so tab reconciliation restores them immediately.
-    if (activeBeforeMigration && activeAfterMigration !== activeBeforeMigration) {
-      const renamedSelection = { ...selectionBeforeRename, worktreeId: activeAfterMigration }
+    if (renamedWasActive && renamed) {
+      const renamedSelection = { ...selectionBeforeRename, worktreeId: renamed.newWorktreeId }
       // Why only if unchanged: a workspace or twin copy picked during the refresh is the user's.
       if (isWorkspaceSelected(useAppStore.getState(), renamedSelection)) {
         restoreWorkspaceSelection(useAppStore.getState(), renamedSelection)
       }
     }
-    // Follow-mode "agents follow their branch": resume slept agents only after
-    // the migrations above swapped session content between the two workspaces.
-    runDefaultWorktreeSwitchFollowWake(identityMigrations)
     // Prune rename grace before early returns so local/non-authoritative events cannot leak entries indefinitely.
     const now = Date.now()
-    sweepExpiredWorktreeIdentityGrace(now)
+    for (const [id, expiry] of recentlyRenamedWorktreeIdExpiry) {
+      if (expiry <= now) {
+        recentlyRenamedWorktreeIdExpiry.delete(id)
+      }
+    }
     // Forced-local scans cannot prove runtime absence; fetch still purges local host rows, while space entries await local-only rescan.
     if (
       options?.forceLocalOwner &&
@@ -209,7 +223,8 @@ export function createWorktreeEventRuntime(
         continue
       }
       // A recently renamed worktree's old/new id isn't a deletion — its state moved to the new id; the list just lags.
-      if (isWorktreeIdentityShielded(id, now)) {
+      const graceExpiry = recentlyRenamedWorktreeIdExpiry.get(id)
+      if (graceExpiry != null && graceExpiry > now) {
         continue
       }
       removed.push(id)

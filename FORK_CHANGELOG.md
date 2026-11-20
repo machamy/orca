@@ -21,6 +21,10 @@
 
 ---
 
+## 미배포 · 2026-11-20
+
+- **기본 워크트리 전환 제거:** "기본 워크트리로 만들기"(브랜치 스왑, 에이전트 따라가기, 드래그 드롭 영역, `orca worktree default set`, 카드의 `Default` 배지)를 코드에서 뺐다. 아래 이력의 해당 항목은 당시 기록이다. 예전 설정 키(`defaultSwitch*`)가 남아 있어도 무시되고 시작에는 영향이 없다.
+
 ## machamy.29 — 원본 `1.4.263` 기준 · 2026-11-19
 
 원본 `v1.4.263`까지 병합했다(1,839커밋, 충돌 114).
@@ -976,7 +980,7 @@ machamy.11의 모델·에포트 배지가 패인마다 보였다 안 보였다 �
 ## machamy.2 — 원본 `1.4.176-rc.1` 기준 · 2026-08-09
 
 기본 워크트리 전환의 **상태 보존**을 실기 계측으로 파고들어 고친 라운드. 수용 기준은
-[`docs/reference/default-worktree-switch-acceptance.md`](docs/reference/default-worktree-switch-acceptance.md)에
+`docs/reference/default-worktree-switch-acceptance.md`(기능과 함께 삭제)에
 "반드시 일어나야 하는 일 / 절대 일어나선 안 되는 일"로 정리했다.
 
 ### 수정 — 전환 시 상태 유실 (전부 실기에서 관측 후 수정)

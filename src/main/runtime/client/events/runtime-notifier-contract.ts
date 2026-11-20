@@ -36,7 +36,6 @@ import type {
   RuntimeTerminalDriverState
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { RuntimeWorktreeIdentityMigration } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type {
   AgentListPublication,
   AgentPaneActivityChange
@@ -50,27 +49,14 @@ export type RuntimeNotifier = {
   worktreesChanged(
     repoId: string,
     renamed?: { oldWorktreeId: string; newWorktreeId: string },
-    options?: {
-      // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
-      invalidateGitScans?: boolean
-      /** Fork (default-worktree switch): id re-keys the renderer must apply before it re-reads state. */
-      migrations?: readonly RuntimeWorktreeIdentityMigration[]
-      /** Fork: the swap only moved the shield, so the renderer can skip a full reload. */
-      shieldOnly?: boolean
-    }
+    // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
+    options?: { invalidateGitScans?: boolean }
   ): void
   workspaceMetadataSet?(set: WorkspaceMetadataSet): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   /** Fork: ask the renderer whether new worktrees of this Unity repo should get the
    *  cache automatically — fired once while the setting is undecided. */
   unityAutoSeedOffer?(repoId: string, worktreePath: string): void
-  /** Fork: ask the desktop renderer to run the full default-switch client flow
-   *  (sleep -> swap -> wake) — the same path the sidebar dialog confirm takes. */
-  defaultWorktreeSwitchRequest?(
-    repoId: string,
-    worktreeId: string,
-    opts: { followAgents: boolean; notifyAgents: boolean; includeUntracked: boolean }
-  ): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
   browserProfilesChanged?(): void

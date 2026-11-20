@@ -3,8 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { isUnsupportedWorktreeRepairError } from '../worktrees/git-worktree-command-capabilities'
-
 import { GitBinaryTestFixture } from './git-binary.test-fixture'
 
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
@@ -17,14 +15,9 @@ type GitResult = { stdout: string; stderr: string }
 describeBinaryCompatibility('real Git binary compatibility (fork worktree cases)', () => {
   let repoPath = ''
   let fixture: GitBinaryTestFixture
-  let version = { major: 0, minor: 0 }
 
   async function runGit(args: string[]): Promise<GitResult> {
     return fixture.exec(args, fixture.executionRoot)
-  }
-
-  function supports(major: number, minor: number): boolean {
-    return version.major > major || (version.major === major && version.minor >= minor)
   }
 
   beforeAll(async () => {
@@ -33,9 +26,6 @@ describeBinaryCompatibility('real Git binary compatibility (fork worktree cases)
     await fixture.start()
     const versionOutput = await runGit(['--version'])
     expect(versionOutput.stdout).toContain(`git version ${expectedVersion}`)
-    const match = versionOutput.stdout.match(/git version (\d+)\.(\d+)/)
-    expect(match).not.toBeNull()
-    version = { major: Number(match?.[1]), minor: Number(match?.[2]) }
 
     await runGit(['init', '-q'])
     await runGit(['config', 'user.email', 'compatibility@example.invalid'])
@@ -66,16 +56,5 @@ describeBinaryCompatibility('real Git binary compatibility (fork worktree cases)
     const remaining = await runGit(['worktree', 'list', '--porcelain'])
     expect(remaining.stdout).not.toContain('deferred-wt')
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
-  })
-
-  // The default-worktree switch repairs links after moving the main worktree.
-  it('recognizes the worktree repair boundary', async () => {
-    try {
-      await runGit(['worktree', 'repair'])
-      expect(supports(2, 29)).toBe(true)
-    } catch (error) {
-      expect(supports(2, 29)).toBe(false)
-      expect(isUnsupportedWorktreeRepairError(error)).toBe(true)
-    }
   })
 })

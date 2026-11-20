@@ -164,8 +164,7 @@ export type BrowserSlice = {
   ) => void
   shutdownWorktreeBrowsers: (
     worktreeId: string,
-    // Fork: keepState frees the guests but keeps the records (default-worktree switch).
-    options?: { preserveWorktreeSelection?: boolean; keepState?: boolean }
+    options?: { preserveWorktreeSelection?: boolean }
   ) => void
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
   /** Activation uses the tab's workspace unless a target is supplied; global selection

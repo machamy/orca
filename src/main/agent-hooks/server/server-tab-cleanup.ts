@@ -3,8 +3,7 @@ import {
   clearPaneStatusCacheState
 } from '../../../shared/agent-hook-listener/listener-state'
 import { paneCacheKeyMatchesTab } from './server-status-identity'
-import type { EndedProcessReconciliationOptions } from './server-cleanup'
-import { AgentHookServerWorktreeAttributionMigration } from './server-worktree-attribution-migration'
+import { AgentHookServerCleanup, type EndedProcessReconciliationOptions } from './server-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { releaseAgentExitKey } from './agent-exit-evidence'
 import { paneHasStateClaims } from '../../../shared/agent-hook-listener/pane-state-claims'
@@ -14,7 +13,7 @@ import type {
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
-export abstract class AgentHookServerTabCleanup extends AgentHookServerWorktreeAttributionMigration {
+export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   retireProcessAuthority(paneKey: string): void {
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
     const { untouched } = this.reconcileEndedProcess(paneKeys, undefined, (key) =>

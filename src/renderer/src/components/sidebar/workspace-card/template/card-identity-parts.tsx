@@ -3,7 +3,6 @@ import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
-import { WorktreeCardDefaultBadge } from '../metadata/worktree-card-default-badge'
 import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import {
@@ -128,7 +127,6 @@ export const CARD_IDENTITY_PARTS = {
     <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
   )),
   PrimaryStar: part([], () => <WorktreeCardPrimaryStar />),
-  DefaultBadge: part([], () => <WorktreeCardDefaultBadge />),
   SparseBadge: part(['hasHoverDetails'], (props, _children, card) => (
     <WorktreeCardSparseBadge
       card={card}

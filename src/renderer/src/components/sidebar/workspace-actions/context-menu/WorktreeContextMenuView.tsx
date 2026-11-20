@@ -18,7 +18,6 @@ import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
-import { DefaultWorktreeSwitchMenuItem } from '../../DefaultWorktreeSwitchMenuItem'
 import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
 import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
 import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
@@ -214,7 +213,6 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
-              <DefaultWorktreeSwitchMenuItem model={model} disabled={isDeleting} />
               {model.unityMenu.menuItems}
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />

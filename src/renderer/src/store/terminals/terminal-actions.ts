@@ -156,12 +156,6 @@ export type TerminalActions = {
   clearTabPtyId: (tabId: string, ptyId?: string) => void
   /** Protects a tab from orphan cleanup after an unverified PTY loss. */
   markUnverifiedPtyLoss: (tabId: string) => void
-  /** Drop a tab's PTY bindings that no longer name a live session, so the next
-   *  mount spawns fresh instead of reattaching to a dead one. */
-  clearDeadLeafPtyBindings: (tabIds: readonly string[]) => number
-  /** Mode-B default switch: drop the migrated worktrees' recordless PTY bindings
-   *  so plain shells respawn in place instead of attaching to a killed session. */
-  releaseFollowSwitchShellPtyBindings: (worktreeIds: readonly string[]) => number
   /** Records the relay's own answer that a PTY id is gone; the one `exited` a respawn may act on. */
   markPtySourceDisowned: (ptyId: string) => void
   /** Awaited verified shutdown; unlike closeTab, physical teardown gates the state commit. */

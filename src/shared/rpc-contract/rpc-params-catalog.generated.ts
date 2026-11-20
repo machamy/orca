@@ -987,7 +987,6 @@ import { WorktreeCreate, WorktreePrefetchCreateBase } from './workspaces/worktre
 import {
   WorktreeActivate,
   WorktreeArchive,
-  WorktreeDefaultSetSelector,
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
@@ -2120,7 +2119,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
   'worktree.create': WorktreeCreate,
-  'worktree.defaultSet': WorktreeDefaultSetSelector,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,
   'worktree.lineageList': null,

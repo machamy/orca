@@ -156,8 +156,8 @@ export function installAppLifetimeIpcEvents(): () => void {
     )
   )
 
-  // Fork: the Unity auto-seed offer + CLI default-switch listeners; pushed into
-  // the shared `unsubs` array so they tear down on the same cleanup boundary.
+  // Fork: the Unity auto-seed offer listener; pushed into the shared `unsubs`
+  // array so it tears down on the same cleanup boundary.
   unsubs.push(...registerForkUiIpcListeners())
 
   registerTerminalPresentationIpcBridge(unsubs)

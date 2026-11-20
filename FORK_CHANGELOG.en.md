@@ -24,6 +24,10 @@ source.
 
 ---
 
+## Unreleased · 2026-11-20
+
+- **Default-worktree switch removed:** "Make Default Worktree" (the branch swap, agents follow, the drag drop zone, `orca worktree default set`, the card's `Default` badge) is gone from the code. Entries below that mention it are historical. Old settings keys (`defaultSwitch*`) left in a profile are ignored and do not affect startup.
+
 ## machamy.29 — upstream `1.4.263` base · 2026-11-19
 
 Merged upstream through `v1.4.263` (1,839 commits, 114 conflicts).
