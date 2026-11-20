@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import { isAbsolute, win32 as pathWin32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
@@ -6,7 +7,6 @@ import { resolveAgentSessionLaunchDirectory } from '../../../runtime/agent-sessi
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
 import { resolveProfileLoadingShell } from '../../../startup/shell-environment/hydrate-shell-path'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
 import { buildWslExecArgs } from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
 import { writeStructuredAgentSessionOrcaNote } from '../structured-agent-session-orca-note'
@@ -43,6 +43,11 @@ const POWERSHELL_UTF8 =
   '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding; '
 const GIT_BASH_UTF8 = 'chcp.com 65001 >/dev/null 2>&1; '
 
+// wsl.exe and a cmd entering a UNC folder need a Windows directory that outlives any worktree.
+function windowsNeutralCwd(): string {
+  return process.env.SystemRoot || homedir()
+}
+
 function shellInvocation(command: string, cwd: string): ShellInvocation {
   const shell = resolveProfileLoadingShell()
   if (process.platform !== 'win32') {
@@ -61,7 +66,7 @@ function shellInvocation(command: string, cwd: string): ShellInvocation {
         wsl.linuxPath,
         command
       ]),
-      cwd: resolveWslInteropSpawnCwd()
+      cwd: windowsNeutralCwd()
     }
   }
   if (!shell) {
@@ -71,7 +76,7 @@ function shellInvocation(command: string, cwd: string): ShellInvocation {
     return {
       program: process.env.ComSpec || 'cmd.exe',
       args: ['/d', '/s', '/c', `"${CMD_UTF8}${enter} & ${command}"`],
-      cwd: unc ? resolveWslInteropSpawnCwd() : cwd,
+      cwd: unc ? windowsNeutralCwd() : cwd,
       windowsVerbatimArguments: true
     }
   }
