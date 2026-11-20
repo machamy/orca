@@ -15,7 +15,8 @@ export const STRUCTURED_COMPOSER_FAILURE_COPY = {
     "This chat's folder is unavailable, so the shell command did not run.",
   shellCommandUnsupportedByHost:
     'This chat host cannot run ! shell commands. Update Orca on that host.',
-  shellCommandFailed: 'The shell command could not run.'
+  shellCommandFailed:
+    'No result came back. The command may have run, so check the chat before running it again.'
 } as const
 
 export type StructuredComposerFailureCode = keyof typeof STRUCTURED_COMPOSER_FAILURE_COPY

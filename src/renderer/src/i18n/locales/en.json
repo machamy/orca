@@ -22260,7 +22260,7 @@
         "shellCommandNotOpen": "Open this chat again, then run the shell command.",
         "shellCommandFolderUnavailable": "This chat's folder is unavailable, so the shell command did not run.",
         "shellCommandUnsupportedByHost": "This chat host cannot run ! shell commands. Update Orca on that host.",
-        "shellCommandFailed": "The shell command could not run."
+        "shellCommandFailed": "No result came back. The command may have run, so check the chat before running it again."
       },
       "githubPeek": {
         "updated": "updated {{time}}",

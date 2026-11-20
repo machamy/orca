@@ -5,6 +5,9 @@ import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { resolveAgentSessionLaunchDirectory } from '../../../runtime/agent-session/launch/agent-session-launch-directory'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
 import { resolveProfileLoadingShell } from '../../../startup/shell-environment/hydrate-shell-path'
+import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
+import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
+import { buildWslExecArgs } from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
 import { writeStructuredAgentSessionOrcaNote } from '../structured-agent-session-orca-note'
 import {
@@ -23,24 +26,63 @@ export type StructuredShellCommandDeps = {
   run?: (spec: ProcessSpec) => ReturnType<typeof runProcess>
 }
 
-function shellInvocation(
-  command: string
-): Pick<ProcessSpec, 'program' | 'args'> & Partial<Pick<ProcessSpec, 'windowsVerbatimArguments'>> {
+type ShellInvocation = Pick<ProcessSpec, 'program' | 'args' | 'cwd'> &
+  Partial<Pick<ProcessSpec, 'windowsVerbatimArguments'>>
+
+// The guest login shell supplies the person's PATH; `-l` without `-i` keeps job-control noise out.
+const WSL_GUEST_RUN_SCRIPT = [
+  's=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)',
+  '[ -x "$s" ] || s=/bin/sh',
+  'cd "$1" || exit 1',
+  'exec "$s" -lc "$2"'
+].join('\n')
+
+// Windows consoles default to the OEM code page (CP949 on Korean Windows); output is read as UTF-8.
+const CMD_UTF8 = 'chcp 65001 > nul'
+const POWERSHELL_UTF8 =
+  '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding; '
+const GIT_BASH_UTF8 = 'chcp.com 65001 >/dev/null 2>&1; '
+
+function shellInvocation(command: string, cwd: string): ShellInvocation {
   const shell = resolveProfileLoadingShell()
   if (process.platform !== 'win32') {
-    return { program: shell ?? '/bin/sh', args: ['-c', command] }
+    return { program: shell ?? '/bin/sh', args: ['-c', command], cwd }
+  }
+  // A WSL folder runs in its distro, where the agent of that folder runs too.
+  const wsl = parseWslPath(cwd)
+  if (wsl) {
+    return {
+      program: 'wsl.exe',
+      args: buildWslExecArgs(wsl.distro, [
+        'sh',
+        '-c',
+        WSL_GUEST_RUN_SCRIPT,
+        'sh',
+        wsl.linuxPath,
+        command
+      ]),
+      cwd: resolveWslInteropSpawnCwd()
+    }
   }
   if (!shell) {
+    // cmd cannot start in a UNC folder; pushd maps it to a drive letter first.
+    const unc = cwd.startsWith('\\\\')
+    const enter = unc ? ` & (pushd "${cwd}" || exit /b 1)` : ''
     return {
       program: process.env.ComSpec || 'cmd.exe',
-      args: ['/d', '/s', '/c', `"${command}"`],
+      args: ['/d', '/s', '/c', `"${CMD_UTF8}${enter} & ${command}"`],
+      cwd: unc ? resolveWslInteropSpawnCwd() : cwd,
       windowsVerbatimArguments: true
     }
   }
   const name = pathWin32.basename(shell).toLowerCase()
   return name === 'powershell.exe' || name === 'pwsh.exe'
-    ? { program: shell, args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command] }
-    : { program: shell, args: ['-c', command] }
+    ? {
+        program: shell,
+        args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', POWERSHELL_UTF8 + command],
+        cwd
+      }
+    : { program: shell, args: ['-c', GIT_BASH_UTF8 + command], cwd }
 }
 
 async function chatFolder(
@@ -81,8 +123,7 @@ export async function runStructuredAgentSessionShellCommand(
   }
   const run = deps.run ?? runProcess
   const outcome = await run({
-    ...shellInvocation(command),
-    cwd,
+    ...shellInvocation(command, cwd),
     // No terminal answers a prompt, so git must fail instead of waiting for one.
     env: { ...(await hostShellEnvironment()), GIT_TERMINAL_PROMPT: '0' },
     timeoutMs: NATIVE_CHAT_SHELL_COMMAND_TIMEOUT_MS,

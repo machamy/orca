@@ -19542,7 +19542,7 @@
         "shellCommandNotOpen": "이 채팅을 다시 연 뒤에 셸 명령을 실행하세요.",
         "shellCommandFolderUnavailable": "이 채팅의 폴더를 찾을 수 없어 셸 명령을 실행하지 않았습니다.",
         "shellCommandUnsupportedByHost": "이 채팅 호스트는 ! 셸 명령을 실행할 수 없습니다. 해당 호스트의 Orca를 업데이트하세요.",
-        "shellCommandFailed": "셸 명령을 실행하지 못했습니다."
+        "shellCommandFailed": "결과를 받지 못했습니다. 명령이 실행됐을 수 있으니 채팅을 확인한 뒤 다시 실행하세요."
       },
       "usageLimitActions": {
         "switchAccount": "계정 전환",
