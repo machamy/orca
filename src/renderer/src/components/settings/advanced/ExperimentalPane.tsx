@@ -13,6 +13,7 @@ import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/Agen
 import { AgentModelBadgeExperimentalSetting } from './AgentModelBadgeExperimentalSetting'
 import { BrowserMarkdownHandoffExperimentalSetting } from './BrowserMarkdownHandoffExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
+import { AppRailExperimentalSetting } from '../../app-rail/AppRailExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
@@ -57,6 +58,7 @@ export function ExperimentalPane({
   const showAgentModelBadge = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentModelBadge
   ])
+  const showAppRail = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().appRail])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
@@ -301,6 +303,10 @@ export function ExperimentalPane({
             deliberately not rendered so the feature is unreachable. */}
         {showAgentModelBadge ? (
           <AgentModelBadgeExperimentalSetting settings={settings} updateSettings={updateSettings} />
+        ) : null}
+
+        {showAppRail ? (
+          <AppRailExperimentalSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />

@@ -1,19 +1,14 @@
-import type {
-  BrowserPage,
-  BrowserWorkspace
-} from '../../../shared/browser/workspaces/browser-workspace-types'
-import { remapBrowserPageDocLocation } from '../../../shared/browser/workspaces/browser-page-doc-location'
 import {
   type WorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
+import { migrateWorkspaceSessionWorktreeIdentity } from './worktree-identity-session-migration'
+import { replaceWorkspaceSessionPartitions } from '../restoring-sessions/workspace-session-partition-replacement'
 import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
-import { migrateWorkspaceSessionIdentity } from './worktree-identity-session-migration'
 
-/** Mutate worktree references in place; return whether anything changed so callers can gate persistence. */
+/** Mutate worktree references in place (sessions are replaced); return whether anything changed so callers can gate persistence. */
 export function migrateWorktreeIdentity(
   state: PersistedState,
   oldWorktreeId: string,
@@ -38,34 +33,6 @@ export function migrateWorktreeIdentity(
     delete record[oldWorktreeId]
     return true
   }
-  const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
-    value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
-  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
-  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
-  const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
-    const renamedValue = withNewWorktreeId(value)
-    return value.docLocation?.worktreeId === oldWorktreeId
-      ? {
-          ...renamedValue,
-          docLocation: remapBrowserPageDocLocation(
-            value.docLocation,
-            oldWorktreeId,
-            newWorktreeId,
-            oldWorktreePath,
-            newWorktreePath
-          )
-        }
-      : renamedValue
-  }
-  const reKey = {
-    oldWorktreeId,
-    newWorktreeId,
-    oldWorkspaceKey,
-    newWorkspaceKey,
-    withNewWorktreeId,
-    withNewBrowserWorktreeId
-  }
-
   let changed = moveKey(state.worktreeMeta)
   // Retain the prior ID so existing terminal sessions do not become orphans.
   const newMeta = state.worktreeMeta[newWorktreeId]
@@ -131,9 +98,20 @@ export function migrateWorktreeIdentity(
     }
   }
 
-  changed = migrateWorkspaceSessionIdentity(state.workspaceSession, reKey) || changed
-  for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
-    changed = migrateWorkspaceSessionIdentity(session, reKey) || changed
+  // Publish replacements: rollback of an in-flight session write keeps the previous objects.
+  const localSession =
+    state.workspaceSession &&
+    migrateWorkspaceSessionWorktreeIdentity(state.workspaceSession, oldWorktreeId, newWorktreeId)
+  if (localSession) {
+    state.workspaceSession = localSession
+    changed = true
+  }
+  const partitions = replaceWorkspaceSessionPartitions(state.workspaceSessionsByHostId, (session) =>
+    migrateWorkspaceSessionWorktreeIdentity(session, oldWorktreeId, newWorktreeId)
+  )
+  if (partitions !== state.workspaceSessionsByHostId) {
+    state.workspaceSessionsByHostId = partitions
+    changed = true
   }
   for (const selectionsByWorktree of Object.values(
     state.mobileClientTabSelectionsByDeviceId ?? {}

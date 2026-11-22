@@ -38,6 +38,7 @@ type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget' | 'worktreeFolderId'> & 
     /** path: and name: in parentWorktree may name a folder workspace. */
     matchFolderWorkspaces?: boolean
     crossStoreParent?: CrossStoreParentRef
+    crossStoreParentIsBotHome?: true
     noParent?: boolean
     /** Write only while the current parent is this workspace key; else refuse, so a newer move stands. */
     ifParentWorkspace?: string
@@ -140,7 +141,10 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         childInstanceId: worktree.instanceId,
         parent: lineage.crossStoreParent,
         origin: 'manual',
-        capture: { source: 'manual-action', confidence: 'explicit' },
+        capture: {
+          source: lineage.crossStoreParentIsBotHome ? 'bot-hand-over' : 'manual-action',
+          confidence: 'explicit'
+        },
         createdAt: Date.now()
       },
       target.hostId

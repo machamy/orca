@@ -5,10 +5,10 @@ import type {
 } from '../../../shared/agent-accounts/managed-account-types'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import {
-  getManagedAccountDisplayName,
   normalizeManagedAccountDisplayName,
   withManagedAccountDisplayName
 } from '../../../shared/agent-accounts/managed-account-display-names'
+import { savedClaudeAccountSummary } from './claude-account-saved-summary'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import { claudeStateFile, readClaudeFolderLogin } from '../sign-in/claude-account-folder'
 import { readClaudeOAuthCredentials } from '../../rate-limits/providers/claude/claude-oauth-credentials'
@@ -26,6 +26,7 @@ import {
   setSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
+import { claudeSystemDefaultUsageId } from '../../../shared/agent-accounts/claude/claude-system-default-usage'
 
 export const CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE =
   'Sign in to this Claude account again before selecting it.'
@@ -137,25 +138,7 @@ export class ClaudeAccountSelection {
   }
 
   private savedSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
-    const displayName = getManagedAccountDisplayName(
-      this.store.getSettings().managedAccountDisplayNames,
-      'claude',
-      account.id
-    )
-    return {
-      id: account.id,
-      email: account.email,
-      ...(displayName ? { displayName } : {}),
-      managedAuthRuntime: account.managedAuthRuntime ?? 'host',
-      wslDistro: account.wslDistro ?? null,
-      authMethod: account.authMethod ?? 'unknown',
-      ...(account.apiKeyHint ? { apiKeyHint: account.apiKeyHint } : {}),
-      organizationUuid: account.organizationUuid ?? null,
-      organizationName: account.organizationName ?? null,
-      createdAt: account.createdAt,
-      updatedAt: account.updatedAt,
-      lastAuthenticatedAt: account.lastAuthenticatedAt
-    }
+    return savedClaudeAccountSummary(account, this.store.getSettings().managedAccountDisplayNames)
   }
 
   async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {
@@ -270,7 +253,11 @@ export class ClaudeAccountSelection {
       })
       throw error
     }
-    this.refreshUsage(outgoingAccountId, effectiveTarget)
+    // Keep System default's last reading on its row, as an outgoing saved account's is kept.
+    this.refreshUsage(
+      outgoingAccountId ?? claudeSystemDefaultUsageId(effectiveTarget),
+      effectiveTarget
+    )
     return this.list()
   }
 

@@ -4,7 +4,7 @@
  * structure.
  */
 
-import { getMarkdownFenceRanges } from './markdown-fence-scanner'
+import { getMarkdownFenceRanges } from '../../../../../../shared/markdown/markdown-fence-scanner'
 
 export function isInsideRange(index: number, ranges: [number, number][]): boolean {
   return ranges.some(([start, end]) => index >= start && index < end)

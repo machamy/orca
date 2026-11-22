@@ -14,6 +14,7 @@ import { remarkMarkdownDocLinks } from '../../markdown/documents/markdown-doc-li
 import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../../../shared/github/markdown/github-callouts'
 import { remarkGithubAlerts } from '../../markdown-github-alerts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
+import { MARKDOWN_CODE_LANGUAGES } from '@/lib/markdown/markdown-code-languages'
 
 export const markdownPreviewSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
@@ -84,7 +85,10 @@ export const MARKDOWN_REHYPE_NORMALIZATION_PLUGINS: MarkdownPluginList = [
   [rehypeSanitize, markdownPreviewSanitizeSchema],
   rehypeSlug
 ]
-export const MARKDOWN_REHYPE_EXPANSION_PLUGINS: MarkdownPluginList = [rehypeHighlight, rehypeKatex]
+export const MARKDOWN_REHYPE_EXPANSION_PLUGINS: MarkdownPluginList = [
+  [rehypeHighlight, { languages: MARKDOWN_CODE_LANGUAGES }],
+  rehypeKatex
+]
 
 // Sanitize raw HTML before math and syntax expansion.
 export const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginList = [

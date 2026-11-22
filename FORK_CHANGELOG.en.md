@@ -24,6 +24,15 @@ source.
 
 ---
 
+## machamy.30 — upstream `1.4.269` base · 2026-11-23
+
+Merged upstream through `v1.4.269` (989 commits, 18 conflicts).
+
+- **Automatic updates (opt-in):** upstream's new `Automatic updates` switch (Settings → General → About) works in internal builds. When on, Orca downloads the new version from the company update folder, installs it and relaunches. It defaults to off. Open-source builds hide the switch and ignore it, because it would install official Orca over the fork.
+- Upstream rewrote the worktree-rename persistence migration (sessions are rebuilt, not edited). The fork's three additions were moved onto the new structure: cleanup dismissals move with the worktree, tab start folders and open-file paths are remapped, and tab lists already at the destination are merged instead of overwritten.
+- Upstream split the sidebar "asleep" check in two. The fork rule that exempts the repo-path checkout (rather than git's main flag) from "Hide sleeping" now uses the new check.
+- Upstream moved the Markdown fence scanner to a shared folder; the fork's code-range check now imports it from there.
+
 ## machamy.29 — upstream `1.4.263` base · 2026-11-22
 
 Merged upstream through `v1.4.263` (1,839 commits, 114 conflicts).

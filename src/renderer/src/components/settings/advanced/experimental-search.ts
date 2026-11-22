@@ -5,6 +5,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getAgentModelBadgeSearchEntry } from './agent-model-badge-search-entry'
 import { getBrowserMarkdownHandoffSearchEntry } from './browser-markdown-handoff-search-entry'
+import { getAppRailSearchEntry } from '../../app-rail/app-rail-search-entry'
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
 import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-experimental-search'
 
@@ -189,6 +190,7 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
       agentModelBadge: getAgentModelBadgeSearchEntry(),
       // Worktree folders: row held back this release — keep it out of the
       // catalog too, or search navigates to a pane with no such control.
+      appRail: getAppRailSearchEntry(),
       ephemeralVms: getEphemeralVmsSearchEntry()
     }) satisfies Record<string, SettingsSearchEntry>
 )

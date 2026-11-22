@@ -1,5 +1,6 @@
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -15,6 +16,7 @@ export function createSidebarHostOptionsSelector() {
   let result: SidebarHostOption[] = []
   return (
     state: AppState,
+    statuses: RuntimeStatuses,
     repos: readonly Repo[],
     settings: AppState['settings'],
     hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
@@ -24,7 +26,7 @@ export function createSidebarHostOptionsSelector() {
       state.sshTargetLabels,
       state.sshConnectionStates,
       settings,
-      state.runtimeStatusByEnvironmentId,
+      statuses,
       state.runtimeEnvironments,
       hostLabelOverrides,
       state.wslHostStatuses,
@@ -42,7 +44,7 @@ export function createSidebarHostOptionsSelector() {
       sshConnectionStates: state.sshConnectionStates,
       settings,
       runtimeEnvironments: state.runtimeEnvironments,
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      runtimeStatusByEnvironmentId: statuses,
       hostLabelOverrides,
       wslHostStatuses: state.wslHostStatuses,
       wslHostsEnabled: selectWslHostsServing(state),

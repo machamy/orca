@@ -7,24 +7,22 @@ export type GitRuntimeOptions = {
    *  the right default for reads but wedges anything a hook can block. */
   timeoutMs?: number
   admissionTier?: GitAdmissionTier
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
 
 export function gitOptionsForWorktree(
   cwd: string,
   options: GitRuntimeOptions = {}
-): {
-  cwd: string
-  wslDistro?: string
-  signal?: AbortSignal
-  timeout?: number
-  admissionTier?: GitAdmissionTier
-} {
+): Omit<GitRuntimeOptions, 'timeoutMs'> & { cwd: string; timeout?: number } {
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...(options.observeChildTermination
+      ? { observeChildTermination: options.observeChildTermination }
+      : {})
   }
 }
 

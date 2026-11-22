@@ -1,3 +1,5 @@
+import { getAutomaticUpdatesSettingCopy } from '../updates/automatic-updates-copy'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { getGeneralConfirmationSearchEntries } from './general-confirmations-search'
 import { getGeneralSubPageTitle } from './general-sub-pages'
 import { GENERAL_SETTING_ANCHORS, generalSetting } from './general-setting-anchors'
@@ -9,6 +11,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from '../updates/update-delay-copy'
+import { IS_INTERNAL_BUILD } from '../../../../../shared/internal-build'
 
 export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() => [
   generalSetting(GENERAL_SETTING_ANCHORS.folder, {
@@ -182,6 +185,7 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
 ])
 
 export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
+  ...(isWebClientLocation() || !IS_INTERNAL_BUILD ? [] : [getAutomaticUpdatesSettingCopy()]),
   {
     title: translate('auto.components.settings.general.search.0504f69ba0', 'Check for updates'),
     description: translate(

@@ -1,7 +1,10 @@
 import type { BranchContext } from './worktree-agent-branch-context'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store/index'
+import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/lib/window-activity/use-now'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
@@ -49,24 +52,21 @@ export default React.memo(function WorktreeCardAgents({
     useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
   const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
+  const body = (bodyClassName?: string) => (
+    <WorktreeCardAgentsBody
+      worktreeId={worktreeId}
+      executionHostId={executionHostId}
+      roots={roots}
+      hostFiltered={roots !== allRoots}
+      className={bodyClassName}
+    />
+  )
   return (
     <WorktreeCardWithForkRows
       worktreeId={worktreeId}
       executionHostId={executionHostId}
       className={className}
-      renderBody={
-        roots.length
-          ? (bodyClassName) => (
-              <WorktreeCardAgentsBody
-                worktreeId={worktreeId}
-                executionHostId={executionHostId}
-                roots={roots}
-                hostFiltered={roots !== allRoots}
-                className={bodyClassName}
-              />
-            )
-          : null
-      }
+      renderBody={roots.length ? body : null}
     />
   )
 })
@@ -87,7 +87,10 @@ function WorktreeCardAgentsBody({
   const onDismiss = useAppStore((s) => s.dropAgentStatus)
   const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
-  const inputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
+  const inputs = useAppStoreWithHostStatuses(
+    (s, statuses) => selectSendTargetInputs(s, statuses, worktreeId),
+    shallow
+  )
   const targets = useMemo(
     () =>
       recomputeOn([languageRevision], () => {
@@ -293,7 +296,7 @@ const AgentBranch = React.memo(function AgentBranch({
     agent: row,
     showModel: context.showAgentModels,
     now: context.now,
-    isUnvisited: row.rowSource === 'live' && acknowledgedAt < row.entry.stateStartedAt,
+    isUnvisited: row.rowSource === 'live' && acknowledgedAt < agentAttentionTurnAt(row.entry),
     onActivate: context.onActivate,
     childAgentCount: hasChildren ? children.keys.length : undefined,
     childAgentsExpanded: expanded,

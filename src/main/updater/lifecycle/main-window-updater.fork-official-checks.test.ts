@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import type { UpdaterSetupOptions } from './updater-setup'
 
 const { setupMock } = vi.hoisted(() => ({
@@ -26,13 +26,12 @@ function createWindowOwner() {
   const store = {
     getSettings: vi.fn((): Record<string, unknown> => ({})),
     getUI: vi.fn(() => ({})),
-    updateUI: vi.fn(),
-    flushPendingAsync: vi.fn().mockResolvedValue(undefined)
+    requestCoreWrite: vi.fn()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setup reads only id/isDestroyed and registers once.
   const mainWindow = window as unknown as BrowserWindow
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setup reads only these store methods.
-  const persistence = store as unknown as Store
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setup reads only these settings methods.
+  const persistence = store as unknown as NativeSettingsProjection
   return { mainWindow, store, persistence }
 }
 
@@ -58,5 +57,7 @@ describe('main window updater official-check gate', () => {
     expect(options?.isAutomaticUpdateCheckEnabled?.()).toBe(false)
     owner.store.getSettings.mockReturnValue({ officialUpdateChecks: true })
     expect(options?.isAutomaticUpdateCheckEnabled?.()).toBe(true)
+    owner.store.getSettings.mockReturnValue({ automaticUpdates: true })
+    expect(options?.getAutomaticUpdates?.()).toBe(false)
   })
 })

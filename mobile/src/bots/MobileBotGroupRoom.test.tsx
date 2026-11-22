@@ -18,7 +18,14 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles },
   Platform: { OS: 'ios' }
 }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Ellipsis: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'Icon',
+  Ellipsis: 'Icon',
+  ListChecks: 'Icon',
+  MessageSquare: 'Icon',
+  Plus: 'Icon',
+  Users: 'Icon'
+}))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -39,7 +46,17 @@ vi.mock('./MobileBotGroupTurns', () => ({
 }))
 vi.mock('./MobileBotGroupPeerRequestLine', () => ({ MobileBotGroupPeerRequestLine: () => null }))
 vi.mock('./MobileBotGroupMembers', () => ({ MobileBotGroupMembers: () => null }))
+vi.mock('./MobileBotGroupItems', () => ({ MobileBotGroupItems: () => null }))
+vi.mock('./MobileBotGroupRepliesSheet', () => ({ MobileBotGroupRepliesSheet: () => null }))
+vi.mock('./MobileBotGroupApprovalDock', () => ({ MobileBotGroupApprovalDock: () => null }))
+vi.mock('./MobileBotGroupRoomBar', () => ({ MobileBotGroupRoomBar: () => null }))
+vi.mock('./MobileBotFaceStack', () => ({ MobileBotFaceStack: () => null }))
 vi.mock('../components/sheets/ActionSheetModal', () => ({ ActionSheetModal: () => null }))
+vi.mock('../components/nav-bar/NavBar', () => ({ NavBar: () => null }))
+vi.mock('../components/nav-bar/NavBarButton', () => ({ NavBarButton: () => null }))
+vi.mock('../session/native-chat/status/MobileNativeChatSendErrorBanner', () => ({
+  MobileNativeChatSendErrorBanner: () => null
+}))
 vi.mock('../session/native-chat/input/session-options/MobileNativeChatSessionOptionRows', () => ({
   ModelPill: () => null
 }))
@@ -97,6 +114,7 @@ async function mount(): Promise<void> {
         client: {} as never,
         groupId: 'g',
         hostId: 'host',
+        hostName: 'Studio Mac',
         visible: true
       })
     )

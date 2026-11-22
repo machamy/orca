@@ -89,11 +89,32 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
     skillSourceOwner: 'copilot',
     readsProjectSkillFoldersOf: ['claude']
   },
+  // Auggie, built on Pi, expands only `/skill:<name>` and reports no skills; it reads `.claude` too.
+  aug: {
+    skillPrefix: '/',
+    skillSourceOwner: 'aug',
+    skillNamePrefix: 'skill:',
+    readsSkillFoldersOf: ['claude']
+  },
   // Hermes' ACP sends an unregistered `/word` to the model as text, so a picked skill would not load.
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
-  omp: null
+  // Kiro's ACP pushes its own slash commands for each session.
+  kiro: null,
+  // Goose reports its skills as commands, at rest too.
+  goose: null,
+  // Orca knows no skill folders of theirs; their sessions report what they load as commands.
+  kilo: null,
+  'mimo-code': null,
+  omp: null,
+  // No folder scan until Gemini's ACP is checked to load a picked skill.
+  gemini: null,
+  // Droid reports skills only once a session starts, so resting chats rely on the scan.
+  droid: {
+    skillPrefix: '/',
+    skillSourceOwner: 'droid'
+  }
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
@@ -103,17 +124,34 @@ export function readsSkillSource(
     NativeChatAgentProfile,
     'skillSourceOwner' | 'readsSkillFoldersOf' | 'readsProjectSkillFoldersOf'
   >,
-  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>,
+  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind' | 'readers'>,
   skill: Pick<DiscoveredSkill, 'sourceKind'>
 ): boolean {
-  if (source.owner === null || source.owner === profile.skillSourceOwner) {
+  if (source.owner === null) {
     return true
+  }
+  if (source.owner === profile.skillSourceOwner) {
+    return source.readers !== 'borrowers'
   }
   const borrowed =
     profile.readsSkillFoldersOf?.includes(source.owner) === true ||
     (source.sourceKind === 'repo' &&
       profile.readsProjectSkillFoldersOf?.includes(source.owner) === true)
-  return borrowed && source.sourceKind !== 'plugin' && skill.sourceKind !== 'bundled'
+  return (
+    borrowed &&
+    source.readers !== 'owner' &&
+    source.sourceKind !== 'plugin' &&
+    skill.sourceKind !== 'bundled'
+  )
+}
+
+const HOME_SKILL_FOLDER_OWNERS_OTHERS_READ: ReadonlySet<AgentType> = new Set(
+  Object.values(NATIVE_CHAT_AGENT_PROFILES).flatMap((profile) => profile?.readsSkillFoldersOf ?? [])
+)
+
+/** Whether another agent reads `owner`'s home skill folders, so its default home still matters. */
+export function isSkillFolderOwnerOthersRead(owner: AgentType): boolean {
+  return HOME_SKILL_FOLDER_OWNERS_OTHERS_READ.has(owner)
 }
 
 export function getNativeChatAgentProfile(

@@ -67,6 +67,7 @@ import type { AgentModelBadgeApi } from './api/agent-model-badge-bridge'
 import type { BotChangesApi } from './api/bot-changes-api'
 import type { GoogleSetupApi } from './api/google-setup-api'
 import type { SlackHandOffApi } from './api/slack-hand-off-api'
+import type { AvatarGenerationApi } from '../shared/avatar-generation/avatar-generation-contract'
 import type { SpeechApi } from './api/speech/speech-api'
 import type { SshApi } from './api/ssh/ssh-api'
 import type { PlainSshTerminalApi } from './api/terminal/plain-ssh-terminal-bridge'
@@ -153,6 +154,7 @@ export type PreloadApi = {
   botChanges: BotChangesApi
   googleSetup: GoogleSetupApi
   slackHandOff: SlackHandOffApi
+  avatarGeneration: AvatarGenerationApi
   skills: SkillsApi
   pet: PetApi
   appIcon: AppIconApi

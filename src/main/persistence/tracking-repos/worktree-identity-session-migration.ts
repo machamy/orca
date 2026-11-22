@@ -1,104 +1,114 @@
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { remapPathInsideWorktreeRoot } from '../../../shared/file-access/cross-platform-path'
-import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../shared/browser/workspaces/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../shared/browser/workspaces/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
+import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { remapPathInsideWorktreeRoot } from '../../../shared/file-access/cross-platform-path'
 import { repointRowArrays, repointRowRecord } from './worktree-identity-row-repoint'
+import { mergeReKeyedValue } from './worktree-identity-rekey-merge'
 
-/** The worktree rename, as everything inside one persisted workspace session needs it. */
-export type WorktreeIdentityReKey = {
-  oldWorktreeId: string
+/** A new session with the worktree moved, or null; published sessions are never edited. */
+export function migrateWorkspaceSessionWorktreeIdentity(
+  session: WorkspaceSessionState,
+  oldWorktreeId: string,
   newWorktreeId: string
-  oldWorkspaceKey: WorkspaceKey
-  newWorkspaceKey: WorkspaceKey
-  withNewWorktreeId: <T extends { worktreeId: string }>(value: T) => T
-  withNewBrowserWorktreeId: <T extends BrowserPage | BrowserWorkspace>(value: T) => T
-}
-
-/**
- * Re-keys one persisted workspace session onto the new worktree id. Split out of
- * `migrateWorktreeIdentity`, which applies it to the local session and to every
- * per-host session. Mutates `session`; returns whether anything moved.
- */
-export function migrateWorkspaceSessionIdentity(
-  session: WorkspaceSessionState | undefined,
-  reKey: WorktreeIdentityReKey
-): boolean {
-  const {
-    oldWorktreeId,
-    newWorktreeId,
-    oldWorkspaceKey,
-    newWorkspaceKey,
-    withNewWorktreeId,
-    withNewBrowserWorktreeId
-  } = reKey
-  if (!session) {
-    return false
+): WorkspaceSessionState | null {
+  const oldWorkspaceKey = worktreeWorkspaceKey(oldWorktreeId)
+  const newWorkspaceKey = worktreeWorkspaceKey(newWorktreeId)
+  const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
+    value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
+  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+  const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
+    const renamedValue = withNewWorktreeId(value)
+    return value.docLocation?.worktreeId === oldWorktreeId
+      ? {
+          ...renamedValue,
+          docLocation: remapBrowserPageDocLocation(
+            value.docLocation,
+            oldWorktreeId,
+            newWorktreeId,
+            oldWorktreePath,
+            newWorktreePath
+          )
+        }
+      : renamedValue
   }
-  let sessionChanged = false
+  let next: WorkspaceSessionState | null = null
+  const edit = (): WorkspaceSessionState => (next ??= { ...session })
+  const setField = <K extends keyof WorkspaceSessionState>(
+    field: K,
+    moved: WorkspaceSessionState[K] | undefined
+  ): void => {
+    if (moved !== undefined) {
+      edit()[field] = moved
+    }
+  }
+  /** Known collision: source overwrites existing target on partial/repeated moves; no revision proves which is newer. */
   const moveSessionKey = <T>(
     record: Record<string, T> | undefined,
     mapValue: (value: T) => T = (value) => value
-  ): boolean => {
-    if (!record) {
-      return false
-    }
-    let moved = false
+  ): Record<string, T> | undefined => {
+    let moved: Record<string, T> | undefined
     const pairs: [string, string][] = [
       [oldWorktreeId, newWorktreeId],
       [oldWorkspaceKey, newWorkspaceKey]
     ]
     for (const [oldKey, newKey] of pairs) {
-      if (!(oldKey in record)) {
+      if (!record || !(oldKey in record)) {
         continue
       }
-      record[newKey] = mergeReKeyedValue(mapValue(record[oldKey]), record[newKey])
-      delete record[oldKey]
-      moved = true
+      moved ??= { ...record }
+      moved[newKey] = mergeReKeyedValue(mapValue(record[oldKey]), moved[newKey])
+      delete moved[oldKey]
     }
     return moved
   }
 
-  // Fork: persisted tab startupCwd / open-file paths are absolute under the
-  // old home; leaving them makes a restart hydrate the swapped workspace
-  // pointing at the other checkout.
-  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
-  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+  // Fork: persisted tab startupCwd / open-file paths are absolute under the old
+  // root; leaving them makes a restart hydrate the moved workspace at the old checkout.
   const remapPathValue = (value: string): string =>
     oldWorktreePath && newWorktreePath
       ? (remapPathInsideWorktreeRoot(oldWorktreePath, newWorktreePath, value) ?? value)
       : value
-  sessionChanged =
+  setField(
+    'tabsByWorktree',
     moveSessionKey(session.tabsByWorktree, (tabs) =>
       tabs.map((tab) => {
         const moved = withNewWorktreeId(tab)
         return moved.startupCwd ? { ...moved, startupCwd: remapPathValue(moved.startupCwd) } : moved
       })
-    ) || sessionChanged
-  sessionChanged =
+    )
+  )
+  setField(
+    'openFilesByWorktree',
     moveSessionKey(session.openFilesByWorktree, (files) =>
       files.map((file) => {
         const moved = withNewWorktreeId(file)
         return moved.filePath ? { ...moved, filePath: remapPathValue(moved.filePath) } : moved
       })
-    ) || sessionChanged
+    )
+  )
   // File ids derive from file paths, so the active pointer moves with them.
-  sessionChanged =
+  setField(
+    'activeFileIdByWorktree',
     moveSessionKey(session.activeFileIdByWorktree, (fileId) =>
       fileId === null ? fileId : remapPathValue(fileId)
-    ) || sessionChanged
-  sessionChanged =
+    )
+  )
+  setField(
+    'browserTabsByWorktree',
     moveSessionKey(session.browserTabsByWorktree, (workspaces) =>
       workspaces.map(withNewBrowserWorktreeId)
-    ) || sessionChanged
+    )
+  )
   if (session.browserPagesByWorkspace) {
     let pagesChanged = false
     const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
@@ -115,27 +125,31 @@ export function migrateWorkspaceSessionIdentity(
       pagesChanged = true
     }
     if (pagesChanged) {
-      session.browserPagesByWorkspace = nextPagesByWorkspace
-      sessionChanged = true
+      setField('browserPagesByWorkspace', nextPagesByWorkspace)
     }
   }
-  // Why the row too: rehydration only republishes a row whose `workspaceId` still equals the key
-  // it is filed under, so re-keying the map alone would strand every page under the new id.
-  sessionChanged =
+  // Rehydration requires workspaceId to match its map key; rekeying alone would strand pages.
+  setField(
+    'clientHostedBrowserPagesByWorktree',
     moveSessionKey(session.clientHostedBrowserPagesByWorktree, (rows) =>
       rows.map((row) =>
         row.workspaceId === oldWorktreeId ? { ...row, workspaceId: newWorktreeId } : row
       )
-    ) || sessionChanged
-  sessionChanged = moveSessionKey(session.activeBrowserTabIdByWorktree) || sessionChanged
-  sessionChanged = moveSessionKey(session.activeTabTypeByWorktree) || sessionChanged
-  sessionChanged = moveSessionKey(session.activeTabIdByWorktree) || sessionChanged
-  sessionChanged =
-    moveSessionKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId)) || sessionChanged
-  sessionChanged =
-    moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || sessionChanged
-  sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
-  sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
+    )
+  )
+  setField('activeBrowserTabIdByWorktree', moveSessionKey(session.activeBrowserTabIdByWorktree))
+  setField('activeTabTypeByWorktree', moveSessionKey(session.activeTabTypeByWorktree))
+  setField('activeTabIdByWorktree', moveSessionKey(session.activeTabIdByWorktree))
+  setField(
+    'unifiedTabs',
+    moveSessionKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId))
+  )
+  setField(
+    'tabGroups',
+    moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId))
+  )
+  setField('tabGroupLayouts', moveSessionKey(session.tabGroupLayouts))
+  setField('activeGroupIdByWorktree', moveSessionKey(session.activeGroupIdByWorktree))
   if (session.lastVisitedAtByWorktreeId) {
     const nextRecency = { ...session.lastVisitedAtByWorktreeId }
     let recencyChanged = false
@@ -147,46 +161,40 @@ export function migrateWorkspaceSessionIdentity(
       const nextKey = isWorktreeHostIdentity(key)
         ? `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
         : newWorktreeId
-      // Why max: a partial migration leaves both identities behind; taking the older one would
-      // regress Cmd+J recency after restart.
+      // Partial migrations can retain both IDs; max prevents recency regression.
       const existing = nextRecency[nextKey]
       nextRecency[nextKey] = existing === undefined ? value : Math.max(existing, value)
       delete nextRecency[key]
       recencyChanged = true
     }
     if (recencyChanged) {
-      session.lastVisitedAtByWorktreeId = nextRecency
-      sessionChanged = true
+      setField('lastVisitedAtByWorktreeId', nextRecency)
     }
   }
-  sessionChanged = moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId) || sessionChanged
+  setField(
+    'defaultTerminalTabsAppliedByWorktreeId',
+    moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId)
+  )
   if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
-    session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
-      id === oldWorktreeId ? newWorktreeId : id
+    setField(
+      'activeWorktreeIdsOnShutdown',
+      session.activeWorktreeIdsOnShutdown.map((id) => (id === oldWorktreeId ? newWorktreeId : id))
     )
-    sessionChanged = true
   }
   if (session.activeWorktreeId === oldWorktreeId) {
-    session.activeWorktreeId = newWorktreeId
-    sessionChanged = true
+    setField('activeWorktreeId', newWorktreeId)
   }
   if (session.activeWorkspaceKey === oldWorkspaceKey) {
-    session.activeWorkspaceKey = newWorkspaceKey
-    sessionChanged = true
+    setField('activeWorkspaceKey', newWorkspaceKey)
   }
-  // Why every row-valued map: a record keyed by pane or tab id still names its worktree in the
-  // value, and a stale one silently stops matching. A `closedTerminalTabTombstonesByTabId` row left
-  // on the old id never suppresses the tab it was minted for, so the remote merge re-adds a tab the
-  // user closed. The census test (`worktree-identity-migration-field-coverage.test.ts`) keeps a
-  // fourth field of this class from joining silently.
+  // Pane/tab/environment-keyed rows still carry worktree IDs in values; explicit typed fields retain census coverage.
   const nextSleeping = repointRowRecord(
     session.sleepingAgentSessionsByPaneKey,
     oldWorktreeId,
     newWorktreeId
   )
   if (nextSleeping) {
-    session.sleepingAgentSessionsByPaneKey = nextSleeping
-    sessionChanged = true
+    setField('sleepingAgentSessionsByPaneKey', nextSleeping)
   }
   const nextSurfaceTombstones = repointRowRecord(
     session.terminalSurfaceTombstonesByPaneKey,
@@ -194,8 +202,7 @@ export function migrateWorkspaceSessionIdentity(
     newWorktreeId
   )
   if (nextSurfaceTombstones) {
-    session.terminalSurfaceTombstonesByPaneKey = nextSurfaceTombstones
-    sessionChanged = true
+    setField('terminalSurfaceTombstonesByPaneKey', nextSurfaceTombstones)
   }
   const nextClosedTombstones = repointRowRecord(
     session.closedTerminalTabTombstonesByTabId,
@@ -203,8 +210,7 @@ export function migrateWorkspaceSessionIdentity(
     newWorktreeId
   )
   if (nextClosedTombstones) {
-    session.closedTerminalTabTombstonesByTabId = nextClosedTombstones
-    sessionChanged = true
+    setField('closedTerminalTabTombstonesByTabId', nextClosedTombstones)
   }
   const nextClosedPanes = repointRowRecord(
     session.closedTerminalPanesByPaneKey,
@@ -212,8 +218,7 @@ export function migrateWorkspaceSessionIdentity(
     newWorktreeId
   )
   if (nextClosedPanes) {
-    session.closedTerminalPanesByPaneKey = nextClosedPanes
-    sessionChanged = true
+    setField('closedTerminalPanesByPaneKey', nextClosedPanes)
   }
   const nextCloseIntents = repointRowArrays(
     session.clientHostedBrowserCloseIntentsByEnvironment,
@@ -221,8 +226,7 @@ export function migrateWorkspaceSessionIdentity(
     newWorktreeId
   )
   if (nextCloseIntents) {
-    session.clientHostedBrowserCloseIntentsByEnvironment = nextCloseIntents
-    sessionChanged = true
+    setField('clientHostedBrowserCloseIntentsByEnvironment', nextCloseIntents)
   }
   const nextPairedTabCloseIntents = repointRowArrays(
     session.pairedTerminalTabCloseIntentsByEnvironment,
@@ -230,8 +234,7 @@ export function migrateWorkspaceSessionIdentity(
     newWorktreeId
   )
   if (nextPairedTabCloseIntents) {
-    session.pairedTerminalTabCloseIntentsByEnvironment = nextPairedTabCloseIntents
-    sessionChanged = true
+    setField('pairedTerminalTabCloseIntentsByEnvironment', nextPairedTabCloseIntents)
   }
-  return sessionChanged
+  return next
 }

@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, Shuffle } from 'lucide-react-native'
+import { Shuffle } from 'lucide-react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { TextField } from '../components/composer-input/TextField'
+import { ListGroup, ListRow } from '../components/list/ListGroup'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerError } from '../platform/haptics/haptics'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -48,13 +51,15 @@ type NewBotSheetProps = {
   onAfterClose?: () => void
   /** The bot the computer made; its Home opens next, where it speaks first. */
   onCreated: (bot: PhoneBot, computer: NewBotComputer) => void
-  /** Editing a bot's offer card: its proposal fills the form, on the computer its proposer runs on,
-   *  and the bot it makes answers that card. */
-  offer?: {
+  /** A filled-in form, on a computer it pins: an offer card's proposal, whose bot answers that card,
+   *  or Hand to bot's, whose bot takes the workspace over. */
+  seed?: {
     proposal: BotProposal
     /** The proposer's agent; absent when this build doesn't know it, so the owner picks one. */
     agent?: BotAgent
-    fromOffer: { botId: string; offerId: string }
+    fromOffer?: { botId: string; offerId: string }
+    /** Its first turn is the hand-over, sent once the workspace moved. */
+    takingOver?: true
     /** "Proposed by …" under the title. */
     origin: string
   }
@@ -74,22 +79,28 @@ export function MobileNewBotSheet(props: NewBotSheetProps) {
 function NewBotForm(props: NewBotSheetProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { offer } = props
-  const [name, setName] = useState(offer?.proposal.name ?? '')
+  const { seed } = props
+  const [name, setName] = useState(seed?.proposal.name ?? '')
   const [computerId, setComputerId] = useState(props.computerId)
-  const [picked, setPicked] = useState<BotAgent>(offer?.agent ?? 'claude')
+  const [picked, setPicked] = useState<BotAgent>(seed?.agent ?? 'claude')
   const [avatar, setAvatar] = useState(() =>
-    offer?.proposal.mascot && isBotMascotId(offer.proposal.mascot)
-      ? mascotAvatar(offer.proposal.mascot)
+    seed?.proposal.mascot && isBotMascotId(seed.proposal.mascot)
+      ? mascotAvatar(seed.proposal.mascot)
       : randomMascotAvatar(null)
   )
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // From a template: its purpose seeds the bot's SOUL.md.
   const [proposal, setProposal] = useState<{ value: BotProposal; origin: string } | null>(
-    offer ? { value: offer.proposal, origin: offer.origin } : null
+    seed ? { value: seed.proposal, origin: seed.origin } : null
   )
   const [picking, setPicking] = useState<'template' | 'computer' | 'agent' | null>(null)
+  // While the computer makes the bot the form stays as it is, as the desktop dialog does.
+  const pick = (next: 'template' | 'computer' | 'agent') => {
+    if (!creating) {
+      setPicking(next)
+    }
+  }
   const listed = props.computers.find((entry) => entry.id === computerId)
   // A chosen computer that drops out keeps its name, unreachable, so Runs on can move the draft.
   const [lastChosen, setLastChosen] = useState(listed)
@@ -105,13 +116,13 @@ function NewBotForm(props: NewBotSheetProps) {
     computer?.hostId.startsWith('runtime:') ? client : null,
     computer ? props.pairedClientFor(computer.id) : null
   )
-  // Runs on shows when there is another computer to pick, and, locked, for an offer's pinned one.
-  const choosesComputer = props.computers.length > 1 || offer !== undefined || !listed
+  // Runs on shows when there is another computer to pick, and, locked, for a seed's pinned one.
+  const choosesComputer = props.computers.length > 1 || seed !== undefined || !listed
   const picture = parseBotAvatar(avatar)
   const trimmed = name.trim()
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
-  const canCreate =
-    trimmed.length > 0 && !creating && client !== null && choices !== null && choices.length > 0
+  const ready = trimmed.length > 0 && client !== null && choices !== null && choices.length > 0
+  const canCreate = ready && !creating
 
   const create = async () => {
     if (!canCreate || !client || !computer) {
@@ -121,18 +132,17 @@ function NewBotForm(props: NewBotSheetProps) {
     setError(null)
     try {
       const { bot } = botCreate.interpret(
-        await botCreate.request(
-          client,
-          proposal
-            ? {
-                ...proposalCreateParams({ ...proposal.value, name: trimmed }, agent, {
-                  templatePackages: computer?.templatePackages === true,
-                  ...(offer ? { fromOffer: offer.fromOffer } : {})
-                }),
-                avatar
-              }
-            : { name: trimmed, agent, avatar }
-        )
+        await botCreate.request(client, {
+          // A workspace with no note or branch words seeds no purpose: a plain bot, as on the desktop.
+          ...(proposal?.value.purpose.trim()
+            ? proposalCreateParams({ ...proposal.value, name: trimmed }, agent, {
+                templatePackages: computer?.templatePackages === true,
+                ...(seed?.fromOffer ? { fromOffer: seed.fromOffer } : {})
+              })
+            : { name: trimmed, agent }),
+          avatar,
+          ...(seed?.takingOver ? { takingOver: true as const } : {})
+        })
       )
       setName('')
       setProposal(null)
@@ -149,7 +159,8 @@ function NewBotForm(props: NewBotSheetProps) {
   }
 
   return (
-    <>
+    // iOS cannot present over a closing sibling Modal; the form and its pickers share one.
+    <BottomDrawerModalHost>
       <MobileBotTemplatesSheet
         visible={props.visible && picking === 'template'}
         botNames={picking === 'template' && computer ? props.botNamesOn(computer.id) : []}
@@ -184,40 +195,48 @@ function NewBotForm(props: NewBotSheetProps) {
       />
       <BottomDrawer
         visible={props.visible && picking === null}
+        dismissible={!creating}
         onClose={props.onClose}
         onAfterClose={props.onAfterClose}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>{t('bots.new.title', 'New bot')}</Text>
-          {proposal || !choosesComputer ? (
-            <Text style={styles.message}>
-              {proposal
-                ? proposal.origin
-                : t('bots.new.runsOnHost', 'Runs on {{host}}.', {
-                    host: computer?.label ?? ''
-                  })}
-            </Text>
-          ) : null}
-        </View>
+        <SheetHeader
+          titleAboveActions
+          title={t('bots.new.title', 'New bot')}
+          {...(proposal || !choosesComputer
+            ? {
+                subtitle: proposal
+                  ? proposal.origin
+                  : t('bots.new.runsOnHost', 'Runs on {{host}}.', { host: computer?.label ?? '' })
+              }
+            : {})}
+          leading={{
+            label: t('common.cancel', 'Cancel'),
+            onPress: props.onClose,
+            disabled: creating
+          }}
+          trailing={{
+            label: t('bots.new.create', 'Create'),
+            onPress: () => void create(),
+            disabled: !ready,
+            busy: creating
+          }}
+        />
         {proposal ? null : (
-          <Pressable
-            style={({ pressed }) => [styles.templateRow, pressed && styles.pressed]}
-            onPress={() => setPicking('template')}
-            accessibilityRole="button"
-          >
-            <Text style={styles.templateText}>
-              {t('bots.new.fromTemplate', 'Start from a template')}
-            </Text>
-            <ChevronRight size={16} color={colors.textMuted} />
-          </Pressable>
+          <ListGroup style={styles.templateGroup}>
+            <ListRow
+              title={t('bots.new.fromTemplate', 'Use template')}
+              navigates
+              onPress={() => pick('template')}
+            />
+          </ListGroup>
         )}
         {choosesComputer ? (
           <NewBotRunsOn
             computer={computer}
-            locked={offer !== undefined || Boolean(proposal?.value.worktrees?.length)}
+            locked={seed !== undefined || Boolean(proposal?.value.worktrees?.length)}
             reachable={client !== null}
             otherAccount={otherAccount}
-            onPick={() => setPicking('computer')}
+            onPick={() => pick('computer')}
           />
         ) : null}
         <View style={styles.picture}>
@@ -255,39 +274,14 @@ function NewBotForm(props: NewBotSheetProps) {
         <NewBotAgentRow
           agent={agent}
           loading={client !== null && choices === null}
-          onPick={() => setPicking('agent')}
+          onPick={() => pick('agent')}
         />
-        <View style={styles.actions}>
-          <Pressable
-            style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
-            onPress={props.onClose}
-          >
-            <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.submitButton,
-              pressed && styles.pressed,
-              !canCreate && styles.submitDisabled
-            ]}
-            disabled={!canCreate}
-            onPress={() => void create()}
-            accessibilityRole="button"
-          >
-            <Text style={styles.submitText}>
-              {creating ? t('bots.new.creating', 'Creating…') : t('bots.new.create', 'Create')}
-            </Text>
-          </Pressable>
-        </View>
       </BottomDrawer>
-    </>
+    </BottomDrawerModalHost>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  header: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
-  title: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  message: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   picture: {
     alignSelf: 'center',
     alignItems: 'center',
@@ -299,45 +293,11 @@ const styles = themedStyleSheet(() => ({
     right: -spacing.sm,
     bottom: -spacing.sm,
     padding: spacing.xs,
-    borderRadius: radii.control,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   },
-  templateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: radii.surface,
-    backgroundColor: colors.sheetGroup,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md
-  },
-  templateText: { fontSize: typography.bodySize, color: colors.textPrimary },
+  templateGroup: { marginBottom: spacing.md },
   takesOver: { fontSize: 13, color: colors.textMuted, marginTop: spacing.sm },
   error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.sm },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  cancelButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
-  },
-  submitButton: {
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
-  },
-  pressed: { opacity: 0.7 },
-  submitDisabled: { opacity: 0.4 },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
+  pressed: { opacity: 0.7 }
 }))

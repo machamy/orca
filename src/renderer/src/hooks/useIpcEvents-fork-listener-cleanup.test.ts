@@ -39,6 +39,7 @@ describe('useIpcEvents fork listener cleanup', () => {
       setAgentStatus: vi.fn(),
       updateTabTitle: vi.fn(),
       workspaceSessionReady: true,
+      updateStatus: { state: 'idle' },
       settings: { terminalFontSize: 13 }
     })
     vi.doMock('../store', () => ({

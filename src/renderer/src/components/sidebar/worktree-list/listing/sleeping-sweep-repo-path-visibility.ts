@@ -3,19 +3,25 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isSleepingSweepExempt } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import { isRepoPathEntryPoint } from '../../../../../../shared/worktree/visibility/ownership'
-import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
+import { createWorkspaceAsleepCheck } from './sleeping-sweep-visibility'
 
-/** Fork: "Hide sleeping" exempts the repo-path checkout, which an in-place default switch keeps as the entry point. */
+/** Fork: "Hide sleeping" exempts the repo-path checkout rather than git's main-worktree flag. */
+export function isRepoPathSleepingSweepExempt(
+  state: AppState,
+  worktree: Worktree,
+  repo: Repo | undefined
+): boolean {
+  return isSleepingSweepExempt(
+    isRepoPathEntryPoint(worktree, repo),
+    state.alwaysShowDefaultBranchWorkspace
+  )
+}
+
 export function createRepoPathSleepingSweepHiddenCheck(
   state: AppState,
   exemptWorktreeIds?: ReadonlySet<string>
 ): (worktree: Worktree, repo: Repo | undefined) => boolean {
-  const isHidden = createSleepingSweepHiddenCheck(state, exemptWorktreeIds)
+  const isAsleep = createWorkspaceAsleepCheck(state, exemptWorktreeIds)
   return (worktree, repo) =>
-    !isSleepingSweepExempt(
-      isRepoPathEntryPoint(worktree, repo),
-      state.alwaysShowDefaultBranchWorkspace
-    ) &&
-    // Why clear the flag: git's main flag follows the displaced checkout, so it must not exempt here.
-    isHidden({ ...worktree, isMainWorktree: false })
+    !isRepoPathSleepingSweepExempt(state, worktree, repo) && isAsleep(worktree)
 }
