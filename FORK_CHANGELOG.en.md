@@ -24,14 +24,11 @@ source.
 
 ---
 
-## Unreleased · 2026-11-20
-
-- **Default-worktree switch removed:** "Make Default Worktree" (the branch swap, agents follow, the drag drop zone, `orca worktree default set`, the card's `Default` badge) is gone from the code. Entries below that mention it are historical. Old settings keys (`defaultSwitch*`) left in a profile are ignored and do not affect startup.
-
-## machamy.29 — upstream `1.4.263` base · 2026-11-19
+## machamy.29 — upstream `1.4.263` base · 2026-11-22
 
 Merged upstream through `v1.4.263` (1,839 commits, 114 conflicts).
 
+- **Default-worktree switch removed:** "Make Default Worktree" (the branch swap, agents follow, the drag drop zone, `orca worktree default set`, the card's `Default` badge) is gone from the code. Entries below that mention it are historical. Old settings keys (`defaultSwitch*`) left in a profile are ignored and do not affect startup.
 - **`!cmd` in Chat UI:** in a chat opened as Chat UI, typing `!ls` makes Orca run the command in the chat folder and leave the result as a card, without starting an agent turn. The output goes to the agent once, with your next message (your own bubble stays as typed). It is not attached to `/command` messages and is refused while the agent is replying. Commands stop after 120 seconds and cannot read input. Works from the desktop and phone composers.
 - Upstream moved the journal to SQL storage and added a ride-along path for host notes; `!` output uses it, as automation result notes do.
 - Upstream turned agent statuses into a dedicated Map class; the default-worktree switch, cold restore and model badge moved off the old record-style access (which type-checks but silently reads nothing).
