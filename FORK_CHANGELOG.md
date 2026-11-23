@@ -21,7 +21,7 @@
 
 ---
 
-## 다음 판 (미배포)
+## machamy.32 — 원본 `1.4.269` 기준 · 2026-11-23
 
 - **Claude OAuth 토큰 계정:** 설정 → 계정 → Claude 의 `API 키·토큰 추가`에 `claude setup-token`으로 받은 토큰(`sk-ant-oat…`)을 붙여넣으면 OAuth 토큰 계정이 된다. 그 구독으로 쓰고, 상태바 계정 전환에서 다른 계정과 같이 고른다. Claude 는 OAuth 토큰을 환경 변수로만 읽어서, 토큰은 키체인이 아니라 계정 폴더 `settings.json`의 `env.CLAUDE_CODE_OAUTH_TOKEN`에 본인만 읽을 수 있게(0600) 둔다. 개인 설정의 `env`가 바뀌어 계정 설정에 동기화될 때도 토큰은 남긴다. 예전에는 이 토큰을 API 키 칸에 넣으면 API 키로 보내져 인증에 실패했다.
 
