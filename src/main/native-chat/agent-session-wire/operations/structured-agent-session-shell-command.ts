@@ -17,12 +17,16 @@ import {
   nativeChatShellCommandRowText,
   type NativeChatShellCommandResult
 } from '../../../../shared/native-chat/native-chat-shell-command'
+import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { AgentSessionShellCommandResult } from '../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-shell-command-params'
 
 const OUTPUT_CAPTURE_BYTES = 256 * 1024
 
 export type StructuredShellCommandDeps = {
-  host: Pick<StructuredAgentSessionHost, 'deps' | 'conversation'>
+  host: Pick<StructuredAgentSessionHost, 'deps' | 'conversation' | 'send'>
+  /** Fork: send the typed `!cmd` right after its row, so the agent answers the output now. */
+  startsTurn?: boolean
   run?: (spec: ProcessSpec) => ReturnType<typeof runProcess>
 }
 
@@ -152,5 +156,45 @@ export async function runStructuredAgentSessionShellCommand(
     nativeChatShellCommandClientMessageId(runId),
     nativeChatShellCommandBody({ runId, text: nativeChatShellCommandRowText(result) })
   )
+  if (deps.startsTurn) {
+    // A cold agent may take longer to admit the turn than the client waits for this reply.
+    void sendShellCommandTurn(deps.host, sessionId, command)
+  }
   return { ok: true }
+}
+
+/** The row rides along with this send; a refused send leaves it for the person's next message. */
+async function sendShellCommandTurn(
+  host: StructuredShellCommandDeps['host'],
+  sessionId: string,
+  command: string
+): Promise<void> {
+  const record = host.deps.store.getRecord(sessionId)
+  if (!record) {
+    return
+  }
+  try {
+    const result = await host.send(
+      { callerKey: 'trusted-local:shell-command-turn' },
+      {
+        ...structuredAgentSessionMessageSendMutation({
+          sessionId,
+          clientOperationId: createStructuredAgentSessionOperationId(randomUUID),
+          expectedRuntimeFence: record.lease.runtimeFence,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: `!${command}` }] }
+        }),
+        // The person's words: only those carry unread `!cmd` rows to the agent.
+        personsMessage: true
+      }
+    )
+    if (!result.ok) {
+      host.deps.logger.warn('shell command turn was refused', {
+        scope: 'shell-command',
+        sessionId,
+        refusal: result.refusal
+      })
+    }
+  } catch (error) {
+    host.deps.logger.warn('shell command turn failed', { scope: 'shell-command', sessionId, error })
+  }
 }

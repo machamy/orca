@@ -24,6 +24,11 @@ source.
 
 ---
 
+## Next (unreleased)
+
+- **Shell mode for `!commands`:** when a chat-UI composer starts with `!`, its border turns to the warning color, the text goes monospace and a "Shell" chip shows; the chip removes the `!`. Desktop and phone composers both.
+- **The agent answers `!commands` right away:** when the command finishes, Orca sends what was typed (`!git status`) as a message and starts a turn; the agent gets the output card with it and replies, as in Claude Code. Turning off Settings → Chat UI → `Agent answers ! commands` restores the old behavior, where the output rides along with the next message. On by default; the setting of the host the chat runs on applies.
+
 ## machamy.30 — upstream `1.4.269` base · 2026-11-23
 
 Merged upstream through `v1.4.269` (989 commits, 18 conflicts).

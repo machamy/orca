@@ -393,6 +393,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
               pickerListboxId={picker.listboxId}
               onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
               goalMode={goalMode}
+              shellCommands={Boolean(structuredTransport)}
               onRetrySkills={picker.retrySkills}
               onChooseMentionFile={mentions.chooseMention}
               onRemoveImageAttachment={attachments.removeImageAttachment}

@@ -3,6 +3,7 @@ import { AppearanceChatSection } from '../appearance/chat/AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
+import { NativeChatShellCommandTurnSetting } from './NativeChatShellCommandTurnSetting'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
@@ -119,6 +120,11 @@ export function ChatSettingsSection({
             settings={settings}
             updateSettings={updateSettings}
             hostScope={hostScope}
+            forceVisible={showAllBehavior}
+          />
+          <NativeChatShellCommandTurnSetting
+            settings={settings}
+            updateSettings={updateSettings}
             forceVisible={showAllBehavior}
           />
           {showDesktopOnlySettings ? (

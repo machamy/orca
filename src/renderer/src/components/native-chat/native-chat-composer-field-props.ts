@@ -82,6 +82,8 @@ export type NativeChatComposerFieldProps = {
   contextUsage?: NativeChatContextUsageSummary | null
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
   goalMode?: NativeChatComposerGoalMode
+  /** Fork: a structured chat runs a `!` draft on its host, so the composer shows shell mode. */
+  shellCommands?: boolean
   agent?: string
   launchPrompt?: { placeholder: string }
   workspaceFooter?: React.ReactNode

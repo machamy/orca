@@ -4082,6 +4082,10 @@
     },
     "messageTime": {
       "yesterday": "Yesterday {{time}}"
+    },
+    "shellCommand": {
+      "chip": "Shell",
+      "exitMode": "Runs in the chat folder. Tap to remove the !"
     }
   },
   "sourceControl": {

@@ -19503,6 +19503,10 @@
       "splitDown": "아래로 분할",
       "automationSaved": {
         "openFullPage": "페이지 열기"
+      },
+      "shellCommand": {
+        "chip": "셸",
+        "exitMode": "채팅 폴더에서 실행됩니다. 누르면 !를 지웁니다"
       }
     },
     "tab": {
@@ -19933,7 +19937,9 @@
         "promptSuggestionsTitle": "추천 프롬프트",
         "promptSuggestionsCopy": "Claude가 답한 뒤, 다음 메시지로 추측한 내용이 빈 메시지 입력란에 표시됩니다. Tab 키를 눌러 사용하세요. 추천마다 요청이 하나 더 발생하며 Claude 사용량에 포함됩니다.",
         "promptSuggestionsSearchNext": "다음 프롬프트",
-        "promptSuggestionsSearchGhost": "고스트 텍스트"
+        "promptSuggestionsSearchGhost": "고스트 텍스트",
+        "shellCommandTurnTitle": "!명령에 에이전트가 바로 답하기",
+        "shellCommandTurnCopy": "!명령이 끝나면 에이전트가 출력을 읽고 바로 답합니다. 끄면 출력은 다음 메시지와 함께 전달됩니다."
       },
       "voice": {
         "dictationLanguage": {

@@ -20,6 +20,7 @@ import {
 import { NativeChatSessionOptionPickers } from '../../session/options/controls/NativeChatSessionOptionPickers'
 import { NativeChatComposerPermissionPicker } from '../../session/options/controls/NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
+import { NativeChatComposerShellChip } from './NativeChatComposerShellChip'
 import { NativeChatComposerPrimaryButton } from './NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from './NativeChatAttachButton'
 import { NativeChatDictationButton } from './NativeChatDictationButton'
@@ -61,6 +62,8 @@ export type NativeChatComposerActionsProps = {
   focusComposer?: () => void
   /** Present while the composer is in goal mode; the chip calls it to leave. */
   onExitGoalMode?: () => void
+  /** Fork: present while a `!` draft will run on the chat host. */
+  onExitShellMode?: () => void
   /** Absent until the session has reported or the transcript can estimate. */
   contextUsage?: NativeChatContextUsageSummary | null
   /** The chat's agent, whose permission modes the picker describes. */
@@ -95,6 +98,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
   onExitGoalMode,
+  onExitShellMode,
   contextUsage,
   focusComposer,
   agent,
@@ -230,6 +234,23 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
               <NativeChatComposerGoalChip
                 onExit={() => {
                   onExitGoalMode()
+                  close()
+                }}
+              />
+            )
+          }
+        ]
+      : []),
+    ...(onExitShellMode
+      ? [
+          {
+            id: 'shell',
+            priority: 4,
+            content: <NativeChatComposerShellChip onExit={onExitShellMode} />,
+            overflow: (close: () => void) => (
+              <NativeChatComposerShellChip
+                onExit={() => {
+                  onExitShellMode()
                   close()
                 }}
               />

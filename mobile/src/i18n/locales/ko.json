@@ -690,6 +690,10 @@
     },
     "messageTime": {
       "yesterday": "어제 {{time}}"
+    },
+    "shellCommand": {
+      "chip": "셸",
+      "exitMode": "채팅 폴더에서 실행됩니다. 누르면 !를 지웁니다"
     }
   },
   "common": {

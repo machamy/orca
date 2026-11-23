@@ -21,6 +21,11 @@ export function nativeChatShellCommandOfDraft(text: string): string | null {
   return command === '' ? null : command
 }
 
+/** Fork: composers show shell mode from the first `!`, before a command follows it. */
+export function isNativeChatShellCommandDraft(text: string): boolean {
+  return text.startsWith('!')
+}
+
 export function nativeChatShellCommandClientMessageId(runId: string): string {
   return `${ID_PREFIX}${runId}`
 }

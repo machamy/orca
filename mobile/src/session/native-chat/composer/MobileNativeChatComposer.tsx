@@ -31,6 +31,7 @@ import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-s
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
+import { useMobileNativeChatComposerShellMode } from './commands/use-mobile-native-chat-composer-shell-mode'
 import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
 import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
@@ -106,6 +107,11 @@ export function MobileNativeChatComposer({
     onAttachPastedText: structured?.onAttachPastedText
   })
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
+  const shell = useMobileNativeChatComposerShellMode(
+    structured !== null && !editSession,
+    value,
+    onChangeText
+  )
   const orca = useMobileNativeChatOrcaCommands({
     structured,
     agent,
@@ -250,7 +256,11 @@ export function MobileNativeChatComposer({
         {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
-        <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
+        <View
+          {...contextRing.barProps}
+          style={[styles.bar, shell.barStyle]}
+          testID="native-chat-composer"
+        >
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -332,6 +342,7 @@ export function MobileNativeChatComposer({
               ) : null}
               <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
+              {shell.chip}
             </MobileNativeChatDictationLeading>
             {onMicPress ? (
               <MobileNativeChatComposerMic

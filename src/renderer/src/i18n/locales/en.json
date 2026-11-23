@@ -22786,6 +22786,10 @@
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
+      },
+      "shellCommand": {
+        "chip": "Shell",
+        "exitMode": "Runs in the chat folder. Click to remove the !"
       }
     },
     "tab": {
@@ -23276,7 +23280,9 @@
         "promptSuggestionsTitle": "Suggested prompts",
         "promptSuggestionsCopy": "After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.",
         "promptSuggestionsSearchNext": "next prompt",
-        "promptSuggestionsSearchGhost": "ghost text"
+        "promptSuggestionsSearchGhost": "ghost text",
+        "shellCommandTurnTitle": "Agent answers ! commands",
+        "shellCommandTurnCopy": "After a !command runs, the agent reads its output and replies right away. Off, the output goes along with your next message."
       },
       "voice": {
         "dictationLanguage": {

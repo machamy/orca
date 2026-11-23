@@ -1,5 +1,5 @@
 // `agentSession.shellCommand` — a person's `!cmd`: the host runs it in the chat folder and records
-// the output as an Orca row, without a turn. Older hosts lack the method; clients say so.
+// the output as an Orca row; fork: then starts a turn on it unless the host's setting is off. Older hosts lack the method; clients say so.
 
 import { defineMethod } from '../../../core'
 import {
@@ -19,8 +19,10 @@ export const STRUCTURED_AGENT_SESSION_SHELL_COMMAND_METHODS = [
       requireStructuredCapability(ctx)
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredSessionHost(ctx, params.sessionId)
+      const startsTurn =
+        ctx.runtime.requireStore().getSettings().nativeChatShellCommandStartsTurn !== false
       return runStructuredAgentSessionShellCommand(
-        { host },
+        { host, startsTurn },
         params.sessionId,
         params.command.trim()
       )

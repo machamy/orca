@@ -49,6 +49,7 @@ export const FORK_ADDED_TESTS = [
   'src/main/updater/updater.fork-official-checks-gate.test.ts',
   'src/main/updater/updater.fork-internal-feed.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-shell-command-ride-along.test.ts',
+  'src/main/native-chat/agent-session-wire/operations/structured-agent-session-shell-command-turn.fork.test.ts',
   'src/main/startup/inherited-pane-env.test.ts',
   'src/shared/agent-hook-listener-claude-model-effort.test.ts',
   'src/shared/agent-hook-listener/providers/claude-model-effort-fields.test.ts',

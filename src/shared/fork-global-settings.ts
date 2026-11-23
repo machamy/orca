@@ -17,4 +17,7 @@ export type ForkGlobalSettings = {
   /** Fork: automatic checks for official Orca releases. Absent means off — a fork build reads as
    *  older than the same upstream release, so the official build was offered over it. */
   officialUpdateChecks?: boolean
+  /** Fork: a chat's `!cmd` starts an agent turn on its output, as Claude Code does. Absent means
+   *  on; off leaves the output to ride along with the next message. */
+  nativeChatShellCommandStartsTurn?: boolean
 }

@@ -14,6 +14,7 @@ import { useNativeChatComposerGlow } from '../../native-chat-composer-glow'
 import { nativeChatComposerPlaceholder } from '../controls/native-chat-composer-placeholder'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { isNativeChatShellCommandDraft } from '../../../../../../shared/native-chat/native-chat-shell-command'
 import type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 import { imeComposedSegment } from '@/lib/text-input/ime/ime-composed-segment'
 import { acceptNativeChatPromptSuggestion } from './native-chat-prompt-suggestion-accept'
@@ -76,6 +77,7 @@ export function NativeChatComposerField({
   contextUsage,
   sessionOptionsPickerRequest,
   goalMode,
+  shellCommands = false,
   agent,
   launchPrompt,
   workspaceFooter
@@ -181,8 +183,17 @@ export function NativeChatComposerField({
 
   // Stable so the memoized option pickers keep their identity.
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
+  const exitShellMode = useLatestHandler(() => {
+    const input = textareaRef.current
+    if (input && isNativeChatShellCommandDraft(draft)) {
+      onDraftChange(draft.slice(1), input)
+    }
+    focusComposer()
+  })
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
+  const shellCommandMode =
+    shellCommands && !editSession && !launch && isNativeChatShellCommandDraft(draft)
 
   return (
     <div
@@ -232,7 +243,10 @@ export function NativeChatComposerField({
               !launch && 'native-chat-composer-card',
               launch
                 ? 'border-foreground/10 bg-background dark:bg-foreground/[0.04]'
-                : 'border-chat-composer-border bg-chat-composer-surface',
+                : cn(
+                    'bg-chat-composer-surface',
+                    shellCommandMode ? 'border-chat-warning' : 'border-chat-composer-border'
+                  ),
               // Contain caret-blink repaint to the composer; keep 4px slack around overhanging attachment buttons, while menus use portals.
               '[contain:paint]',
               glowing && 'native-chat-composer-glow'
@@ -297,6 +311,7 @@ export function NativeChatComposerField({
                   ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:mr-[-100%]'
                   : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
                 'overflow-y-auto scrollbar-sleek',
+                shellCommandMode && 'font-mono',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
                 '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'
               )}
@@ -339,6 +354,7 @@ export function NativeChatComposerField({
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
                 focusComposer={focusComposer}
                 onExitGoalMode={goalMode?.active ? exitGoalMode : undefined}
+                onExitShellMode={shellCommandMode ? exitShellMode : undefined}
                 launchPrompt={launch}
                 {...(agent ? { agent } : {})}
               />
