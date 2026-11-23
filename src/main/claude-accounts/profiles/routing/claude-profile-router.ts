@@ -44,6 +44,7 @@ import {
   type ClaudeFolderLogin
 } from '../../sign-in/claude-account-folder'
 import { resolveLoginShellEnvironment } from '../../../startup/shell-environment/login-shell-environment'
+import { usesSavedClaudeCredential } from '../../../../shared/agent-accounts/claude/claude-saved-credential'
 
 export type ClaudeProfileRouterSettings = Pick<
   GlobalSettings,
@@ -114,8 +115,8 @@ export class ClaudeProfileRouter {
   /** Reuse a matching System default login until a legacy account signs in separately. */
   coveredBySystemDefault(accountId: string): boolean {
     const saved = this.savedAccount(accountId)
-    // An API key account's label is not a login, so it never stands in for System default.
-    if (saved?.authMethod === 'api-key' || this.accountLogin(accountId)) {
+    // A pasted-credential account's label is not a login, so it never stands in for System default.
+    if (usesSavedClaudeCredential(saved?.authMethod) || this.accountLogin(accountId)) {
       return false
     }
     const systemDefault = this.systemDefaultLogin()

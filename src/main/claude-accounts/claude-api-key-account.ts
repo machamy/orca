@@ -13,13 +13,15 @@ import {
   storeClaudeApiKey,
   writeClaudeApiKeyHelperSetting
 } from './claude-api-key-store'
+import { writeClaudeOAuthTokenSetting } from './claude-oauth-token-setting'
+import { claudeSavedCredentialKind } from '../../shared/agent-accounts/claude/claude-saved-credential'
 
 export type ClaudeApiKeyAccountRequest = { label: string; apiKey: string }
 
 const MAX_LABEL_LENGTH = 60
 const HOST_TARGET = { runtime: 'host' } as const
 
-/** Fork: an Anthropic API key saved as a switchable Claude account in its own folder. */
+/** Fork: an Anthropic API key or `claude setup-token` OAuth token saved as a switchable Claude account. */
 export class ClaudeApiKeyAccounts {
   constructor(
     private readonly deps: {
@@ -43,12 +45,17 @@ export class ClaudeApiKeyAccounts {
     const { store, rateLimits, runtimeAuth, selection } = this.deps
     const accountId = randomUUID()
     const folder = await runtimeAuth.prepareAccountFolder(accountId, HOST_TARGET)
+    const authMethod = claudeSavedCredentialKind(apiKey)
     try {
-      await storeClaudeApiKey(accountId, folder.readPath, apiKey, this.deps.platform)
-      writeClaudeApiKeyHelperSetting(
-        folder.readPath,
-        claudeApiKeyHelperCommand(accountId, folder.readPath, this.deps.platform)
-      )
+      if (authMethod === 'oauth-token') {
+        writeClaudeOAuthTokenSetting(folder.readPath, apiKey)
+      } else {
+        await storeClaudeApiKey(accountId, folder.readPath, apiKey, this.deps.platform)
+        writeClaudeApiKeyHelperSetting(
+          folder.readPath,
+          claudeApiKeyHelperCommand(accountId, folder.readPath, this.deps.platform)
+        )
+      }
     } catch (error) {
       await this.discard(accountId, folder.readPath)
       throw error
@@ -64,7 +71,7 @@ export class ClaudeApiKeyAccounts {
           managedAuthRuntime: 'host',
           wslDistro: null,
           wslLinuxAuthPath: null,
-          authMethod: 'api-key',
+          authMethod,
           apiKeyHint: apiKey.slice(-4),
           createdAt: now,
           updatedAt: now,

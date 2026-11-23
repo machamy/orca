@@ -27,6 +27,7 @@ import {
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
 import { claudeSystemDefaultUsageId } from '../../../shared/agent-accounts/claude/claude-system-default-usage'
+import { usesSavedClaudeCredential } from '../../../shared/agent-accounts/claude/claude-saved-credential'
 
 export const CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE =
   'Sign in to this Claude account again before selecting it.'
@@ -118,7 +119,7 @@ export class ClaudeAccountSelection {
       return savedWslClaudeAccountHome(account) ? summary : { ...summary, needsSignIn: true }
     }
     const home = this.runtimeAuth.router.accountHome(account.id)
-    if (account.authMethod === 'api-key') {
+    if (usesSavedClaudeCredential(account.authMethod)) {
       return { ...summary, home }
     }
     const login = readClaudeFolderLogin(claudeStateFile(home))

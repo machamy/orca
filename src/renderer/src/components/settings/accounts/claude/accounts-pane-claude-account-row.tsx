@@ -26,6 +26,7 @@ import {
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
 import { getObservedAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 import { claudeApiKeyAccountDetail } from './claude-api-key-account-dialog'
+import { usesSavedClaudeCredential } from '../../../../../../shared/agent-accounts/claude/claude-saved-credential'
 
 export function renderClaudeAccountRow(
   account: ClaudeRateLimitAccountsState['accounts'][number],
@@ -144,7 +145,7 @@ export function renderClaudeAccountRow(
             pending={renamingAccountKeys.has(`claude:${account.id}`)}
             onRename={() => setRenameTarget(renameTargetFor('claude', account, accountRuntimeView))}
           />
-          {account.authMethod === 'api-key' ? null : (
+          {usesSavedClaudeCredential(account.authMethod) ? null : (
             <ButtonGroup>
               <Button
                 variant="ghost"

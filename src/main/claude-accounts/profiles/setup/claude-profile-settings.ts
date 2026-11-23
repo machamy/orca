@@ -3,6 +3,7 @@ import { statSync } from 'node:fs'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { readClaudeProfileObject } from '../claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
+import { hasClaudeOAuthToken, keepClaudeOAuthToken } from '../../claude-oauth-token-setting'
 import {
   ClaudeProfileSurfaceError,
   type ClaudeProfileSurfaceOutcome
@@ -58,6 +59,7 @@ export function syncClaudeProfileSettings(
       }
     }
   }
+  settings = keepClaudeOAuthToken(current.kind === 'present' ? current.value : null, settings)
   const unchanged =
     current.kind === 'present'
       ? JSON.stringify(settings) === JSON.stringify(current.value)
@@ -65,7 +67,10 @@ export function syncClaudeProfileSettings(
   let outcome: ClaudeProfileSurfaceOutcome = 'unchanged'
   if (!unchanged) {
     writeFileAtomically(target, `${JSON.stringify(settings, null, 2)}\n`, {
-      mode: input.kind === 'present' ? statSync(source).mode & 0o777 : 0o600
+      mode:
+        input.kind === 'present' && !hasClaudeOAuthToken(settings)
+          ? statSync(source).mode & 0o777
+          : 0o600
     })
     outcome = 'synced'
   }

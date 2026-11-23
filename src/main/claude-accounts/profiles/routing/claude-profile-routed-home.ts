@@ -6,6 +6,7 @@ import {
   readClaudeFolderLoginAsync
 } from '../../sign-in/claude-account-folder'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
+import { usesSavedClaudeCredential } from '../../../../shared/agent-accounts/claude/claude-saved-credential'
 
 /** `routedHome` without blocking main: chat reads run once per options read and send. */
 export async function claudeRoutedHomeAsync(
@@ -22,7 +23,7 @@ export async function claudeRoutedHomeAsync(
   const login = (configDir: string | undefined) =>
     claudeStateFileAsync(configDir, router.userHome).then(readClaudeFolderLoginAsync)
   const saved = router.savedAccount(profile.accountId)
-  if (saved?.authMethod !== 'api-key' && !(await login(profile.home))) {
+  if (!usesSavedClaudeCredential(saved?.authMethod) && !(await login(profile.home))) {
     // Reuse a matching System default login until the account signs in separately.
     const systemDefault = await login(router.userConfigDir())
     if (saved && systemDefault && isSameClaudeLogin(saved, systemDefault)) {

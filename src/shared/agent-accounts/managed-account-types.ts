@@ -78,8 +78,9 @@ export type ClaudeManagedAccount = {
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxAuthPath?: string | null
-  /** Fork: 'api-key' accounts read an Anthropic API key through Claude's apiKeyHelper. */
-  authMethod: 'subscription-oauth' | 'api-key' | 'unknown'
+  /** Fork: 'api-key' reads an Anthropic API key through Claude's apiKeyHelper; 'oauth-token' is a
+   *  pasted `claude setup-token` token Claude reads from its settings env. */
+  authMethod: 'subscription-oauth' | 'api-key' | 'oauth-token' | 'unknown'
   /** Fork: last characters of an API key account's key, for telling keys apart. */
   apiKeyHint?: string
   organizationUuid?: string | null
@@ -96,8 +97,9 @@ export type ClaudeManagedAccountSummary = {
   displayName?: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
-  /** Fork: 'api-key' accounts read an Anthropic API key through Claude's apiKeyHelper. */
-  authMethod: 'subscription-oauth' | 'api-key' | 'unknown'
+  /** Fork: 'api-key' reads an Anthropic API key through Claude's apiKeyHelper; 'oauth-token' is a
+   *  pasted `claude setup-token` token Claude reads from its settings env. */
+  authMethod: 'subscription-oauth' | 'api-key' | 'oauth-token' | 'unknown'
   /** Fork: last characters of an API key account's key, for telling keys apart. */
   apiKeyHint?: string
   organizationUuid?: string | null

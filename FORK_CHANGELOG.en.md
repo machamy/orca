@@ -24,6 +24,10 @@ source.
 
 ---
 
+## Next (unreleased)
+
+- **Claude OAuth token accounts:** pasting a `claude setup-token` token (`sk-ant-oat…`) into Settings → Accounts → Claude → `Add API key or token` makes an OAuth token account that uses its subscription and switches like any other account. Claude reads OAuth tokens only from its environment, so the token lives in the account folder's `settings.json` as `env.CLAUDE_CODE_OAUTH_TOKEN`, owner-only (0600), not in the keychain. Syncing the personal settings' `env` into the account keeps the token. Before, such a token pasted as an API key was sent as an API key and failed to authenticate.
+
 ## machamy.31 — upstream `1.4.269` base · 2026-11-23
 
 - **Shell mode for `!commands`:** when a chat-UI composer starts with `!`, its border turns to the warning color, the text goes monospace and a "Shell" chip shows; the chip removes the `!`. Desktop and phone composers both.

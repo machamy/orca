@@ -25248,13 +25248,14 @@
       "systemDefaultIsSavedDismiss": "Dismiss",
       "signInRequired": "Sign in again to use this account",
       "apiKey": {
-        "add": "Add API key",
-        "title": "Add a Claude API key",
-        "description": "Claude started with this account bills the key’s Anthropic Console organization. The key stays in this device’s keychain and never reaches the settings file.",
+        "add": "Add API key or token",
+        "title": "Add a Claude API key or OAuth token",
+        "description": "Paste an Anthropic API key or a token from `claude setup-token`. An API key bills its Console organization and stays in this device’s keychain. An OAuth token uses its Claude subscription and is saved in this account’s own Claude settings file, readable only by you.",
         "label": "Name",
         "labelPlaceholder": "Team API key",
-        "key": "API key",
-        "row": "API key · …{{value0}}"
+        "key": "API key or OAuth token",
+        "row": "API key · …{{value0}}",
+        "tokenRow": "OAuth token · …{{value0}}"
       },
       "signInAgain": "Sign in again",
       "usageSignInLabel": "Sign in again",

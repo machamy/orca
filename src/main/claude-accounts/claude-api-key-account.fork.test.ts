@@ -15,6 +15,7 @@ import {
   isAcceptableClaudeApiKey,
   writeClaudeApiKeyHelperSetting
 } from './claude-api-key-store'
+import { syncClaudeProfileSettings } from './profiles/setup/claude-profile-settings'
 
 // Account removal and key storage must never reach the real Keychain.
 vi.mock('../macos-keychain/generic-password', () => ({
@@ -25,6 +26,7 @@ vi.mock('../macos-keychain/generic-password', () => ({
 }))
 
 const KEY = 'sk-ant-api03-orcaForkTestKey_000000000000'
+const TOKEN = 'sk-ant-oat01-orcaForkTestToken_0000000000'
 const roots: string[] = []
 afterEach(() => {
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
@@ -189,5 +191,41 @@ describe('Claude API key accounts (fork)', () => {
 
     expect(onlyAccount(h.selection.list())).toMatchObject({ authMethod: 'api-key' })
     expect(onlyAccount(h.selection.list()).needsSignIn).toBeUndefined()
+  })
+
+  it('saves a setup-token as an OAuth token account Claude reads from its settings env', async () => {
+    const h = harness('darwin')
+
+    const account = onlyAccount(await h.accounts.add({ label: 'Max plan', apiKey: TOKEN }))
+
+    expect(account).toMatchObject({ authMethod: 'oauth-token', apiKeyHint: TOKEN.slice(-4) })
+    expect(account.needsSignIn).toBeUndefined()
+    const file = join(h.home(account.id), 'settings.json')
+    const settings = JSON.parse(readFileSync(file, 'utf8'))
+    expect(settings.env).toEqual({ CLAUDE_CODE_OAUTH_TOKEN: TOKEN })
+    expect(settings.apiKeyHelper).toBeUndefined()
+    expect(statSync(file).mode & 0o777).toBe(0o600)
+    expect(JSON.stringify(h.store.getSettings())).not.toContain(TOKEN)
+  })
+
+  it('keeps an account token, owner-only, when the personal settings env changes', () => {
+    const root = tempRoot()
+    const personal = join(root, 'personal.json')
+    const account = join(root, 'account.json')
+    const record = join(root, 'record.json')
+    writeFileSync(personal, JSON.stringify({ env: { A: '1' } }), { mode: 0o644 })
+    syncClaudeProfileSettings(personal, account, record)
+    writeFileSync(account, JSON.stringify({ env: { A: '1', CLAUDE_CODE_OAUTH_TOKEN: TOKEN } }), {
+      mode: 0o600
+    })
+
+    writeFileSync(personal, JSON.stringify({ env: { A: '2' } }), { mode: 0o644 })
+    syncClaudeProfileSettings(personal, account, record)
+
+    expect(JSON.parse(readFileSync(account, 'utf8')).env).toEqual({
+      A: '2',
+      CLAUDE_CODE_OAUTH_TOKEN: TOKEN
+    })
+    expect(statSync(account).mode & 0o777).toBe(0o600)
   })
 })

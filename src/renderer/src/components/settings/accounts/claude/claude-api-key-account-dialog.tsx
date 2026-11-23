@@ -14,7 +14,7 @@ import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 
-/** Fork: adds an Anthropic API key as a switchable Claude account. */
+/** Fork: adds an Anthropic API key or `claude setup-token` OAuth token as a switchable Claude account. */
 export function ClaudeApiKeyAccountButton({
   model,
   disabled
@@ -51,16 +51,18 @@ export function ClaudeApiKeyAccountButton({
         className="gap-1.5"
       >
         <KeyRound className="size-3" />
-        {t('accounts.claude.apiKey.add', 'Add API key')}
+        {t('accounts.claude.apiKey.add', 'Add API key or token')}
       </Button>
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('accounts.claude.apiKey.title', 'Add a Claude API key')}</DialogTitle>
+            <DialogTitle>
+              {t('accounts.claude.apiKey.title', 'Add a Claude API key or OAuth token')}
+            </DialogTitle>
             <DialogDescription>
               {t(
                 'accounts.claude.apiKey.description',
-                'Claude started with this account bills the key’s Anthropic Console organization. The key stays in this device’s keychain and never reaches the settings file.'
+                'Paste an Anthropic API key or a token from `claude setup-token`. An API key bills its Console organization and stays in this device’s keychain. An OAuth token uses its Claude subscription and is saved in this account’s own Claude settings file, readable only by you.'
               )}
             </DialogDescription>
           </DialogHeader>
@@ -92,7 +94,7 @@ export function ClaudeApiKeyAccountButton({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="claude-api-key-value">
-                {t('accounts.claude.apiKey.key', 'API key')}
+                {t('accounts.claude.apiKey.key', 'API key or OAuth token')}
               </Label>
               <Input
                 id="claude-api-key-value"
@@ -119,15 +121,16 @@ export function ClaudeApiKeyAccountButton({
   )
 }
 
-/** Fork: an API key account's second line names the key instead of a sign-in time. */
+/** Fork: a pasted-credential account's second line names the credential instead of a sign-in time. */
 export function claudeApiKeyAccountDetail(
   account: { authMethod: string; apiKeyHint?: string },
   t: (key: string, fallback: string, values?: Record<string, string>) => string
 ): string | null {
-  if (account.authMethod !== 'api-key') {
-    return null
+  const values = { value0: account.apiKeyHint ?? '' }
+  if (account.authMethod === 'oauth-token') {
+    return t('accounts.claude.apiKey.tokenRow', 'OAuth token · …{{value0}}', values)
   }
-  return t('accounts.claude.apiKey.row', 'API key · …{{value0}}', {
-    value0: account.apiKeyHint ?? ''
-  })
+  return account.authMethod === 'api-key'
+    ? t('accounts.claude.apiKey.row', 'API key · …{{value0}}', values)
+    : null
 }
